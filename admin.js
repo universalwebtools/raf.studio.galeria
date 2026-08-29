@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-import { getDatabase, ref, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=11.1";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=11.2";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -12,6 +12,7 @@ const storage = getStorage(fb);
 const $ = (selector) => document.querySelector(selector);
 
 let galleries = {};
+let favoritesRoot = {};
 let unsubscribeGalleries = null;
 let uploadSlug = null;
 let createdSlug = null;
@@ -65,10 +66,10 @@ function showNotice(element, message, type = "ok") {
   element.hidden = false;
 }
 
-function selectionCount(gallery) {
-  const selections = gallery?.selections || {};
-  return Object.values(selections).filter(selection =>
-    Object.values(selection || {}).some(item => item?.filename)
+function selectionCountForSlug(slug) {
+  const galleryFavorites = favoritesRoot?.[slug] || {};
+  return Object.values(galleryFavorites).filter(clientSelection =>
+    Object.values(clientSelection || {}).some(item => item?.filename)
   ).length;
 }
 
@@ -89,6 +90,17 @@ onAuthStateChanged(auth, (user) => {
       (error) => {
         console.error("GALLERIES READ ERROR", error);
         showNotice($("#globalMessage"), `Błąd odczytu galerii: ${error.code || error.message}`, "error");
+      }
+    );
+
+    onValue(
+      ref(db, "favorites"),
+      (snapshot) => {
+        favoritesRoot = snapshot.exists() ? snapshot.val() : {};
+        renderAll();
+      },
+      (error) => {
+        console.error("FAVORITES READ ERROR", error);
       }
     );
   } else {
@@ -132,7 +144,7 @@ function renderAll() {
   const entries = Object.values(galleries);
   $("#statGalleries").textContent = entries.length;
   $("#statPhotos").textContent = entries.reduce((sum, g) => sum + Number(g?.public?.photoCount || 0), 0);
-  $("#statSelections").textContent = entries.reduce((sum, g) => sum + selectionCount(g), 0);
+  $("#statSelections").textContent = Object.keys(galleries).reduce((sum, slug) => sum + selectionCountForSlug(slug), 0);
   renderCards();
 }
 
@@ -170,7 +182,7 @@ function renderCards() {
 
   entries.forEach(([slug, gallery]) => {
     const pub = gallery?.public || {};
-    const selectedClients = selectionCount(gallery);
+    const selectedClients = selectionCountForSlug(slug);
 
     const card = document.createElement("article");
     card.className = "gallery-card";
@@ -387,6 +399,7 @@ $("#deleteGalleryBtn").addEventListener("click", async () => {
 
   try {
     await deleteFolder(`galleries/${slug}`);
+    await remove(ref(db, `favorites/${slug}`)).catch(() => {});
     await remove(ref(db, `galleries/${slug}`));
 
     $("#galleryDialog").close();
@@ -698,7 +711,7 @@ function downloadText(filename, content, type = "text/plain") {
 
 function openSelections(slug) {
   const gallery = galleries[slug] || {};
-  const selections = gallery.selections || {};
+  const selections = favoritesRoot?.[slug] || {};
   const container = $("#selectionContent");
 
   $("#selectionTitle").textContent = `${gallery.public?.title || slug} — wybrane`;

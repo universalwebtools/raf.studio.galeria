@@ -8,13 +8,17 @@
 
         "public": {
           ".read": "auth != null"
-        },
+        }
+      }
+    },
 
-        "selections": {
-          "$clientUid": {
-            ".read": "auth != null && (auth.uid === $clientUid || auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1')",
-            ".write": "auth != null && (auth.uid === $clientUid || auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1')"
-          }
+    "favorites": {
+      ".read": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
+
+      "$galleryId": {
+        "$clientUid": {
+          ".read": "auth != null && (auth.uid === $clientUid || auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1')",
+          ".write": "auth != null && (auth.uid === $clientUid || auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1')"
         }
       }
     }

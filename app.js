@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=11.1";
+import { firebaseConfig } from "./firebase-config.js?v=11.2";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -164,7 +164,7 @@ async function openGallery() {
 
 async function loadFavorites() {
   try {
-    const snap = await get(ref(db, `galleries/${slug}/selections/${uid}`));
+    const snap = await get(ref(db, `favorites/${slug}/${uid}`));
     favorites.clear();
 
     if (snap.exists()) {
@@ -286,7 +286,7 @@ async function toggleFavorite(filename) {
   render();
 
   try {
-    const target = ref(db, `galleries/${slug}/selections/${uid}/${selectionKey(filename)}`);
+    const target = ref(db, `favorites/${slug}/${uid}/${selectionKey(filename)}`);
 
     if (wasSelected) {
       await remove(target);
@@ -302,7 +302,11 @@ async function toggleFavorite(filename) {
     else favorites.delete(filename);
 
     render();
-    toast(`Błąd zapisu wyboru: ${error.code || error.message || error}`);
+    if(String(error.code||"").toUpperCase().includes("PERMISSION")){
+      toast("Brak uprawnień Firebase — wklej reguły v11.2 i kliknij Publish.");
+    }else{
+      toast(`Błąd zapisu wyboru: ${error.code || error.message || error}`);
+    }
   }
 }
 
