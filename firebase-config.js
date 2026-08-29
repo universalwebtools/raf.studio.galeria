@@ -7,8 +7,11 @@ export const firebaseConfig = {
   appId: "1:53550728942:web:dbcf91a86807ada97d15ff",
   measurementId: "G-GJ9LZR48BT"
 };
+
 export const galleryConfig = {
   id: "test-session",
+  title: "Sesja testowa",
   password: "raf123",
-  previewFolder: "galleries/test-session/previews"
+  previewFolder: "galleries/test-session/previews",
+  originalFolder: "galleries/test-session/originals"
 };
