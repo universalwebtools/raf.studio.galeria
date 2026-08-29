@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata, updateMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=12.1";
+import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=12.2";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -74,30 +74,10 @@ function selectionCountForSlug(slug) {
   ).length;
 }
 
-async function restoreAdminCredentials() {
-  const savedEmail = localStorage.getItem("raf-admin-email");
-  if (savedEmail && $("#adminEmail")) {
-    $("#adminEmail").value = savedEmail;
-  }
-
-  try {
-    if (navigator.credentials?.get) {
-      const credential = await navigator.credentials.get({
-        password: true,
-        mediation: "optional"
-      });
-
-      if (credential?.id && credential?.password) {
-        $("#adminEmail").value = credential.id;
-        $("#adminPassword").value = credential.password;
-      }
-    }
-  } catch (error) {
-    console.debug("Credential autofill unavailable:", error);
-  }
+const savedAdminEmail = localStorage.getItem("raf-admin-email");
+if (savedAdminEmail && $("#adminEmail")) {
+  $("#adminEmail").value = savedAdminEmail;
 }
-
-restoreAdminCredentials();
 
 onAuthStateChanged(auth, (user) => {
   if (user && user.uid === ADMIN_UID) {
@@ -158,25 +138,10 @@ $("#adminLoginForm").addEventListener("submit", async (event) => {
       await signOut(auth);
       throw new Error("To konto nie ma uprawnień administratora.");
     }
-    if ($("#rememberAdminLogin")?.checked) {
-      localStorage.setItem("raf-admin-email", $("#adminEmail").value.trim());
 
-      try {
-        if ("PasswordCredential" in window && navigator.credentials?.store) {
-          await navigator.credentials.store(
-            new PasswordCredential({
-              id: $("#adminEmail").value.trim(),
-              password: $("#adminPassword").value,
-              name: "RAF.studio Studio Manager"
-            })
-          );
-        }
-      } catch (credentialError) {
-        console.debug("Browser password manager store unavailable:", credentialError);
-      }
-    } else {
-      localStorage.removeItem("raf-admin-email");
-    }
+    // Remember only the email ourselves.
+    // Password is left to Chrome/Edge password manager.
+    localStorage.setItem("raf-admin-email", $("#adminEmail").value.trim());
   } catch (error) {
     console.error("ADMIN LOGIN ERROR", error);
     $("#adminLoginError").textContent = error.message || String(error);
@@ -187,17 +152,17 @@ $("#adminLoginForm").addEventListener("submit", async (event) => {
 
 const togglePasswordButton = $("#toggleAdminPassword");
 if (togglePasswordButton) {
-  togglePasswordButton.addEventListener("click", (event) => {
+  togglePasswordButton.addEventListener("click", function(event) {
     event.preventDefault();
     event.stopPropagation();
 
-    const input = $("#adminPassword");
-    const show = input.type === "password";
+    const passwordInput = $("#adminPassword");
+    if (!passwordInput) return;
 
-    input.type = show ? "text" : "password";
-    togglePasswordButton.textContent = show ? "Ukryj hasło" : "Pokaż hasło";
-    togglePasswordButton.setAttribute("aria-pressed", show ? "true" : "false");
-    input.focus();
+    const reveal = passwordInput.type === "password";
+    passwordInput.type = reveal ? "text" : "password";
+    this.textContent = reveal ? "Ukryj hasło" : "Pokaż hasło";
+    this.setAttribute("aria-pressed", reveal ? "true" : "false");
   });
 }
 

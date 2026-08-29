@@ -1,48 +1,34 @@
-RAF.studio v12.1 — NO CLOUD
+RAF.studio v12.2 — LOGIN FIX
 
-WARIANT BEZ GOOGLE CLOUD CONSOLE.
+ZNALEZIONY BŁĄD:
+admin.js miał:
+updateMetadata, updateMetadata
 
-POBIERANIE:
-- bez getBlob()
-- bez fetch()
-- bez ZIP
-- bez CORS
-- bez Google Cloud Console
+Duplikat importu powodował, że cały moduł administratora nie uruchamiał się w przeglądarce.
 
-↓ pojedyncze zdjęcie:
-- pobiera oryginał z Firebase Storage
-- korzysta z Content-Disposition: attachment
+SKUTKI BYŁY DOKŁADNIE TAKIE:
+- Pokaż hasło nie działało
+- event logowania nie działał
+- formularz wysyłał się natywnie
+- username/password trafiały do URL
 
-Pobierz wybrane:
-- uruchamia kolejne normalne pobrania
-- każde zdjęcie osobno
-- Chrome może przy pierwszej próbie zapytać o zgodę na wiele pobrań
+NAPRAWIONE:
+- usunięty duplikat importu
+- formularz ma action=javascript:void(0), więc nawet przy awarii JS nie wyśle hasła w URL
+- Pokaż hasło ma też prosty inline fallback i działa nawet gdy admin.js jeszcze się ładuje
+- standardowe autocomplete=username / current-password
+- aplikacja pamięta tylko email
+- hasła NIE zapisujemy ręcznie w localStorage
+- Chrome/Edge może normalnie zapisać hasło swoim natywnym menedżerem
+- usunięty checkbox i niestabilne PasswordCredential API
 
-WAŻNE DLA STARYCH GALERII:
-W panelu admina jest przycisk:
-⚙ Napraw pobieranie
-
-Kliknij go raz dla istniejącej galerii.
-Ustawia Content-Disposition: attachment na wszystkich oryginałach.
-NIE trzeba ponownie wysyłać zdjęć.
-
-UPLOAD:
-- JPG
-- JPEG
-- PNG
-- WEBP
-
-ADMIN LOGIN:
-- zachowane poprawki v12
-- Pokaż hasło
-- Zapamiętaj logowanie w przeglądarce
+POBIERANIA, SERDUSZEK, UPLOADU JPG/PNG/WEBP NIE ZMIENIANO.
 
 NA GITHUBIE PODMIEŃ:
-index.html
 admin.html
-style.css
-app.js
 admin.js
+index.html
+app.js
+style.css
 
 REGUŁ FIREBASE NIE ZMIENIAJ.
-GOOGLE CLOUD CONSOLE NIE JEST POTRZEBNE.

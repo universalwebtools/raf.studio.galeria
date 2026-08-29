@@ -307,3 +307,22 @@ input,select{width:100%;background:#0e0e10;border:1px solid #34343a;color:#fff;b
 #zipProgress{
   width:0%;
 }
+
+
+/* ===== v12.2 login cleanup ===== */
+#adminLoginForm{
+  display:grid;
+  gap:12px;
+}
+.admin-password-wrap{
+  position:relative;
+  width:100%;
+}
+.admin-password-wrap input{
+  width:100%;
+  padding-right:108px;
+}
+.show-password-btn{
+  z-index:10;
+  pointer-events:auto;
+}
