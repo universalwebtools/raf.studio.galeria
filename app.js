@@ -1,230 +1,435 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getAuth,signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-import { getDatabase,ref,get,set,remove,update } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-import { getStorage,ref as sRef,getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=8";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
+import { firebaseConfig } from "./firebase-config.js?v=11";
 
-const fb=initializeApp(firebaseConfig),auth=getAuth(fb),db=getDatabase(fb),storage=getStorage(fb),$=s=>document.querySelector(s);
-const slug=new URLSearchParams(location.search).get("g")||"test-session";
-let uid=null,gallery=null,photos=[],favorites=new Map(),current=0,filter="all",meta=null,touchX=0;
+const fb = initializeApp(firebaseConfig);
+const auth = getAuth(fb);
+const db = getDatabase(fb);
+const storage = getStorage(fb);
 
-async function hash(text){const d=new TextEncoder().encode(text),h=await crypto.subtle.digest("SHA-256",d);return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,"0")).join("")}
-function key(name){const b=new TextEncoder().encode(name);let s="";b.forEach(x=>s+=String.fromCharCode(x));return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
-function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTimeout(t._t);t._t=setTimeout(()=>t.hidden=true,1800)}
-function maxFav(){return Number(gallery?.maxFavorites||0)}
-function locked(){return !!(gallery?.lockAfterSubmit&&meta?.submittedAt)}
-function expired(){return gallery?.expiresAt&&new Date(gallery.expiresAt+"T23:59:59")<new Date()}
+const $ = (selector) => document.querySelector(selector);
+const slug = new URLSearchParams(location.search).get("g") || "";
 
-async function init(){
-  try{
-    uid=(await signInAnonymously(auth)).user.uid;
-    const s=await get(ref(db,`galleries/${slug}/public`));
-    if(!s.exists())return fail("Galeria nie istnieje.");
-    gallery=s.val();
-    if(gallery.active===false||expired())return fail("Galeria wygasła lub została wyłączona.");
+let uid = null;
+let gallery = null;
+let photos = [];
+let favorites = new Map();
+let currentIndex = 0;
+let filter = "all";
+let touchStartX = 0;
 
-    $("#lockTitle").textContent=gallery.title||"Galeria klienta";
-    $("#heroTitle").textContent=gallery.title||slug;
-    $("#heroSubtitle").textContent=gallery.subtitle||"Wybierz swoje ulubione zdjęcia.";
-    if(gallery.expiresAt)$("#expiryLabel").textContent=`Dostęp do ${gallery.expiresAt}`;
-    if(maxFav()>0){$("#maxFavoritesLabel").textContent=` / ${maxFav()}`;$("#progressWrap").hidden=false}
-    if(gallery.selectionEnabled===false){$("#favoritesToggle").hidden=true;$("#favFilter").hidden=true}
-
-    if(sessionStorage.getItem(`raf-access-${slug}`)==="1")openGallery();
-  }catch(e){fail("Nie udało się połączyć z galerią.")}
-}
-function fail(m){$("#galleryNotFound").hidden=false;$("#galleryNotFound").textContent=m;$("#passwordForm").hidden=true}
-
-async function openGallery(){
-  $("#lockScreen").hidden=true;
-  $("#galleryView").hidden=false;
-  await loadSelection();
-  loadManifestInstant();
-  updateUI();
-}
-async function loadSelection(){
-  const s=await get(ref(db,`galleries/${slug}/selections/${uid}`));
-  favorites.clear();meta=null;
-  if(s.exists()){
-    const d=s.val()||{};
-    Object.values(d.items||{}).forEach(v=>{if(v?.filename)favorites.set(v.filename,v)});
-    meta=d.meta||null;
-  }
+async function sha256(text) {
+  const data = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-/* v10:
-   ZERO listAll() po stronie klienta.
-   ZERO getDownloadURL() dla previews podczas wejścia.
-   Gotowe adresy preview są już zapisane przez panel w gallery.photos.
-*/
-function loadManifestInstant(){
-  $("#loading").hidden=true;
-  $("#storageError").hidden=true;
+function selectionKey(filename) {
+  const bytes = new TextEncoder().encode(filename);
+  let binary = "";
+  bytes.forEach(b => binary += String.fromCharCode(b));
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
 
-  const manifest=gallery.photos||{};
-  photos=Object.values(manifest)
-    .filter(x=>x&&x.filename&&x.previewUrl)
-    .sort((a,b)=>a.filename.localeCompare(b.filename,undefined,{numeric:true}))
-    .map(x=>({
-      filename:x.filename,
-      preview:x.previewUrl,
-      original:null,
-      originalPath:x.originalPath||`galleries/${slug}/originals/${x.filename}`
-    }));
+function toast(message) {
+  const el = $("#toast");
+  el.textContent = message;
+  el.hidden = false;
+  clearTimeout(el._timer);
+  el._timer = setTimeout(() => el.hidden = true, 2200);
+}
 
-  $("#photoCountHero").textContent=`${photos.length} zdjęć`;
+function maxFavorites() {
+  return Number(gallery?.maxFavorites || 0);
+}
 
-  if(!photos.length){
-    $("#storageError").hidden=false;
-    $("#storageError").innerHTML="Galeria nie ma jeszcze szybkiego indeksu zdjęć. Fotograf powinien w panelu kliknąć <strong>⚡ Odbuduj indeks</strong>.";
+function isExpired() {
+  if (!gallery?.expiresAt) return false;
+  return new Date(`${gallery.expiresAt}T23:59:59`) < new Date();
+}
+
+function showFatal(message) {
+  $("#galleryNotFound").textContent = message;
+  $("#galleryNotFound").hidden = false;
+  $("#passwordForm").hidden = true;
+}
+
+async function init() {
+  if (!slug) {
+    showFatal("Brak identyfikatora galerii w linku.");
     return;
   }
 
-  const cover=photos.find(p=>p.filename===gallery.coverFile)||photos[0];
-  if(cover)$("#hero").style.backgroundImage=`url("${cover.preview}")`;
+  try {
+    const credential = await signInAnonymously(auth);
+    uid = credential.user.uid;
+
+    const publicSnap = await get(ref(db, `galleries/${slug}/public`));
+    if (!publicSnap.exists()) {
+      showFatal("Galeria nie istnieje.");
+      return;
+    }
+
+    gallery = publicSnap.val();
+
+    if (gallery.active === false) {
+      showFatal("Galeria została wyłączona.");
+      return;
+    }
+
+    if (isExpired()) {
+      showFatal("Dostęp do galerii wygasł.");
+      return;
+    }
+
+    applyGalleryMeta();
+
+    if (sessionStorage.getItem(`raf-access-${slug}`) === "1") {
+      await openGallery();
+    }
+  } catch (error) {
+    console.error("INIT ERROR", error);
+    showFatal(`Nie udało się uruchomić galerii: ${error.code || error.message || error}`);
+  }
+}
+
+function applyGalleryMeta() {
+  $("#lockTitle").textContent = gallery.title || "Galeria klienta";
+  $("#heroTitle").textContent = gallery.title || slug;
+  $("#heroSubtitle").textContent = gallery.subtitle || "Wybierz ulubione zdjęcia.";
+
+  if (gallery.expiresAt) {
+    $("#expiryLabel").textContent = `Dostęp do ${gallery.expiresAt}`;
+  }
+
+  if (maxFavorites() > 0) {
+    $("#maxFavoritesLabel").textContent = ` / ${maxFavorites()}`;
+    $("#progressWrap").hidden = false;
+  }
+}
+
+async function openGallery() {
+  $("#lockScreen").hidden = true;
+  $("#galleryView").hidden = false;
+  $("#loading").hidden = false;
+
+  await loadFavorites();
+  loadManifest();
+}
+
+async function loadFavorites() {
+  try {
+    const snap = await get(ref(db, `galleries/${slug}/selections/${uid}`));
+    favorites.clear();
+
+    if (snap.exists()) {
+      Object.values(snap.val() || {}).forEach(item => {
+        if (item?.filename) favorites.set(item.filename, item);
+      });
+    }
+  } catch (error) {
+    console.error("LOAD FAVORITES ERROR", error);
+    toast(`Nie udało się odczytać wyborów: ${error.code || error.message}`);
+  }
+}
+
+function loadManifest() {
+  const manifest = gallery.photos || {};
+
+  photos = Object.values(manifest)
+    .filter(item => item?.filename && item?.previewUrl)
+    .sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true }))
+    .map(item => ({
+      filename: item.filename,
+      preview: item.previewUrl,
+      originalPath: item.originalPath || `galleries/${slug}/originals/${item.filename}`,
+      originalUrl: null
+    }));
+
+  $("#loading").hidden = true;
+  $("#photoCountHero").textContent = `${photos.length} zdjęć`;
+
+  if (!photos.length) {
+    $("#storageError").hidden = false;
+    $("#storageError").textContent = "W tej galerii nie ma jeszcze zdjęć.";
+    render();
+    return;
+  }
+
+  const cover = photos.find(p => p.filename === gallery.coverFile) || photos[0];
+  if (cover) $("#hero").style.backgroundImage = `url("${cover.preview}")`;
 
   render();
 }
-function render(){
-  const shown=filter==="favorites"?photos.filter(p=>favorites.has(p.filename)):photos;
-  const grid=$("#grid");grid.innerHTML="";
 
-  shown.forEach(p=>{
-    const idx=photos.findIndex(x=>x.filename===p.filename);
-    const card=document.createElement("article");card.className="photo-card";
-    card.innerHTML=`<div class="photo-skeleton"></div><img loading="lazy" src="${p.preview}" alt=""><button type="button" class="photo-fav ${favorites.has(p.filename)?"active":""}" data-filename="${p.filename.replaceAll('"','&quot;')}" aria-label="Dodaj do wybranych" aria-pressed="${favorites.has(p.filename)?"true":"false"}" ${gallery.selectionEnabled===false?"hidden":""}>${favorites.has(p.filename)?"♥":"♡"}</button>`;
-    const img=card.querySelector("img");img.onload=()=>{img.classList.add("loaded");card.classList.add("is-loaded")};if(img.complete&&img.naturalWidth>0){img.classList.add("loaded");card.classList.add("is-loaded")}img.onclick=()=>openLightbox(idx);
-    const f=card.querySelector(".photo-fav");
-    if(f){
-      f.addEventListener("click",e=>{
-        e.preventDefault();
-        e.stopPropagation();
-        toggleFav(p.filename,f);
-      });
+function render() {
+  const list = filter === "favorites"
+    ? photos.filter(photo => favorites.has(photo.filename))
+    : photos;
+
+  const grid = $("#grid");
+  grid.innerHTML = "";
+
+  if (!list.length) {
+    grid.innerHTML = filter === "favorites"
+      ? '<div class="notice">Nie zaznaczono jeszcze żadnych zdjęć.</div>'
+      : "";
+    updateUI();
+    return;
+  }
+
+  list.forEach(photo => {
+    const index = photos.findIndex(p => p.filename === photo.filename);
+    const selected = favorites.has(photo.filename);
+
+    const card = document.createElement("article");
+    card.className = "photo-card";
+
+    const skeleton = document.createElement("div");
+    skeleton.className = "photo-skeleton";
+
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    img.alt = photo.filename;
+    img.src = photo.preview;
+
+    const heart = document.createElement("button");
+    heart.type = "button";
+    heart.className = `photo-fav${selected ? " active" : ""}`;
+    heart.textContent = selected ? "♥" : "♡";
+    heart.setAttribute("aria-label", selected ? "Usuń z wybranych" : "Dodaj do wybranych");
+    heart.setAttribute("aria-pressed", selected ? "true" : "false");
+
+    img.addEventListener("load", () => {
+      img.classList.add("loaded");
+      card.classList.add("is-loaded");
+    });
+
+    if (img.complete && img.naturalWidth > 0) {
+      img.classList.add("loaded");
+      card.classList.add("is-loaded");
     }
+
+    img.addEventListener("click", () => openLightbox(index));
+
+    heart.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await toggleFavorite(photo.filename);
+    });
+
+    card.append(skeleton, img, heart);
     grid.appendChild(card);
   });
 
-  if(filter==="favorites"&&!shown.length)grid.innerHTML='<div class="notice">Nie masz jeszcze wybranych zdjęć.</div>';
   updateUI();
 }
-async function toggleFav(name, button=null){
-  if(gallery.selectionEnabled===false){
-    toast("Wybieranie zdjęć jest wyłączone dla tej galerii.");
-    return;
-  }
-  if(locked()){
-    toast("Wybór został już zatwierdzony.");
-    return;
-  }
 
-  const wasSelected = favorites.has(name);
+async function toggleFavorite(filename) {
+  const wasSelected = favorites.has(filename);
 
-  if(!wasSelected && maxFav()>0 && favorites.size>=maxFav()){
-    toast(`Limit: ${maxFav()} zdjęć`);
+  if (!wasSelected && maxFavorites() > 0 && favorites.size >= maxFavorites()) {
+    toast(`Możesz wybrać maksymalnie ${maxFavorites()} zdjęć.`);
     return;
   }
 
-  // OPTIMISTYCZNIE: serce zmienia się natychmiast, bez czekania na Firebase.
-  if(wasSelected){
-    favorites.delete(name);
-  }else{
-    favorites.set(name,{filename:name,selectedAt:Date.now()});
-  }
+  const optimisticValue = { filename, selectedAt: Date.now() };
 
-  updateUI();
-  updateHeartVisuals(name);
+  if (wasSelected) favorites.delete(filename);
+  else favorites.set(filename, optimisticValue);
 
-  if(button) button.classList.add("is-saving");
+  render();
 
-  try{
-    if(wasSelected){
-      await remove(ref(db,`galleries/${slug}/selections/${uid}/items/${key(name)}`));
-    }else{
-      await set(
-        ref(db,`galleries/${slug}/selections/${uid}/items/${key(name)}`),
-        favorites.get(name)
-      );
+  try {
+    const target = ref(db, `galleries/${slug}/selections/${uid}/${selectionKey(filename)}`);
+
+    if (wasSelected) {
+      await remove(target);
+    } else {
+      await set(target, optimisticValue);
     }
-  }catch(err){
-    // Cofnij zmianę, jeśli Firebase odrzuci zapis.
-    if(wasSelected){
-      favorites.set(name,{filename:name,selectedAt:Date.now()});
-    }else{
-      favorites.delete(name);
+
+    toast(wasSelected ? "Usunięto z wybranych" : "Dodano do wybranych");
+  } catch (error) {
+    console.error("FAVORITE WRITE ERROR", error);
+
+    if (wasSelected) favorites.set(filename, optimisticValue);
+    else favorites.delete(filename);
+
+    render();
+    toast(`Błąd zapisu wyboru: ${error.code || error.message || error}`);
+  }
+}
+
+function updateUI() {
+  const count = favorites.size;
+
+  $("#favCount").textContent = count;
+  $("#selectedCount").textContent = count;
+
+  if (maxFavorites() > 0) {
+    const percent = Math.min(100, (count / maxFavorites()) * 100);
+    $("#selectProgress").style.width = `${percent}%`;
+    $("#progressText").textContent = `${count} z ${maxFavorites()} wybranych`;
+  }
+}
+
+async function getOriginalUrl(index) {
+  const photo = photos[index];
+  if (!photo) return null;
+
+  if (photo.originalUrl) return photo.originalUrl;
+
+  try {
+    photo.originalUrl = await getDownloadURL(sRef(storage, photo.originalPath));
+  } catch (error) {
+    console.warn("ORIGINAL URL ERROR", error);
+    photo.originalUrl = photo.preview;
+  }
+
+  return photo.originalUrl;
+}
+
+async function openLightbox(index) {
+  currentIndex = index;
+  const photo = photos[index];
+
+  $("#lightbox").hidden = false;
+  document.body.style.overflow = "hidden";
+  $("#lightboxImage").src = photo.preview;
+
+  updateLightboxUI();
+
+  const original = await getOriginalUrl(index);
+  if (currentIndex === index && original) {
+    $("#lightboxImage").src = original;
+    $("#lightboxDownload").href = original;
+  }
+}
+
+function updateLightboxUI() {
+  const photo = photos[currentIndex];
+  if (!photo) return;
+
+  const selected = favorites.has(photo.filename);
+
+  $("#lightboxCaption").textContent = `${currentIndex + 1} / ${photos.length} · ${photo.filename}`;
+  $("#lightboxFav").textContent = selected ? "♥" : "♡";
+  $("#lightboxFav").classList.toggle("active", selected);
+  $("#lightboxDownload").hidden = gallery.downloadsEnabled === false;
+
+  if (photo.originalUrl) $("#lightboxDownload").href = photo.originalUrl;
+}
+
+async function changeLightbox(delta) {
+  currentIndex = (currentIndex + delta + photos.length) % photos.length;
+  const photo = photos[currentIndex];
+
+  $("#lightboxImage").src = photo.preview;
+  updateLightboxUI();
+
+  const original = await getOriginalUrl(currentIndex);
+  if (original) {
+    $("#lightboxImage").src = original;
+    $("#lightboxDownload").href = original;
+  }
+}
+
+function closeLightbox() {
+  $("#lightbox").hidden = true;
+  document.body.style.overflow = "";
+}
+
+$("#passwordForm").addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  try {
+    const enteredHash = await sha256($("#passwordInput").value);
+    const ok = enteredHash === gallery.passwordHash;
+
+    $("#passwordError").hidden = ok;
+
+    if (!ok) return;
+
+    sessionStorage.setItem(`raf-access-${slug}`, "1");
+    await openGallery();
+  } catch (error) {
+    console.error("LOGIN ERROR", error);
+    $("#passwordError").textContent = `Błąd logowania: ${error.message || error}`;
+    $("#passwordError").hidden = false;
+  }
+});
+
+$("#allFilter").addEventListener("click", () => {
+  filter = "all";
+  $("#allFilter").classList.add("active");
+  $("#favFilter").classList.remove("active");
+  render();
+});
+
+$("#favFilter").addEventListener("click", () => {
+  filter = "favorites";
+  $("#favFilter").classList.add("active");
+  $("#allFilter").classList.remove("active");
+  render();
+});
+
+$("#favoritesToggle").addEventListener("click", () => $("#favFilter").click());
+
+$("#shareBtn").addEventListener("click", async () => {
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: gallery.title || "Galeria RAF.studio", url: location.href });
+    } else {
+      await navigator.clipboard.writeText(location.href);
+      toast("Link skopiowany");
     }
-    updateUI();
-    updateHeartVisuals(name);
+  } catch (_) {}
+});
 
-    console.error("Błąd zapisu ulubionego:", err);
-    toast(`Nie zapisano wyboru: ${err.code || err.message || "błąd Firebase"}`);
-  }finally{
-    if(button) button.classList.remove("is-saving");
+$("#logoutBtn").addEventListener("click", () => {
+  sessionStorage.removeItem(`raf-access-${slug}`);
+  location.reload();
+});
+
+$("#closeLightbox").addEventListener("click", closeLightbox);
+$("#prevPhoto").addEventListener("click", () => changeLightbox(-1));
+$("#nextPhoto").addEventListener("click", () => changeLightbox(1));
+
+$("#lightboxFav").addEventListener("click", async () => {
+  const photo = photos[currentIndex];
+  if (!photo) return;
+  await toggleFavorite(photo.filename);
+  updateLightboxUI();
+});
+
+$("#lightboxDownload").addEventListener("click", async (event) => {
+  const photo = photos[currentIndex];
+  if (!photo) return;
+
+  if (!photo.originalUrl) {
+    event.preventDefault();
+    const url = await getOriginalUrl(currentIndex);
+    if (url) window.open(url, "_blank", "noopener");
   }
-}
+});
 
-function updateHeartVisuals(name){
-  document.querySelectorAll(".photo-fav").forEach(btn=>{
-    if(btn.dataset.filename===name){
-      const selected=favorites.has(name);
-      btn.classList.toggle("active",selected);
-      btn.textContent=selected?"♥":"♡";
-      btn.setAttribute("aria-pressed", selected ? "true" : "false");
-    }
-  });
+document.addEventListener("keydown", (event) => {
+  if ($("#lightbox").hidden) return;
+  if (event.key === "Escape") closeLightbox();
+  if (event.key === "ArrowLeft") changeLightbox(-1);
+  if (event.key === "ArrowRight") changeLightbox(1);
+});
 
-  if(!$("#lightbox").hidden && photos[current]?.filename===name){
-    $("#lightboxFav").textContent=favorites.has(name)?"♥":"♡";$("#lightboxFav").classList.toggle("is-active",favorites.has(name));
-  }
-}
+$("#lightbox").addEventListener("touchstart", (event) => {
+  touchStartX = event.changedTouches[0].clientX;
+}, { passive: true });
 
-function updateUI(){
-  const n=favorites.size;
-  $("#favCount").textContent=n;
-  $("#selectedCount").textContent=n;
+$("#lightbox").addEventListener("touchend", (event) => {
+  const delta = event.changedTouches[0].clientX - touchStartX;
+  if (Math.abs(delta) > 60) changeLightbox(delta > 0 ? -1 : 1);
+}, { passive: true });
 
-  if(maxFav()>0){
-    $("#selectProgress").style.width=`${Math.min(100,n/maxFav()*100)}%`;
-    $("#progressText").textContent=`${n} z ${maxFav()} wybranych`;
-  }
-}
-
-async function ensureOriginal(i){
-  const p=photos[i];if(!p)return null;if(p.original)return p.original;
-  try{p.original=await getDownloadURL(sRef(storage,p.originalPath))}catch(_){p.original=p.preview}
-  return p.original;
-}
-async function openLightbox(i){
-  current=i;$("#lightbox").hidden=false;document.body.style.overflow="hidden";
-  const p=photos[i];$("#lightboxImage").src=p.preview;updateLightboxUI();
-  const url=await ensureOriginal(i);if(current===i&&url)$("#lightboxImage").src=url;
-}
-function updateLightboxUI(){
-  const p=photos[current];if(!p)return;
-  $("#lightboxCaption").textContent=`${current+1} / ${photos.length} · ${p.filename}`;
-  $("#lightboxFav").textContent=favorites.has(p.filename)?"♥":"♡";$("#lightboxFav").classList.toggle("is-active",favorites.has(p.filename));
-  $("#lightboxDownload").hidden=gallery.downloadsEnabled===false;
-  if(p.original)$("#lightboxDownload").href=p.original;
-}
-async function go(i){
-  current=(i+photos.length)%photos.length;
-  const p=photos[current];$("#lightboxImage").src=p.preview;updateLightboxUI();
-  const url=await ensureOriginal(current);if(url)$("#lightboxImage").src=url;
-}
-function closeLightbox(){$("#lightbox").hidden=true;document.body.style.overflow=""}
-
-$("#passwordForm").onsubmit=async e=>{e.preventDefault();const ok=(await hash($("#passwordInput").value))===gallery.passwordHash;$("#passwordError").hidden=ok;if(ok){sessionStorage.setItem(`raf-access-${slug}`,"1");openGallery()}};
-$("#allFilter").onclick=()=>{filter="all";$("#allFilter").classList.add("active");$("#favFilter").classList.remove("active");render()};
-$("#favFilter").onclick=()=>{filter="favorites";$("#favFilter").classList.add("active");$("#allFilter").classList.remove("active");render()};
-$("#favoritesToggle").onclick=()=>$("#favFilter").click();
-$("#shareBtn").onclick=async()=>{try{if(navigator.share)await navigator.share({title:gallery.title,url:location.href});else{await navigator.clipboard.writeText(location.href);toast("Link skopiowany")}}catch(_){}};
-$("#logoutBtn").onclick=()=>{sessionStorage.removeItem(`raf-access-${slug}`);location.reload()};
-$("#closeLightbox").onclick=closeLightbox;
-$("#prevPhoto").onclick=()=>go(current-1);
-$("#nextPhoto").onclick=()=>go(current+1);
-$("#lightboxFav").onclick=(e)=>{e.preventDefault();e.stopPropagation();toggleFav(photos[current].filename,$("#lightboxFav"))};
-$("#lightboxDownload").onclick=async e=>{if(!photos[current].original){e.preventDefault();const u=await ensureOriginal(current);if(u)window.open(u,"_blank")}};
-document.addEventListener("keydown",e=>{if($("#lightbox").hidden)return;if(e.key==="Escape")closeLightbox();if(e.key==="ArrowLeft")$("#prevPhoto").click();if(e.key==="ArrowRight")$("#nextPhoto").click()});
-$("#lightbox").addEventListener("touchstart",e=>touchX=e.changedTouches[0].clientX,{passive:true});
-$("#lightbox").addEventListener("touchend",e=>{const d=e.changedTouches[0].clientX-touchX;if(Math.abs(d)>60)(d>0?$("#prevPhoto"):$("#nextPhoto")).click()},{passive:true});
 init();
