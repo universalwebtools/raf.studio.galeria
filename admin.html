@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0b0b0c">
+  <title>RAF.studio — Panel administratora</title>
+  <link rel="stylesheet" href="style.css?v=4">
+</head>
+<body>
+  <section id="adminLogin" class="lock-screen">
+    <div class="lock-card">
+      <div class="brand">RAF<span>.studio</span></div>
+      <p class="eyebrow">PANEL ADMINISTRATORA</p>
+      <h1>Logowanie</h1>
+      <form id="adminLoginForm">
+        <input id="adminEmail" type="email" placeholder="E-mail" autocomplete="username" required>
+        <input id="adminPassword" type="password" placeholder="Hasło" autocomplete="current-password" required>
+        <button type="submit">Zaloguj</button>
+        <p id="adminLoginError" class="error" hidden></p>
+      </form>
+    </div>
+  </section>
+
+  <main id="adminPanel" class="admin-shell" hidden>
+    <header class="topbar">
+      <div>
+        <div class="brand small">RAF<span>.studio</span></div>
+        <div class="gallery-name">Panel administratora</div>
+      </div>
+      <div class="header-actions">
+        <button id="newGalleryBtn">+ Nowa galeria</button>
+        <button id="adminLogoutBtn" class="ghost">Wyloguj</button>
+      </div>
+    </header>
+
+    <section class="admin-content">
+      <div class="admin-head">
+        <div>
+          <p class="eyebrow">GALERIE</p>
+          <h1>Twoje sesje</h1>
+        </div>
+      </div>
+      <div id="galleryList" class="admin-grid"></div>
+    </section>
+  </main>
+
+  <dialog id="galleryDialog" class="admin-dialog">
+    <form id="galleryForm" method="dialog">
+      <div class="dialog-head">
+        <div>
+          <p class="eyebrow">USTAWIENIA GALERII</p>
+          <h2 id="dialogTitle">Nowa galeria</h2>
+        </div>
+        <button type="button" id="closeDialogBtn" class="ghost icon-btn">×</button>
+      </div>
+
+      <input type="hidden" id="editingSlug">
+
+      <label>Nazwa sesji
+        <input id="galleryTitleInput" required placeholder="np. Ślub Kowalscy">
+      </label>
+
+      <label>Adres / slug
+        <input id="gallerySlugInput" required placeholder="np. kowalscy-2026">
+      </label>
+
+      <label>Hasło klienta
+        <input id="galleryPasswordInput" type="password" placeholder="Zostaw puste przy edycji, aby nie zmieniać">
+      </label>
+
+      <label>Opis
+        <input id="gallerySubtitleInput" placeholder="np. Wybierz 20 ulubionych zdjęć">
+      </label>
+
+      <div class="form-row">
+        <label>Limit ulubionych
+          <input id="maxFavoritesInput" type="number" min="0" value="0">
+        </label>
+        <label class="check-label">
+          <input id="downloadsEnabledInput" type="checkbox" checked>
+          Pobieranie oryginałów
+        </label>
+        <label class="check-label">
+          <input id="galleryActiveInput" type="checkbox" checked>
+          Galeria aktywna
+        </label>
+      </div>
+
+      <div class="dialog-actions">
+        <button type="button" id="deleteGalleryBtn" class="danger" hidden>Usuń galerię</button>
+        <span></span>
+        <button type="button" id="cancelDialogBtn" class="ghost">Anuluj</button>
+        <button type="submit">Zapisz</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="selectionDialog" class="admin-dialog wide">
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow">WYBÓR KLIENTA</p>
+        <h2 id="selectionTitle">Ulubione</h2>
+      </div>
+      <button type="button" id="closeSelectionBtn" class="ghost icon-btn">×</button>
+    </div>
+    <div id="selectionContent"></div>
+  </dialog>
+
+  <script type="module" src="admin.js?v=4"></script>
+</body>
+</html>

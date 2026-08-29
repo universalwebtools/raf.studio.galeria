@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "galleries": {
+      "$galleryId": {
+        "public": {
+          ".read": "auth != null",
+          ".write": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'"
+        },
+        "selections": {
+          "$clientUid": {
+            ".read": "auth != null && (auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1' || auth.uid === $clientUid)",
+            ".write": "auth != null && (auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1' || auth.uid === $clientUid)"
+          }
+        },
+        ".read": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
+        ".write": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'"
+      }
+    }
+  }
+}
