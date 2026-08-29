@@ -1,40 +1,43 @@
-# RAF.studio Client Gallery
+# RAF.studio Client Gallery v2
 
-Pierwsza wersja galerii klienta przygotowana do publikacji przez GitHub Pages.
+## Firebase Storage
+Ta wersja pobiera zdjęcia z:
+`galleries/test-session/previews/`
 
-## Co już działa
-- ekran wejścia z hasłem,
-- responsywny układ mobile-first,
-- galeria typu masonry,
-- pełnoekranowy podgląd,
-- przewijanie zdjęć,
-- ulubione zapamiętywane w przeglądarce,
-- filtr ulubionych,
-- pobieranie pojedynczego zdjęcia,
-- lazy loading podglądów.
+Hasło testowe: `raf123`
 
-## Ważne: bezpieczeństwo wersji demo
-Hasło w `gallery-config.js` chroni tylko interfejs. Nie jest to jeszcze prawdziwa ochrona plików przed osobą techniczną, która zna narzędzia deweloperskie lub bezpośredni URL obrazu.
+## Reguły TESTOWE
+Firebase Storage -> Rules:
 
-Docelowy etap:
-1. GitHub Pages = frontend.
-2. Firebase / backend = konta galerii, sesje i autoryzacja.
-3. Storage = podglądy i oryginały poza GitHubem.
-4. Reguły/backend = klient otrzymuje dostęp wyłącznie do swojej galerii.
-5. Panel fotografa = tworzenie galerii, hasło, upload zdjęć, termin ważności, eksport zaznaczeń.
+```txt
+rules_version = '2';
 
-## Test
-Otwórz `index.html`.
-Hasło demo: `raf123`
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /galleries/test-session/{allPaths=**} {
+      allow read: if true;
+      allow write: if false;
+    }
 
-## Publikacja GitHub Pages
-1. Utwórz nowe publiczne repo, np. `raf-client-gallery`.
-2. Wgraj zawartość tego folderu do głównego katalogu repo.
-3. Settings -> Pages.
-4. Source: Deploy from a branch.
-5. Branch: `main`, folder `/ (root)`.
-6. Zapisz.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
+```
 
-## Następny krok
-Nie wrzucaj docelowych 300 MB / 1 GB zdjęć do tego repo.
-Podłączymy magazyn plików i bezpieczny dostęp klienta.
+Kliknij Publish.
+
+To pozwala tylko na odczyt plików z testowej galerii. Zapis pozostaje zablokowany.
+To jeszcze nie jest docelowa ochrona hasłem.
+
+## GitHub
+Zastąp:
+- index.html
+- style.css
+- app.js
+
+Dodaj:
+- firebase-config.js
+
+Stary `gallery-config.js` możesz usunąć.
