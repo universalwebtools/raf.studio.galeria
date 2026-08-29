@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-import { getStorage, ref as sRef, uploadBytes, listAll } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=6";
+import { getStorage, ref as sRef, uploadBytesResumable, listAll } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=7";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -290,62 +290,134 @@ $("#photoFilesInput").addEventListener("change",()=>{
   $("#uploadSize").textContent=`${(bytes/1024/1024).toFixed(1)} MB`;
 });
 
-async function makePreview(file,maxSide=2200,quality=.82){
-  const bitmap=await createImageBitmap(file);
-  let w=bitmap.width,h=bitmap.height;
-  const scale=Math.min(1,maxSide/Math.max(w,h));
-  w=Math.round(w*scale);h=Math.round(h*scale);
-  const canvas=document.createElement("canvas");
-  canvas.width=w;canvas.height=h;
-  const ctx=canvas.getContext("2d",{alpha:false});
-  ctx.drawImage(bitmap,0,0,w,h);
-  bitmap.close();
+async function makePreview(file, maxSide=1600, quality=.76){
+  // Mobile-friendly path with fallback; avoids relying only on createImageBitmap.
+  const dataUrl = await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Nie udało się odczytać zdjęcia."));
+    reader.readAsDataURL(file);
+  });
+
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image();
+    i.onload = () => resolve(i);
+    i.onerror = () => reject(new Error("Nie udało się otworzyć zdjęcia."));
+    i.src = dataUrl;
+  });
+
+  let w = img.naturalWidth, h = img.naturalHeight;
+  const scale = Math.min(1, maxSide / Math.max(w,h));
+  w = Math.max(1, Math.round(w*scale));
+  h = Math.max(1, Math.round(h*scale));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = w; canvas.height = h;
+  const ctx = canvas.getContext("2d", {alpha:false});
+  ctx.drawImage(img, 0, 0, w, h);
+
   return await new Promise((resolve,reject)=>{
-    canvas.toBlob(blob=>blob?resolve(blob):reject(new Error("Nie udało się utworzyć podglądu.")),"image/jpeg",quality);
+    canvas.toBlob(
+      blob => blob ? resolve(blob) : reject(new Error("Nie udało się utworzyć podglądu.")),
+      "image/jpeg",
+      quality
+    );
   });
 }
 
-$("#startUploadBtn").onclick=async()=>{
-  const files=[...$("#photoFilesInput").files];
-  if(!uploadSlug||!files.length){
-    showMessage($("#uploadStatus"),"Najpierw wybierz zdjęcia JPG.","error");
+function uploadWithProgress(storageRef, data, metadata, onProgress){
+  return new Promise((resolve,reject)=>{
+    const task = uploadBytesResumable(storageRef, data, metadata);
+    task.on("state_changed",
+      snap => {
+        const pct = snap.totalBytes ? (snap.bytesTransferred / snap.totalBytes) : 0;
+        onProgress(Math.max(0, Math.min(1, pct)));
+      },
+      reject,
+      resolve
+    );
+  });
+}
+
+$("#startUploadBtn").onclick = async () => {
+  const files = [...$("#photoFilesInput").files];
+
+  if(!uploadSlug || !files.length){
+    showMessage($("#uploadStatus"), "Najpierw wybierz zdjęcia JPG.", "error");
     return;
   }
 
-  const btn=$("#startUploadBtn");
-  btn.disabled=true;btn.textContent="Wysyłanie…";
+  const btn = $("#startUploadBtn");
+  btn.disabled = true;
+  btn.textContent = "Wysyłanie…";
+  $("#uploadProgress").style.width = "0%";
 
   try{
-    for(let i=0;i<files.length;i++){
-      const file=files[i];
-      if(!/image\/jpe?g/i.test(file.type)) throw new Error(`${file.name} nie jest JPG/JPEG.`);
+    for(let i=0; i<files.length; i++){
+      const file = files[i];
 
-      showMessage($("#uploadStatus"),`${i+1}/${files.length}: ${file.name} — wysyłam oryginał…`);
+      if(!/image\/jpe?g/i.test(file.type)){
+        throw new Error(`${file.name} nie jest JPG/JPEG.`);
+      }
 
-      await uploadBytes(
-        sRef(storage,`galleries/${uploadSlug}/originals/${file.name}`),
-        file,
-        {contentType:"image/jpeg"}
+      showMessage(
+        $("#uploadStatus"),
+        `${i+1}/${files.length}: ${file.name} — przygotowuję podgląd…`
       );
 
-      showMessage($("#uploadStatus"),`${i+1}/${files.length}: ${file.name} — tworzę podgląd…`);
+      // Make the small preview first. If this fails, don't waste time uploading the original.
+      const preview = await makePreview(file);
 
-      const preview=await makePreview(file);
-      await uploadBytes(
-        sRef(storage,`galleries/${uploadSlug}/previews/${file.name}`),
+      const perFileBase = i / files.length;
+      const perFileWeight = 1 / files.length;
+
+      showMessage(
+        $("#uploadStatus"),
+        `${i+1}/${files.length}: ${file.name} — wysyłam podgląd…`
+      );
+
+      await uploadWithProgress(
+        sRef(storage, `galleries/${uploadSlug}/previews/${file.name}`),
         preview,
-        {contentType:"image/jpeg"}
+        {contentType:"image/jpeg"},
+        p => {
+          // preview = first 15% of this file's visual progress
+          const overall = perFileBase + perFileWeight * (p * 0.15);
+          $("#uploadProgress").style.width = `${Math.round(overall*100)}%`;
+        }
       );
 
-      $("#uploadProgress").style.width=`${Math.round(((i+1)/files.length)*100)}%`;
+      showMessage(
+        $("#uploadStatus"),
+        `${i+1}/${files.length}: ${file.name} — wysyłam oryginał…`
+      );
+
+      await uploadWithProgress(
+        sRef(storage, `galleries/${uploadSlug}/originals/${file.name}`),
+        file,
+        {contentType:"image/jpeg"},
+        p => {
+          // original = remaining 85%
+          const overall = perFileBase + perFileWeight * (0.15 + p * 0.85);
+          $("#uploadProgress").style.width = `${Math.round(overall*100)}%`;
+        }
+      );
     }
 
-    showMessage($("#uploadStatus"),`Gotowe — dodano ${files.length} zdjęć.`,"ok");
+    $("#uploadProgress").style.width = "100%";
+    showMessage($("#uploadStatus"), `Gotowe — dodano ${files.length} zdjęć.`, "ok");
     refreshPhotoCounts();
+
   }catch(err){
-    showMessage($("#uploadStatus"),"Błąd uploadu: "+(err.message||err),"error");
+    console.error(err);
+    showMessage(
+      $("#uploadStatus"),
+      `Błąd uploadu: ${err.code ? err.code + " — " : ""}${err.message || err}`,
+      "error"
+    );
   }finally{
-    btn.disabled=false;btn.textContent="Wyślij zdjęcia";
+    btn.disabled = false;
+    btn.textContent = "Wyślij zdjęcia";
   }
 };
 

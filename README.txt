@@ -1,20 +1,17 @@
-RAF.studio v6
+RAF.studio v7 - szybszy upload mobilny
 
-PODMIEŃ NA GITHUBIE:
+Podmień na GitHubie:
 - admin.html
 - admin.js
-- style.css
 
-firebase-config.js, index.html, app.js zostają bez zmian.
+Najważniejsze zmiany:
+- realny postęp uploadu bajt po bajcie
+- pokazuje dokładnie, czy trwa podgląd czy oryginał
+- podgląd 1600 px / JPEG 76%, więc telefon generuje go szybciej
+- podgląd wysyłany najpierw
+- dokładny kod błędu Firebase przy awarii
+- wersja ?v=7 omija cache przeglądarki
 
-Co poprawione:
-- karta galerii renderuje się natychmiast po zapisie
-- nie czeka na odczyt Storage
-- po utworzeniu pojawia się osobne okno z gotowym linkiem
-- przycisk Kopiuj link
-- przycisk + Dodaj zdjęcia teraz
-- przycisk Otwórz galerię
-- w każdej karcie jest + Dodaj zdjęcia
-- upload tworzy originals i previews automatycznie
-
-Reguł Firebase nie zmieniaj, jeśli masz już poprawione reguły Realtime Database z poprzedniej wiadomości.
+UWAGA:
+Jeśli w tle nadal widzisz Permission denied, najpierw popraw reguły Realtime Database.
+Storage także musi mieć regułę write dla UID admina.
