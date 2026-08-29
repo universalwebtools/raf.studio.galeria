@@ -1,34 +1,39 @@
-RAF.studio v11.2 — FAVORITES FIX
+RAF.studio v11.3 — DOWNLOAD SELECTION
 
-Dlaczego:
-Stare ulubione były pod:
-galleries/{slug}/selections/{uid}
+Nowe funkcje klienta:
 
-v11.2 przenosi je do osobnej, prostszej gałęzi:
-favorites/{slug}/{uid}/{photoKey}
+❤️ Serce
+- nadal zapisuje wybór klienta dla fotografa w Firebase
+- nic w tej logice nie zostało zmienione
 
-Dzięki temu reguły klienta nie mieszają się z administracyjnymi regułami galerii.
+↓ Pobierz
+- pobiera jedno konkretne zdjęcie w pełnej jakości
 
-KRYTYCZNIE WAŻNE:
-Firebase -> Realtime Database -> Rules
-1. usuń obecne reguły
-2. wklej CAŁY database-rules.json z tej paczki
-3. kliknij Publish
+○ / ✓
+- osobne zaznaczenie do pobrania
+- NIE zapisuje się w Firebase
+- NIE wpływa na serduszka
+- istnieje tylko podczas bieżącego otwarcia strony
 
-Bez kroku 3 Firebase nadal będzie zwracał PERMISSION_DENIED.
+Po zaznaczeniu zdjęć pojawia się pasek:
+Pobierz wybrane (X)
+
+Pobierz wybrane:
+- pobiera oryginały zaznaczonych zdjęć
+- pakuje je do jednego ZIP
+- pokazuje postęp
+- pobiera plik np.:
+  milena-konrad2026-wybrane-15.zip
+
+WAŻNE:
+Przy bardzo dużej liczbie pełnych JPG ZIP może zużyć sporo pamięci RAM,
+szczególnie na telefonie. Dla 10–30 zdjęć na komputerze powinno być OK.
 
 NA GITHUBIE PODMIEŃ:
 - index.html
-- admin.html
-- app.js
-- admin.js
 - style.css
+- app.js
+- admin.html
+- admin.js
 
-Reguł Storage nie zmieniaj.
-
-Po zmianie:
-- serce robi się czerwone
-- wybór zapisuje się w /favorites
-- po odświeżeniu serce nadal jest zaznaczone
-- panel admina -> Wybory pokazuje pliki klienta
-- usunięcie galerii usuwa również jej favorites
+REGUŁ FIREBASE NIE ZMIENIAJ.

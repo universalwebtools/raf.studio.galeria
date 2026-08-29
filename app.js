@@ -2,7 +2,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=11.2";
+import { firebaseConfig } from "./firebase-config.js?v=11.3";
+import JSZip from "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -13,6 +14,7 @@ const $ = (selector) => document.querySelector(selector);
 const slug = new URLSearchParams(location.search).get("g") || "";
 
 let uid = null;
+let downloadSelection = new Set();
 let gallery = null;
 let photos = [];
 let favorites = new Map();
@@ -238,12 +240,31 @@ function render() {
     img.alt = photo.filename;
     img.src = photo.preview;
 
+    const tools = document.createElement("div");
+    tools.className = "photo-card-tools";
+
     const heart = document.createElement("button");
     heart.type = "button";
     heart.className = `photo-fav${selected ? " active" : ""}`;
     heart.textContent = selected ? "♥" : "♡";
-    heart.setAttribute("aria-label", selected ? "Usuń z wybranych" : "Dodaj do wybranych");
+    heart.title = selected ? "Usuń z wybranych dla fotografa" : "Dodaj do wybranych dla fotografa";
+    heart.setAttribute("aria-label", heart.title);
     heart.setAttribute("aria-pressed", selected ? "true" : "false");
+
+    const downloadOne = document.createElement("button");
+    downloadOne.type = "button";
+    downloadOne.className = "photo-download";
+    downloadOne.textContent = "↓";
+    downloadOne.title = "Pobierz to zdjęcie";
+    downloadOne.setAttribute("aria-label", downloadOne.title);
+
+    const selectDownload = document.createElement("button");
+    selectDownload.type = "button";
+    selectDownload.className = `photo-select-download${downloadSelection.has(photo.filename) ? " active" : ""}`;
+    selectDownload.textContent = downloadSelection.has(photo.filename) ? "✓" : "○";
+    selectDownload.title = "Zaznacz do pobrania";
+    selectDownload.setAttribute("aria-label", selectDownload.title);
+    selectDownload.setAttribute("aria-pressed", downloadSelection.has(photo.filename) ? "true" : "false");
 
     img.addEventListener("load", () => {
       img.classList.add("loaded");
@@ -263,7 +284,20 @@ function render() {
       await toggleFavorite(photo.filename);
     });
 
-    card.append(skeleton, img, heart);
+    downloadOne.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await downloadSinglePhoto(index);
+    });
+
+    selectDownload.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleDownloadSelection(photo.filename);
+    });
+
+    tools.append(heart, downloadOne, selectDownload);
+    card.append(skeleton, img, tools);
     grid.appendChild(card);
   });
 
@@ -320,6 +354,163 @@ function updateUI() {
     const percent = Math.min(100, (count / maxFavorites()) * 100);
     $("#selectProgress").style.width = `${percent}%`;
     $("#progressText").textContent = `${count} z ${maxFavorites()} wybranych`;
+  }
+
+  updateDownloadUI();
+}
+
+
+function toggleDownloadSelection(filename) {
+  if (downloadSelection.has(filename)) {
+    downloadSelection.delete(filename);
+  } else {
+    downloadSelection.add(filename);
+  }
+
+  render();
+}
+
+function updateDownloadUI() {
+  const count = downloadSelection.size;
+  const bar = $("#downloadBar");
+
+  if (!bar) return;
+
+  $("#downloadSelectedCount").textContent = count;
+  bar.hidden = count === 0;
+
+  const button = $("#downloadSelectedBtn");
+  if (button) {
+    button.textContent = count > 0
+      ? `↓ Pobierz wybrane (${count})`
+      : "↓ Pobierz wybrane";
+  }
+}
+
+async function forceBrowserDownload(url, filename) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const blob = await response.blob();
+    const localUrl = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = localUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(() => URL.revokeObjectURL(localUrl), 1500);
+  } catch (error) {
+    console.warn("Direct download fallback:", error);
+    window.open(url, "_blank", "noopener");
+  }
+}
+
+async function downloadSinglePhoto(index) {
+  if (gallery.downloadsEnabled === false) {
+    toast("Pobieranie zdjęć jest wyłączone dla tej galerii.");
+    return;
+  }
+
+  const photo = photos[index];
+  if (!photo) return;
+
+  toast("Przygotowuję zdjęcie…");
+
+  const url = await getOriginalUrl(index);
+  if (!url) {
+    toast("Nie udało się pobrać zdjęcia.");
+    return;
+  }
+
+  await forceBrowserDownload(url, photo.filename);
+}
+
+async function downloadSelectedAsZip() {
+  if (gallery.downloadsEnabled === false) {
+    toast("Pobieranie zdjęć jest wyłączone dla tej galerii.");
+    return;
+  }
+
+  const selected = photos.filter(photo => downloadSelection.has(photo.filename));
+
+  if (!selected.length) {
+    toast("Najpierw zaznacz zdjęcia do pobrania.");
+    return;
+  }
+
+  const dialog = $("#downloadDialog");
+  const text = $("#downloadDialogText");
+  const progress = $("#zipProgress");
+  const errorBox = $("#downloadDialogError");
+  const mainButton = $("#downloadSelectedBtn");
+
+  errorBox.hidden = true;
+  progress.style.width = "0%";
+  mainButton.disabled = true;
+  dialog.showModal();
+
+  try {
+    const zip = new JSZip();
+
+    for (let i = 0; i < selected.length; i++) {
+      const photo = selected[i];
+      const photoIndex = photos.findIndex(p => p.filename === photo.filename);
+
+      text.textContent = `Pobieram ${i + 1} z ${selected.length}: ${photo.filename}`;
+
+      const url = await getOriginalUrl(photoIndex);
+      if (!url) throw new Error(`Brak oryginału: ${photo.filename}`);
+
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Nie udało się pobrać ${photo.filename}`);
+
+      const blob = await response.blob();
+      zip.file(photo.filename, blob);
+
+      progress.style.width = `${Math.round(((i + 1) / selected.length) * 75)}%`;
+    }
+
+    text.textContent = "Pakuję zdjęcia do ZIP…";
+
+    const zipBlob = await zip.generateAsync(
+      { type: "blob", compression: "STORE" },
+      metadata => {
+        const percent = 75 + Math.round(metadata.percent * 0.25);
+        progress.style.width = `${Math.min(100, percent)}%`;
+      }
+    );
+
+    progress.style.width = "100%";
+    text.textContent = "Gotowe — rozpoczynam pobieranie…";
+
+    const zipUrl = URL.createObjectURL(zipBlob);
+    const link = document.createElement("a");
+    link.href = zipUrl;
+    link.download = `${slug}-wybrane-${selected.length}.zip`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(() => URL.revokeObjectURL(zipUrl), 3000);
+
+    downloadSelection.clear();
+    render();
+
+    setTimeout(() => {
+      if (dialog.open) dialog.close();
+    }, 700);
+
+    toast(`Pobrano ${selected.length} zdjęć w ZIP.`);
+  } catch (error) {
+    console.error("ZIP DOWNLOAD ERROR", error);
+    errorBox.textContent = `Nie udało się przygotować ZIP: ${error.message || error}`;
+    errorBox.hidden = false;
+  } finally {
+    mainButton.disabled = false;
   }
 }
 
@@ -503,5 +694,16 @@ $("#lightbox").addEventListener("touchend", (event) => {
   const delta = event.changedTouches[0].clientX - touchStartX;
   if (Math.abs(delta) > 60) changeLightbox(delta > 0 ? -1 : 1);
 }, { passive: true });
+
+$("#downloadSelectedBtn")?.addEventListener("click", downloadSelectedAsZip);
+
+$("#clearDownloadSelectionBtn")?.addEventListener("click", () => {
+  downloadSelection.clear();
+  render();
+});
+
+$("#closeDownloadDialog")?.addEventListener("click", () => {
+  if ($("#downloadDialog").open) $("#downloadDialog").close();
+});
 
 init();

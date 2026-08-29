@@ -90,3 +90,124 @@ input,select{width:100%;background:#0e0e10;border:1px solid #34343a;color:#fff;b
   .lock-card .raf-logo{width:160px !important}
   .client-topbar .raf-logo{width:98px !important}
 }
+
+
+/* ===== v11.3: osobny wybór do pobierania ===== */
+.photo-card-tools{
+  position:absolute;
+  top:9px;
+  right:9px;
+  z-index:25;
+  display:flex;
+  gap:6px;
+  pointer-events:auto;
+}
+
+.photo-card-tools .photo-fav,
+.photo-card-tools .photo-download,
+.photo-card-tools .photo-select-download{
+  position:static !important;
+  width:40px;
+  height:40px;
+  padding:0;
+  display:grid;
+  place-items:center;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.24);
+  background:rgba(9,9,11,.78);
+  color:#fff;
+  backdrop-filter:blur(10px);
+  cursor:pointer;
+  pointer-events:auto !important;
+  font-size:19px;
+  line-height:1;
+}
+
+.photo-card-tools .photo-fav.active{
+  color:var(--red) !important;
+  border-color:rgba(255,59,77,.75) !important;
+  background:rgba(9,9,11,.88) !important;
+}
+
+.photo-card-tools .photo-select-download.active{
+  color:#111 !important;
+  background:#f4f4f1 !important;
+  border-color:#f4f4f1 !important;
+}
+
+.photo-card-tools .photo-download:hover,
+.photo-card-tools .photo-select-download:hover,
+.photo-card-tools .photo-fav:hover{
+  transform:translateY(-1px);
+}
+
+.download-bar{
+  position:sticky;
+  top:66px;
+  z-index:24;
+  max-width:1450px;
+  margin:12px auto 0;
+  padding:12px 14px 12px 18px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:18px;
+  background:rgba(20,20,23,.94);
+  border:1px solid #35353b;
+  border-radius:16px;
+  backdrop-filter:blur(15px);
+  box-shadow:0 12px 40px rgba(0,0,0,.28);
+}
+
+.download-bar-info strong{display:block}
+.download-bar-info small{
+  display:block;
+  margin-top:3px;
+  color:#8d8d94;
+}
+.download-bar-actions{
+  display:flex;
+  gap:8px;
+  flex-shrink:0;
+}
+
+.download-dialog{
+  width:min(560px,calc(100% - 24px));
+}
+.download-dialog .progress-track{
+  margin-top:18px;
+}
+#zipProgress{
+  width:0%;
+}
+
+@media(max-width:760px){
+  .photo-card-tools{
+    top:6px;
+    right:6px;
+    gap:4px;
+  }
+
+  .photo-card-tools .photo-fav,
+  .photo-card-tools .photo-download,
+  .photo-card-tools .photo-select-download{
+    width:33px;
+    height:33px;
+    font-size:16px;
+  }
+
+  .download-bar{
+    top:59px;
+    margin:8px 6px 0;
+    padding:10px;
+    border-radius:13px;
+  }
+
+  .download-bar-info small{display:none}
+  .download-bar-actions .ghost{display:none}
+  .download-bar-actions .primary{
+    padding:10px 12px;
+    font-size:12px;
+    white-space:nowrap;
+  }
+}

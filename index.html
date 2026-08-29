@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
   <title>RAF.studio — Galeria klienta</title>
-  <link rel="stylesheet" href="style.css?v=11.2">
+  <link rel="stylesheet" href="style.css?v=11.3">
 </head>
 <body class="client-body">
 
 <section id="lockScreen" class="lock-screen">
   <div class="lock-card">
-    <img class="raf-logo login-logo" src="logo-white.png?v=11.2" alt="RAF.studio">
+    <img class="raf-logo login-logo" src="logo-white.png?v=11.3" alt="RAF.studio">
     <p class="eyebrow">PRYWATNA GALERIA</p>
     <h1 id="lockTitle">Galeria klienta</h1>
     <p class="muted">Wpisz hasło otrzymane od fotografa.</p>
@@ -28,7 +28,7 @@
 
 <main id="galleryView" hidden>
   <header class="client-topbar">
-    <img class="raf-logo top-logo" src="logo-white.png?v=11.2" alt="RAF.studio">
+    <img class="raf-logo top-logo" src="logo-white.png?v=11.3" alt="RAF.studio">
     <div class="top-actions">
       <button id="favoritesToggle" type="button" class="ghost">♥ Wybrane <span id="favCount">0</span></button>
       <button id="shareBtn" type="button" class="ghost">Udostępnij</button>
@@ -62,13 +62,24 @@
     <small id="progressText"></small>
   </div>
 
+  <div id="downloadBar" class="download-bar" hidden>
+    <div class="download-bar-info">
+      <strong>Zaznaczono do pobrania: <span id="downloadSelectedCount">0</span></strong>
+      <small>✓ wybiera zdjęcia tylko do pobrania — nie zmienia serduszek</small>
+    </div>
+    <div class="download-bar-actions">
+      <button id="clearDownloadSelectionBtn" type="button" class="ghost">Wyczyść</button>
+      <button id="downloadSelectedBtn" type="button" class="primary">↓ Pobierz wybrane</button>
+    </div>
+  </div>
+
   <div id="loading" class="loading"><span class="spinner"></span>Ładowanie galerii…</div>
   <div id="storageError" class="notice error-box" hidden></div>
 
   <section id="grid" class="photo-grid"></section>
 
   <footer class="client-footer">
-    <img class="raf-logo footer-logo" src="logo-white.png?v=11.2" alt="RAF.studio">
+    <img class="raf-logo footer-logo" src="logo-white.png?v=11.3" alt="RAF.studio">
   </footer>
 </main>
 
@@ -87,8 +98,21 @@
   <button id="nextPhoto" type="button" class="lb-arrow lb-right">›</button>
 </div>
 
+<dialog id="downloadDialog" class="dialog download-dialog">
+  <div class="dialog-head">
+    <div>
+      <p class="eyebrow">POBIERANIE</p>
+      <h2>Przygotowuję ZIP</h2>
+    </div>
+    <button id="closeDownloadDialog" type="button" class="ghost close-btn">×</button>
+  </div>
+  <p id="downloadDialogText" class="muted">Przygotowywanie plików…</p>
+  <div class="progress-track"><div id="zipProgress" class="progress-bar"></div></div>
+  <div id="downloadDialogError" class="notice error" hidden></div>
+</dialog>
+
 <div id="toast" class="toast" hidden></div>
 
-<script type="module" src="app.js?v=11.2"></script>
+<script type="module" src="app.js?v=11.3"></script>
 </body>
 </html>
