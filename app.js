@@ -14,6 +14,7 @@ function toast(msg){const t=$("#toast");t.textContent=msg;t.hidden=false;clearTi
 function maxFav(){return Number(gallery?.maxFavorites||0)}
 function locked(){return !!(gallery?.lockAfterSubmit&&meta?.submittedAt)}
 function expired(){return gallery?.expiresAt&&new Date(gallery.expiresAt+"T23:59:59")<new Date()}
+function originalNameFromPreview(name){return name.toLowerCase().endsWith(".webp")?name.slice(0,-5):name}
 
 async function init(){
   try{
@@ -32,50 +33,181 @@ async function init(){
   }catch(e){fail("Nie udało się połączyć z galerią.")}
 }
 function fail(m){$("#galleryNotFound").hidden=false;$("#galleryNotFound").textContent=m;$("#passwordForm").hidden=true}
-async function openGallery(){$("#lockScreen").hidden=true;$("#galleryView").hidden=false;await loadSelection();await loadPhotos();updateUI()}
-async function loadSelection(){const s=await get(ref(db,`galleries/${slug}/selections/${uid}`));favorites.clear();meta=null;if(s.exists()){const d=s.val()||{};Object.values(d.items||{}).forEach(v=>{if(v?.filename)favorites.set(v.filename,v)});meta=d.meta||null}}
-async function loadPhotos(){
-  $("#loading").hidden=false;
-  try{
-    const r=await listAll(sRef(storage,`galleries/${slug}/previews`));
-    const items=[...r.items].sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
-    photos=await Promise.all(items.map(async i=>{const preview=await getDownloadURL(i);let original=preview;if(gallery.downloadsEnabled!==false){try{original=await getDownloadURL(sRef(storage,`galleries/${slug}/originals/${i.name}`))}catch(_){}}return{filename:i.name,preview,original}}));
-    $("#photoCountHero").textContent=`${photos.length} zdjęć`;
-    const cover=photos.find(p=>p.filename===gallery.coverFile)||photos[0];if(cover)$("#hero").style.backgroundImage=`url("${cover.preview}")`;
-    render();
-  }catch(e){$("#storageError").hidden=false;$("#storageError").textContent=`Błąd zdjęć: ${e.code||""} ${e.message||e}`}
-  finally{$("#loading").hidden=true}
-}
-function render(){
-  const shown=filter==="favorites"?photos.filter(p=>favorites.has(p.filename)):photos,grid=$("#grid");grid.innerHTML="";
-  for(const p of shown){
-    const idx=photos.findIndex(x=>x.filename===p.filename),card=document.createElement("article");card.className="photo-card";
-    card.innerHTML=`<img loading="lazy" src="${p.preview}" alt=""><button class="photo-fav ${favorites.has(p.filename)?"active":""}" ${gallery.selectionEnabled===false?"hidden":""}>${favorites.has(p.filename)?"♥":"♡"}</button>`;
-    const img=card.querySelector("img");img.onload=()=>img.classList.add("loaded");img.onclick=()=>openLightbox(idx);
-    const f=card.querySelector(".photo-fav");if(f)f.onclick=e=>{e.stopPropagation();toggleFav(p.filename)};
-    grid.appendChild(card);
-  }
-  if(filter==="favorites"&&!shown.length)grid.innerHTML='<div class="notice">Nie masz jeszcze wybranych zdjęć.</div>';
+
+async function openGallery(){
+  $("#lockScreen").hidden=true;
+  $("#galleryView").hidden=false;
+  await loadSelection();
+  await loadPhotosFAST();
   updateUI();
 }
+
+async function loadSelection(){
+  const s=await get(ref(db,`galleries/${slug}/selections/${uid}`));
+  favorites.clear();meta=null;
+  if(s.exists()){
+    const d=s.val()||{};
+    Object.values(d.items||{}).forEach(v=>{if(v?.filename)favorites.set(v.filename,v)});
+    meta=d.meta||null;
+  }
+}
+
+async function loadPhotosFAST(){
+  $("#loading").hidden=false;
+  $("#storageError").hidden=true;
+
+  try{
+    const r=await listAll(sRef(storage,`galleries/${slug}/previews`));
+    const items=[...r.items].sort((a,b)=>originalNameFromPreview(a.name).localeCompare(originalNameFromPreview(b.name),undefined,{numeric:true}));
+
+    // IMPORTANT: only preview URLs are resolved here. Originals are lazy.
+    photos = items.map(i=>({
+      filename: originalNameFromPreview(i.name),
+      previewRef: i,
+      preview: null,
+      original: null
+    }));
+
+    $("#photoCountHero").textContent=`${photos.length} zdjęć`;
+
+    // Render placeholders immediately so user sees the gallery structure instantly.
+    render();
+
+    // Resolve preview URLs progressively in small concurrent batches.
+    const concurrency = 6;
+    let cursor = 0;
+
+    async function worker(){
+      while(cursor < photos.length){
+        const idx = cursor++;
+        const p = photos[idx];
+        try{
+          p.preview = await getDownloadURL(p.previewRef);
+          const img = document.querySelector(`img[data-photo-index="${idx}"]`);
+          if(img){
+            img.src = p.preview;
+            if(img.complete) img.classList.add("loaded");
+          }
+          if((gallery.coverFile===p.filename || (!gallery.coverFile && idx===0)) && p.preview){
+            $("#hero").style.backgroundImage=`url("${p.preview}")`;
+          }
+        }catch(e){
+          console.warn("Preview URL error", p.filename, e);
+        }
+      }
+    }
+
+    await Promise.all(Array.from({length:Math.min(concurrency,photos.length)},()=>worker()));
+
+  }catch(e){
+    $("#storageError").hidden=false;
+    $("#storageError").textContent=`Błąd zdjęć: ${e.code||""} ${e.message||e}`;
+  }finally{
+    $("#loading").hidden=true;
+  }
+}
+
+function render(){
+  const shownIndexes=[];
+  photos.forEach((p,i)=>{if(filter==="all"||favorites.has(p.filename))shownIndexes.push(i)});
+  const grid=$("#grid");grid.innerHTML="";
+
+  for(const idx of shownIndexes){
+    const p=photos[idx];
+    const card=document.createElement("article");card.className="photo-card";
+    card.innerHTML=`<div class="photo-skeleton"></div><img data-photo-index="${idx}" loading="lazy" ${p.preview?`src="${p.preview}"`:""} alt=""><button class="photo-fav ${favorites.has(p.filename)?"active":""}" ${gallery.selectionEnabled===false?"hidden":""}>${favorites.has(p.filename)?"♥":"♡"}</button>`;
+    const img=card.querySelector("img");
+    img.onload=()=>img.classList.add("loaded");
+    img.onclick=()=>openLightbox(idx);
+    const f=card.querySelector(".photo-fav");
+    if(f)f.onclick=e=>{e.stopPropagation();toggleFav(p.filename)};
+    grid.appendChild(card);
+  }
+
+  if(filter==="favorites"&&!shownIndexes.length)grid.innerHTML='<div class="notice">Nie masz jeszcze wybranych zdjęć.</div>';
+  updateUI();
+}
+
 async function toggleFav(name){
   if(gallery.selectionEnabled===false)return;
   if(locked())return toast("Wybór został już zatwierdzony.");
-  if(favorites.has(name)){await remove(ref(db,`galleries/${slug}/selections/${uid}/items/${key(name)}`));favorites.delete(name)}
-  else{if(maxFav()>0&&favorites.size>=maxFav())return toast(`Limit: ${maxFav()} zdjęć`);const v={filename:name,selectedAt:Date.now()};await set(ref(db,`galleries/${slug}/selections/${uid}/items/${key(name)}`),v);favorites.set(name,v)}
-  if(meta?.submittedAt&&!gallery.lockAfterSubmit){meta.submittedAt=null;await update(ref(db,`galleries/${slug}/selections/${uid}/meta`),{submittedAt:null,updatedAt:Date.now()})}
-  render();if(!$("#lightbox").hidden)updateLightbox();
+
+  if(favorites.has(name)){
+    await remove(ref(db,`galleries/${slug}/selections/${uid}/items/${key(name)}`));
+    favorites.delete(name);
+  }else{
+    if(maxFav()>0&&favorites.size>=maxFav())return toast(`Limit: ${maxFav()} zdjęć`);
+    const v={filename:name,selectedAt:Date.now()};
+    await set(ref(db,`galleries/${slug}/selections/${uid}/items/${key(name)}`),v);
+    favorites.set(name,v);
+  }
+
+  if(meta?.submittedAt&&!gallery.lockAfterSubmit){
+    meta.submittedAt=null;
+    await update(ref(db,`galleries/${slug}/selections/${uid}/meta`),{submittedAt:null,updatedAt:Date.now()});
+  }
+  render();
+  if(!$("#lightbox").hidden)updateLightbox();
 }
+
 function updateUI(){
-  const n=favorites.size;$("#favCount").textContent=n;$("#selectedCount").textContent=n;$("#dockCount").textContent=n;
+  const n=favorites.size;
+  $("#favCount").textContent=n;$("#selectedCount").textContent=n;$("#dockCount").textContent=n;
   if(maxFav()>0){$("#selectProgress").style.width=`${Math.min(100,n/maxFav()*100)}%`;$("#progressText").textContent=`${n} z ${maxFav()} wybranych`}
   $("#selectionDock").hidden=gallery?.selectionEnabled===false||n===0;
   $("#submitSelectionBtn").textContent=meta?.submittedAt?"Wybór zatwierdzony ✓":"Zatwierdź wybór";
   $("#submitSelectionBtn").disabled=locked();
   $("#dockHint").textContent=meta?.submittedAt?(locked()?"Wybór jest zamknięty.":"Zmiana zdjęcia cofnie zatwierdzenie."):"Wybór zapisuje się automatycznie.";
 }
-function openLightbox(i){current=i;$("#lightbox").hidden=false;document.body.style.overflow="hidden";updateLightbox()}
-function updateLightbox(){const p=photos[current];if(!p)return;$("#lightboxImage").src=p.original;$("#lightboxCaption").textContent=`${current+1} / ${photos.length} · ${p.filename}`;$("#lightboxFav").textContent=favorites.has(p.filename)?"♥":"♡";$("#lightboxDownload").href=p.original;$("#lightboxDownload").hidden=gallery.downloadsEnabled===false}
+
+async function ensureOriginal(index){
+  const p=photos[index];
+  if(!p)return null;
+  if(p.original)return p.original;
+
+  if(gallery.downloadsEnabled===false){
+    p.original=p.preview;
+    return p.original;
+  }
+
+  try{
+    p.original=await getDownloadURL(sRef(storage,`galleries/${slug}/originals/${p.filename}`));
+  }catch(_){
+    p.original=p.preview;
+  }
+  return p.original;
+}
+
+async function openLightbox(i){
+  current=i;
+  $("#lightbox").hidden=false;
+  document.body.style.overflow="hidden";
+  // Show preview instantly first.
+  const p=photos[current];
+  $("#lightboxImage").src=p.preview||"";
+  updateLightboxUI();
+  // Then fetch the original lazily only for this photo.
+  const original=await ensureOriginal(i);
+  if(current===i && original) $("#lightboxImage").src=original;
+}
+
+function updateLightboxUI(){
+  const p=photos[current];if(!p)return;
+  $("#lightboxCaption").textContent=`${current+1} / ${photos.length} · ${p.filename}`;
+  $("#lightboxFav").textContent=favorites.has(p.filename)?"♥":"♡";
+  $("#lightboxDownload").hidden=gallery.downloadsEnabled===false;
+  if(p.original)$("#lightboxDownload").href=p.original;
+}
+
+async function goToPhoto(nextIndex){
+  current=(nextIndex+photos.length)%photos.length;
+  const p=photos[current];
+  $("#lightboxImage").src=p.preview||"";
+  updateLightboxUI();
+  const original=await ensureOriginal(current);
+  if(original)$("#lightboxImage").src=original;
+}
+
 function closeLightbox(){$("#lightbox").hidden=true;document.body.style.overflow=""}
 
 $("#passwordForm").onsubmit=async e=>{e.preventDefault();const ok=(await hash($("#passwordInput").value))===gallery.passwordHash;$("#passwordError").hidden=ok;if(ok){sessionStorage.setItem(`raf-access-${slug}`,"1");openGallery()}};
@@ -85,9 +217,16 @@ $("#favoritesToggle").onclick=()=>$("#favFilter").click();
 $("#shareBtn").onclick=async()=>{try{if(navigator.share)await navigator.share({title:gallery.title,url:location.href});else{await navigator.clipboard.writeText(location.href);toast("Link skopiowany")}}catch(_){}};
 $("#logoutBtn").onclick=()=>{sessionStorage.removeItem(`raf-access-${slug}`);location.reload()};
 $("#closeLightbox").onclick=closeLightbox;
-$("#prevPhoto").onclick=()=>{current=(current-1+photos.length)%photos.length;updateLightbox()};
-$("#nextPhoto").onclick=()=>{current=(current+1)%photos.length;updateLightbox()};
+$("#prevPhoto").onclick=()=>goToPhoto(current-1);
+$("#nextPhoto").onclick=()=>goToPhoto(current+1);
 $("#lightboxFav").onclick=()=>toggleFav(photos[current].filename);
+$("#lightboxDownload").onclick=async e=>{
+  if(!photos[current].original){
+    e.preventDefault();
+    const url=await ensureOriginal(current);
+    if(url)window.open(url,"_blank");
+  }
+};
 document.addEventListener("keydown",e=>{if($("#lightbox").hidden)return;if(e.key==="Escape")closeLightbox();if(e.key==="ArrowLeft")$("#prevPhoto").click();if(e.key==="ArrowRight")$("#nextPhoto").click()});
 $("#lightbox").addEventListener("touchstart",e=>touchX=e.changedTouches[0].clientX,{passive:true});
 $("#lightbox").addEventListener("touchend",e=>{const d=e.changedTouches[0].clientX-touchX;if(Math.abs(d)>60)(d>0?$("#prevPhoto"):$("#nextPhoto")).click()},{passive:true});

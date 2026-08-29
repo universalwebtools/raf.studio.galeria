@@ -1,50 +1,30 @@
-RAF.studio GALERIA — ULTRA PRO v8
+RAF.studio v9 FAST WEBP
 
-DLA FOTOGRAFA:
-- dashboard: galerie, zdjęcia, wybory i zatwierdzone wybory
-- tworzenie/edycja galerii
-- hasło, slug, opis, termin wygaśnięcia
-- limit ulubionych, pobieranie, aktywność, blokada po zatwierdzeniu
-- upload wielu JPG + prawdziwy pasek postępu
-- automatyczne podglądy 1800 px
-- pełne oryginały osobno
-- automatyczna okładka
-- zarządzanie zdjęciami: okładka, usuwanie
-- gotowy link klienta
-- wybory klientów z imieniem i notatką
-- status Roboczy / Zatwierdzony
-- eksport nazw plików TXT i CSV
-- wyszukiwanie i filtrowanie galerii
+NAJWAŻNIEJSZA ZMIANA:
+v8 NIE używała WebP. Podglądy były JPEG 1800 px.
+Dodatkowo klient przed pokazaniem galerii pobierał URL każdego preview ORAZ każdego oryginału.
 
-DLA KLIENTA:
-- elegancki ekran hasła
-- duża okładka sesji
-- responsywny masonry grid
-- lightbox + klawiatura + swipe
-- ulubione synchronizowane z Firebase
-- limit wyboru i pasek postępu
-- filtr wybranych
-- pobieranie oryginału (jeżeli włączone)
-- Zatwierdź wybór + imię + wiadomość
-- możliwość blokady wyboru po zatwierdzeniu
-- udostępnianie linku
+v9:
+- nowe podglądy są WebP
+- max 1600 px, adaptacyjna kompresja
+- cel: zwykle poniżej ok. 650 KB na preview
+- klient na wejściu pobiera WYŁĄCZNIE adresy preview
+- oryginał jest pobierany dopiero po kliknięciu konkretnego zdjęcia
+- kafelki pojawiają się od razu jako skeletony
+- adresy preview są pobierane progresywnie (6 równolegle)
+- stare galerie z JPG preview nadal działają
+- nowe preview mają nazwę np. IMG_001.jpg.webp
+- original zachowuje IMG_001.jpg
 
-INSTALACJA:
-1. Na GitHubie podmień:
-   index.html
-   admin.html
-   style.css
-   app.js
-   admin.js
-   firebase-config.js
-2. Firebase Realtime Database -> Rules:
-   wklej database-rules.json -> Publish.
-3. Firebase Storage -> Rules:
-   wklej storage-rules.txt -> Publish.
-4. Panel:
-   https://universalwebtools.github.io/raf.studio.galeria/admin.html
+PODMIEŃ NA GITHUBIE:
+index.html
+admin.html
+style.css
+app.js
+admin.js
 
-UWAGA DOT. HASŁA:
-Hasło galerii jest zapisane jako hash SHA-256. To jest lepsze niż jawne hasło w JS,
-ale pełne bezpieczeństwo klasy komercyjnych galerii wymaga później walidacji hasła
-po stronie serwera (np. Firebase Cloud Function).
+REGUŁ FIREBASE NIE ZMIENIAJ.
+
+WAŻNE:
+Stare galerie nie staną się automatycznie WebP. Żeby skorzystać z pełnego przyspieszenia,
+najlepiej w nowej galerii wrzucić zdjęcia ponownie przez panel v9.

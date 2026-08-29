@@ -14,6 +14,7 @@ const galleryUrl=s=>location.href.replace(/admin\.html.*$/,"")+`?g=${encodeURICo
 function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(t._t);t._t=setTimeout(()=>t.hidden=true,1800)}
 function notice(el,m,type="ok"){el.hidden=false;el.className=`notice ${type}`;el.textContent=m}
 function fmt(ts){return ts?new Date(ts).toLocaleString("pl-PL"):"—"}
+function originalNameFromPreview(name){return name.toLowerCase().endsWith(".webp")?name.slice(0,-5):name}
 
 onAuthStateChanged(auth,u=>{
   if(u&&u.uid===ADMIN_UID){
@@ -51,7 +52,13 @@ function renderCards(){
   list.querySelectorAll("[data-select]").forEach(b=>b.onclick=()=>openSelections(b.dataset.select));
   list.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEdit(b.dataset.edit))
 }
-async function loadCover(el,slug,file){if(!file)return;try{el.style.backgroundImage=`url("${await getDownloadURL(sRef(storage,`galleries/${slug}/previews/${file}`))}")`}catch(_){}}
+async function loadCover(el,slug,file){
+  if(!file)return;
+  const candidates=[`${file}.webp`,file];
+  for(const candidate of candidates){
+    try{el.style.backgroundImage=`url("${await getDownloadURL(sRef(storage,`galleries/${slug}/previews/${candidate}`))}")`;return}catch(_){}
+  }
+}
 $("#gallerySearch").oninput=renderCards;$("#galleryStatusFilter").onchange=renderCards;
 
 function resetForm(){
@@ -79,21 +86,71 @@ $("#openCreatedGalleryBtn").onclick=()=>window.open(galleryUrl(createdSlug),"_bl
 $("#addPhotosNowBtn").onclick=()=>{$("#createdDialog").close();openUpload(createdSlug)};
 
 function openUpload(slug){uploadSlug=slug;$("#uploadTitle").textContent=`Dodaj zdjęcia — ${galleries[slug]?.public?.title||slug}`;$("#photoFilesInput").value="";$("#uploadFileCount").textContent="0 plików";$("#uploadSize").textContent="0 MB";$("#uploadProgress").style.width="0%";$("#uploadStatus").hidden=true;$("#uploadDialog").showModal()}
-const dz=$("#dropZone");["dragenter","dragover"].forEach(x=>dz.addEventListener(x,e=>{e.preventDefault()}));dz.addEventListener("drop",e=>{e.preventDefault();const dt=new DataTransfer();[...e.dataTransfer.files].filter(f=>/image\/jpe?g/i.test(f.type)).forEach(f=>dt.items.add(f));$("#photoFilesInput").files=dt.files;fileMeta()});$("#photoFilesInput").onchange=fileMeta;
+const dz=$("#dropZone");["dragenter","dragover"].forEach(x=>dz.addEventListener(x,e=>e.preventDefault()));dz.addEventListener("drop",e=>{e.preventDefault();const dt=new DataTransfer();[...e.dataTransfer.files].filter(f=>/image\/jpe?g/i.test(f.type)).forEach(f=>dt.items.add(f));$("#photoFilesInput").files=dt.files;fileMeta()});$("#photoFilesInput").onchange=fileMeta;
 function fileMeta(){const f=[...$("#photoFilesInput").files],b=f.reduce((a,x)=>a+x.size,0);$("#uploadFileCount").textContent=`${f.length} plików`;$("#uploadSize").textContent=`${(b/1024/1024).toFixed(1)} MB`}
-async function preview(file,max=1800,q=.78){const u=URL.createObjectURL(file),img=await new Promise((r,j)=>{const i=new Image();i.onload=()=>r(i);i.onerror=j;i.src=u});let w=img.naturalWidth,h=img.naturalHeight,s=Math.min(1,max/Math.max(w,h));w=Math.round(w*s);h=Math.round(h*s);const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d",{alpha:false}).drawImage(img,0,0,w,h);URL.revokeObjectURL(u);return await new Promise((r,j)=>c.toBlob(b=>b?r(b):j(new Error("Błąd podglądu")),"image/jpeg",q))}
-function task(r,data,cb){return new Promise((ok,bad)=>{const t=uploadBytesResumable(r,data,{contentType:"image/jpeg"});t.on("state_changed",s=>cb(s.totalBytes?s.bytesTransferred/s.totalBytes:0),bad,ok)})}
+
+async function makeWebpPreview(file){
+  const url=URL.createObjectURL(file);
+  const img=await new Promise((r,j)=>{const i=new Image();i.onload=()=>r(i);i.onerror=j;i.src=url});
+
+  const attempts=[
+    {max:1600,q:.76},
+    {max:1500,q:.70},
+    {max:1400,q:.66},
+    {max:1280,q:.62}
+  ];
+
+  let lastBlob=null;
+  for(const a of attempts){
+    let w=img.naturalWidth,h=img.naturalHeight;
+    const s=Math.min(1,a.max/Math.max(w,h));
+    w=Math.max(1,Math.round(w*s));h=Math.max(1,Math.round(h*s));
+    const c=document.createElement("canvas");c.width=w;c.height=h;
+    c.getContext("2d",{alpha:false}).drawImage(img,0,0,w,h);
+    const blob=await new Promise((r,j)=>c.toBlob(b=>b?r(b):j(new Error("Błąd WebP")),"image/webp",a.q));
+    lastBlob=blob;
+    if(blob.size<=650*1024)break;
+  }
+
+  URL.revokeObjectURL(url);
+  return lastBlob;
+}
+
+function task(r,data,cb,contentType){return new Promise((ok,bad)=>{const t=uploadBytesResumable(r,data,{contentType,cacheControl:"public,max-age=31536000,immutable"});t.on("state_changed",s=>cb(s.totalBytes?s.bytesTransferred/s.totalBytes:0),bad,ok)})}
+
 $("#startUploadBtn").onclick=async()=>{
   const files=[...$("#photoFilesInput").files];if(!uploadSlug||!files.length)return notice($("#uploadStatus"),"Wybierz zdjęcia JPG.","error");
   const btn=$("#startUploadBtn");btn.disabled=true;btn.textContent="Wysyłanie…";
   try{
     for(let i=0;i<files.length;i++){
-      const f=files[i],base=i/files.length,weight=1/files.length;notice($("#uploadStatus"),`${i+1}/${files.length}: ${f.name} — podgląd…`);
-      const p=await preview(f);await task(sRef(storage,`galleries/${uploadSlug}/previews/${f.name}`),p,x=>$("#uploadProgress").style.width=`${Math.round((base+weight*x*.15)*100)}%`);
-      notice($("#uploadStatus"),`${i+1}/${files.length}: ${f.name} — oryginał…`);await task(sRef(storage,`galleries/${uploadSlug}/originals/${f.name}`),f,x=>$("#uploadProgress").style.width=`${Math.round((base+weight*(.15+x*.85))*100)}%`);
+      const f=files[i],base=i/files.length,weight=1/files.length;
+      notice($("#uploadStatus"),`${i+1}/${files.length}: ${f.name} — tworzę szybki WebP…`);
+
+      const p=await makeWebpPreview(f);
+      const previewName=`${f.name}.webp`;
+
+      await task(
+        sRef(storage,`galleries/${uploadSlug}/previews/${previewName}`),
+        p,
+        x=>$("#uploadProgress").style.width=`${Math.round((base+weight*x*.15)*100)}%`,
+        "image/webp"
+      );
+
+      notice($("#uploadStatus"),`${i+1}/${files.length}: ${f.name} — wysyłam oryginał…`);
+      await task(
+        sRef(storage,`galleries/${uploadSlug}/originals/${f.name}`),
+        f,
+        x=>$("#uploadProgress").style.width=`${Math.round((base+weight*(.15+x*.85))*100)}%`,
+        "image/jpeg"
+      );
+
       if(i===0&&!galleries[uploadSlug]?.public?.coverFile)await update(ref(db,`galleries/${uploadSlug}/public`),{coverFile:f.name})
     }
-    const all=await listAll(sRef(storage,`galleries/${uploadSlug}/previews`));await update(ref(db,`galleries/${uploadSlug}/public`),{photoCount:all.items.length,updatedAt:Date.now()});$("#uploadProgress").style.width="100%";notice($("#uploadStatus"),`Gotowe — ${files.length} zdjęć wysłanych.`,"ok")
+
+    const all=await listAll(sRef(storage,`galleries/${uploadSlug}/previews`));
+    await update(ref(db,`galleries/${uploadSlug}/public`),{photoCount:all.items.length,updatedAt:Date.now(),previewFormat:"webp"});
+    $("#uploadProgress").style.width="100%";
+    notice($("#uploadStatus"),`Gotowe — ${files.length} zdjęć wysłanych. Podglądy zapisano jako WebP.`,"ok");
   }catch(err){notice($("#uploadStatus"),`${err.code||"Błąd"}: ${err.message||err}`,"error")}
   finally{btn.disabled=false;btn.textContent="Rozpocznij wysyłanie"}
 };
@@ -103,10 +160,12 @@ async function openPhotos(slug){
   $("#photosTitle").textContent=`Zdjęcia — ${galleries[slug]?.public?.title||slug}`;$("#photoManagerGrid").innerHTML="";$("#photoManagerLoading").hidden=false;$("#photosDialog").showModal();
   try{
     const r=await listAll(sRef(storage,`galleries/${slug}/previews`));
-    for(const item of r.items.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}))){
-      const url=await getDownloadURL(item),w=document.createElement("article");w.className="pm-item";w.innerHTML=`<div class="pm-thumb" style="background-image:url('${url}')"></div><div class="pm-info"><div class="pm-name">${esc(item.name)}</div><div class="pm-actions"><button class="ghost cover">Okładka</button><button class="danger del">Usuń</button></div></div>`;
-      w.querySelector(".cover").onclick=async()=>{await update(ref(db,`galleries/${slug}/public`),{coverFile:item.name});toast("Okładka ustawiona")};
-      w.querySelector(".del").onclick=async()=>{if(!confirm(`Usunąć ${item.name}?`))return;await deleteObject(sRef(storage,`galleries/${slug}/previews/${item.name}`));await deleteObject(sRef(storage,`galleries/${slug}/originals/${item.name}`)).catch(()=>{});w.remove();const left=await listAll(sRef(storage,`galleries/${slug}/previews`));await update(ref(db,`galleries/${slug}/public`),{photoCount:left.items.length});toast("Zdjęcie usunięte")};
+    for(const item of r.items.sort((a,b)=>originalNameFromPreview(a.name).localeCompare(originalNameFromPreview(b.name),undefined,{numeric:true}))){
+      const originalName=originalNameFromPreview(item.name);
+      const url=await getDownloadURL(item),w=document.createElement("article");w.className="pm-item";
+      w.innerHTML=`<div class="pm-thumb" style="background-image:url('${url}')"></div><div class="pm-info"><div class="pm-name">${esc(originalName)}</div><div class="pm-actions"><button class="ghost cover">Okładka</button><button class="danger del">Usuń</button></div></div>`;
+      w.querySelector(".cover").onclick=async()=>{await update(ref(db,`galleries/${slug}/public`),{coverFile:originalName});toast("Okładka ustawiona")};
+      w.querySelector(".del").onclick=async()=>{if(!confirm(`Usunąć ${originalName}?`))return;await deleteObject(item);await deleteObject(sRef(storage,`galleries/${slug}/originals/${originalName}`)).catch(()=>{});w.remove();const left=await listAll(sRef(storage,`galleries/${slug}/previews`));await update(ref(db,`galleries/${slug}/public`),{photoCount:left.items.length});toast("Zdjęcie usunięte")};
       $("#photoManagerGrid").appendChild(w)
     }
   }finally{$("#photoManagerLoading").hidden=true}
