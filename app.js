@@ -92,35 +92,100 @@ function render(){
   shown.forEach(p=>{
     const idx=photos.findIndex(x=>x.filename===p.filename);
     const card=document.createElement("article");card.className="photo-card";
-    card.innerHTML=`<div class="photo-skeleton"></div><img loading="lazy" src="${p.preview}" alt=""><button class="photo-fav ${favorites.has(p.filename)?"active":""}" ${gallery.selectionEnabled===false?"hidden":""}>${favorites.has(p.filename)?"♥":"♡"}</button>`;
+    card.innerHTML=`<div class="photo-skeleton"></div><img loading="lazy" src="${p.preview}" alt=""><button type="button" class="photo-fav ${favorites.has(p.filename)?"active":""}" data-filename="${p.filename.replaceAll('"','&quot;')}" aria-label="Dodaj do wybranych" aria-pressed="${favorites.has(p.filename)?"true":"false"}" ${gallery.selectionEnabled===false?"hidden":""}>${favorites.has(p.filename)?"♥":"♡"}</button>`;
     const img=card.querySelector("img");img.onload=()=>{img.classList.add("loaded");card.classList.add("is-loaded")};if(img.complete&&img.naturalWidth>0){img.classList.add("loaded");card.classList.add("is-loaded")}img.onclick=()=>openLightbox(idx);
-    const f=card.querySelector(".photo-fav");if(f)f.onclick=e=>{e.stopPropagation();toggleFav(p.filename)};
+    const f=card.querySelector(".photo-fav");
+    if(f){
+      f.addEventListener("click",e=>{
+        e.preventDefault();
+        e.stopPropagation();
+        toggleFav(p.filename,f);
+      });
+    }
     grid.appendChild(card);
   });
 
   if(filter==="favorites"&&!shown.length)grid.innerHTML='<div class="notice">Nie masz jeszcze wybranych zdjęć.</div>';
   updateUI();
 }
-async function toggleFav(name){
-  if(gallery.selectionEnabled===false)return;
-  if(locked())return toast("Wybór został już zatwierdzony.");
+async function toggleFav(name, button=null){
+  if(gallery.selectionEnabled===false){
+    toast("Wybieranie zdjęć jest wyłączone dla tej galerii.");
+    return;
+  }
+  if(locked()){
+    toast("Wybór został już zatwierdzony.");
+    return;
+  }
 
-  if(favorites.has(name)){
-    await remove(ref(db,`galleries/${slug}/selections/${uid}/items/${key(name)}`));
+  const wasSelected = favorites.has(name);
+
+  if(!wasSelected && maxFav()>0 && favorites.size>=maxFav()){
+    toast(`Limit: ${maxFav()} zdjęć`);
+    return;
+  }
+
+  // OPTIMISTYCZNIE: serce zmienia się natychmiast, bez czekania na Firebase.
+  if(wasSelected){
     favorites.delete(name);
   }else{
-    if(maxFav()>0&&favorites.size>=maxFav())return toast(`Limit: ${maxFav()} zdjęć`);
-    const v={filename:name,selectedAt:Date.now()};
-    await set(ref(db,`galleries/${slug}/selections/${uid}/items/${key(name)}`),v);
-    favorites.set(name,v);
+    favorites.set(name,{filename:name,selectedAt:Date.now()});
   }
-  if(meta?.submittedAt&&!gallery.lockAfterSubmit){
-    meta.submittedAt=null;
-    await update(ref(db,`galleries/${slug}/selections/${uid}/meta`),{submittedAt:null,updatedAt:Date.now()});
+
+  updateUI();
+  updateHeartVisuals(name);
+
+  if(button) button.classList.add("is-saving");
+
+  try{
+    if(wasSelected){
+      await remove(ref(db,`galleries/${slug}/selections/${uid}/items/${key(name)}`));
+    }else{
+      await set(
+        ref(db,`galleries/${slug}/selections/${uid}/items/${key(name)}`),
+        favorites.get(name)
+      );
+    }
+
+    if(meta?.submittedAt&&!gallery.lockAfterSubmit){
+      meta.submittedAt=null;
+      await update(
+        ref(db,`galleries/${slug}/selections/${uid}/meta`),
+        {submittedAt:null,updatedAt:Date.now()}
+      );
+    }
+  }catch(err){
+    // Cofnij zmianę, jeśli Firebase odrzuci zapis.
+    if(wasSelected){
+      favorites.set(name,{filename:name,selectedAt:Date.now()});
+    }else{
+      favorites.delete(name);
+    }
+    updateUI();
+    updateHeartVisuals(name);
+
+    console.error("Błąd zapisu ulubionego:", err);
+    toast(`Nie zapisano wyboru: ${err.code || err.message || "błąd Firebase"}`);
+  }finally{
+    if(button) button.classList.remove("is-saving");
   }
-  render();
-  if(!$("#lightbox").hidden)updateLightboxUI();
 }
+
+function updateHeartVisuals(name){
+  document.querySelectorAll(".photo-fav").forEach(btn=>{
+    if(btn.dataset.filename===name){
+      const selected=favorites.has(name);
+      btn.classList.toggle("active",selected);
+      btn.textContent=selected?"♥":"♡";
+      btn.setAttribute("aria-pressed", selected ? "true" : "false");
+    }
+  });
+
+  if(!$("#lightbox").hidden && photos[current]?.filename===name){
+    $("#lightboxFav").textContent=favorites.has(name)?"♥":"♡";
+  }
+}
+
 function updateUI(){
   const n=favorites.size;
   $("#favCount").textContent=n;$("#selectedCount").textContent=n;$("#dockCount").textContent=n;
@@ -164,7 +229,7 @@ $("#logoutBtn").onclick=()=>{sessionStorage.removeItem(`raf-access-${slug}`);loc
 $("#closeLightbox").onclick=closeLightbox;
 $("#prevPhoto").onclick=()=>go(current-1);
 $("#nextPhoto").onclick=()=>go(current+1);
-$("#lightboxFav").onclick=()=>toggleFav(photos[current].filename);
+$("#lightboxFav").onclick=(e)=>{e.preventDefault();e.stopPropagation();toggleFav(photos[current].filename,$("#lightboxFav"))};
 $("#lightboxDownload").onclick=async e=>{if(!photos[current].original){e.preventDefault();const u=await ensureOriginal(current);if(u)window.open(u,"_blank")}};
 document.addEventListener("keydown",e=>{if($("#lightbox").hidden)return;if(e.key==="Escape")closeLightbox();if(e.key==="ArrowLeft")$("#prevPhoto").click();if(e.key==="ArrowRight")$("#nextPhoto").click()});
 $("#lightbox").addEventListener("touchstart",e=>touchX=e.changedTouches[0].clientX,{passive:true});

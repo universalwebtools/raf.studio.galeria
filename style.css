@@ -65,3 +65,73 @@
 .photo-fav{
   z-index:3;
 }
+
+
+/* ===== v10.2: prawdziwe logo RAF.studio ===== */
+.raf-logo{
+  display:block;
+  width:auto;
+  height:62px;
+  object-fit:contain;
+  object-position:left center;
+}
+.raf-logo-small{
+  height:40px;
+}
+.logo-link{
+  display:block;
+  line-height:0;
+}
+.lock-card .raf-logo{
+  height:74px;
+  max-width:100%;
+}
+.sidebar .raf-logo{
+  height:54px;
+  max-width:100%;
+}
+.client-body footer .raf-logo{
+  height:52px;
+  margin:0 auto;
+}
+
+/* ===== v10.2: serduszko ZAWSZE klikalne ===== */
+.photo-card{
+  position:relative !important;
+  isolation:isolate;
+}
+.photo-card img{
+  position:relative !important;
+  z-index:1 !important;
+}
+.photo-skeleton{
+  z-index:0 !important;
+  pointer-events:none !important;
+}
+.photo-fav{
+  position:absolute !important;
+  z-index:20 !important;
+  pointer-events:auto !important;
+  touch-action:manipulation;
+  user-select:none;
+  -webkit-user-select:none;
+  cursor:pointer !important;
+}
+.photo-fav:active{
+  transform:scale(.92);
+}
+.photo-fav.is-saving{
+  opacity:.7;
+}
+
+/* Lightbox heart */
+#lightboxFav{
+  pointer-events:auto !important;
+  cursor:pointer !important;
+}
+
+@media(max-width:760px){
+  .raf-logo{height:48px}
+  .raf-logo-small{height:34px}
+  .lock-card .raf-logo{height:60px}
+}
