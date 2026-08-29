@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b0b0c">
   <title>RAF.studio — Panel administratora</title>
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
   <section id="adminLogin" class="lock-screen">
@@ -95,6 +95,25 @@
     </form>
   </dialog>
 
+  <dialog id="createdDialog" class="admin-dialog">
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow">GOTOWE</p>
+        <h2>Galeria utworzona</h2>
+      </div>
+      <button type="button" id="closeCreatedBtn" class="ghost icon-btn">×</button>
+    </div>
+    <p class="muted">Link dla klienta:</p>
+    <div class="gallery-link big-link">
+      <input id="createdLink" readonly>
+      <button id="copyCreatedLink" class="ghost">Kopiuj link</button>
+    </div>
+    <div class="created-actions">
+      <button id="addPhotosNowBtn">+ Dodaj zdjęcia teraz</button>
+      <button id="openGalleryNowBtn" class="ghost">Otwórz galerię</button>
+    </div>
+  </dialog>
+
   <dialog id="uploadDialog" class="admin-dialog wide">
     <div class="dialog-head">
       <div>
@@ -104,9 +123,9 @@
       <button type="button" id="closeUploadBtn" class="ghost icon-btn">×</button>
     </div>
 
-    <p class="muted">Wybierz gotowe JPG/JPEG. Oryginały trafią do <code>originals</code>, a panel sam utworzy mniejsze podglądy do <code>previews</code>.</p>
-
+    <p class="muted">Wybierz JPG/JPEG. Oryginały trafią do <code>originals</code>, a podglądy zostaną utworzone automatycznie.</p>
     <input id="photoFilesInput" type="file" accept="image/jpeg,image/jpg" multiple>
+
     <div class="upload-summary">
       <span id="uploadFileCount">0 plików</span>
       <span id="uploadSize">0 MB</span>
@@ -115,7 +134,7 @@
     <div class="progress-track"><div id="uploadProgress" class="progress-bar"></div></div>
     <div id="uploadStatus" class="admin-message" hidden></div>
 
-    <div class="dialog-actions upload-actions">
+    <div class="dialog-actions">
       <span></span><span></span>
       <button type="button" id="cancelUploadBtn" class="ghost">Zamknij</button>
       <button type="button" id="startUploadBtn">Wyślij zdjęcia</button>
@@ -133,6 +152,6 @@
     <div id="selectionContent"></div>
   </dialog>
 
-  <script type="module" src="admin.js?v=5"></script>
+  <script type="module" src="admin.js?v=6"></script>
 </body>
 </html>

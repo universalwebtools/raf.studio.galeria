@@ -1,24 +1,20 @@
-RAF.studio v5 — poprawiony panel admina
+RAF.studio v6
 
 PODMIEŃ NA GITHUBIE:
 - admin.html
 - admin.js
 - style.css
-- firebase-config.js
 
-index.html i app.js z v4 mogą zostać.
+firebase-config.js, index.html, app.js zostają bez zmian.
 
-WAŻNE:
-1. Realtime Database -> Rules -> wklej database-rules.json -> Publish
-2. Storage -> Rules -> wklej storage-rules.txt -> Publish
+Co poprawione:
+- karta galerii renderuje się natychmiast po zapisie
+- nie czeka na odczyt Storage
+- po utworzeniu pojawia się osobne okno z gotowym linkiem
+- przycisk Kopiuj link
+- przycisk + Dodaj zdjęcia teraz
+- przycisk Otwórz galerię
+- w każdej karcie jest + Dodaj zdjęcia
+- upload tworzy originals i previews automatycznie
 
-NOWOŚCI:
-- po Zapisz dostajesz komunikat sukcesu albo dokładny błąd Firebase
-- każda galeria pokazuje gotowy link + przycisk Kopiuj
-- przycisk + Zdjęcia w każdej galerii
-- wybierasz wiele JPG naraz
-- oryginał trafia do originals/
-- podgląd max 2200 px jest automatycznie generowany w przeglądarce i trafia do previews/
-- pasek postępu
-- licznik zdjęć w panelu
-- naprawione [hidden], więc ekran logowania nie świeci w tle
+Reguł Firebase nie zmieniaj, jeśli masz już poprawione reguły Realtime Database z poprzedniej wiadomości.
