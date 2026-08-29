@@ -1,18 +1,24 @@
-RAF.studio v10.2 — HEARTS + LOGO FIX
+RAF.studio v10.3 — RED HEARTS + PERMISSION FIX
 
-Co poprawione:
-1. Serduszka zmieniają stan NATYCHMIAST po kliknięciu.
-2. Zapis do Firebase odbywa się w tle.
-3. Jeśli Firebase odrzuci zapis, serce wraca do poprzedniego stanu i pojawia się konkretny komunikat błędu.
-4. Serduszka mają własny z-index 20 i nie mogą być przykryte przez zdjęcie ani skeleton.
-5. Obsługa click jest przez addEventListener + preventDefault/stopPropagation.
-6. Podmieniono tekstowe RAF.studio na prawdziwe logo użytkownika.
-7. Dodano:
-   logo-white.png
-   logo-black.png
-8. Na obecnym ciemnym UI używana jest wersja biała.
+ZMIANY:
+- usunięty cały dolny pasek „Zatwierdź wybór”
+- usunięte okna finalizacji wyboru
+- klient po prostu klika serduszka
+- wybór zapisuje się automatycznie do Firebase
+- aktywne serce jest CZERWONE
+- licznik Wybrano X / LIMIT zostaje
+- filtr „Wybrane” zostaje
+- prawdziwe logo RAF.studio zostaje
+- poprawione Realtime Database Rules dla anonimowego klienta
 
-PODMIEŃ NA GITHUBIE:
+WAŻNE:
+Realtime Database -> Rules
+MUSISZ wkleić database-rules.json z tej paczki i kliknąć Publish.
+To naprawia PERMISSION_DENIED przy serduszkach.
+
+Storage Rules nie wymagają zmiany, ale aktualna wersja jest również w paczce.
+
+NA GITHUBIE PODMIEŃ:
 - index.html
 - admin.html
 - style.css
@@ -20,8 +26,7 @@ PODMIEŃ NA GITHUBIE:
 - logo-white.png
 - logo-black.png
 
-admin.js nie wymaga zmiany funkcjonalnej.
+admin.js może zostać obecny.
 
-Reguł Firebase nie zmieniaj na tym etapie.
-
-Jeśli po kliknięciu serca Firebase odrzuci zapis, v10.2 pokaże na ekranie dokładny kod błędu.
+FIREBASE:
+Realtime Database -> Rules -> database-rules.json -> Publish.

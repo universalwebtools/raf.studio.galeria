@@ -1,4 +1,5 @@
 rules_version = '2';
+
 service firebase.storage {
   match /b/{bucket}/o {
     match /galleries/{galleryId}/{allPaths=**} {
@@ -6,6 +7,9 @@ service firebase.storage {
       allow write: if request.auth != null
                    && request.auth.uid == "NLYAfU5UNcfldH4k2x2r9m1g4Vx1";
     }
-    match /{allPaths=**} { allow read, write: if false; }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
   }
 }

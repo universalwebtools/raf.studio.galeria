@@ -135,3 +135,33 @@
   .raf-logo-small{height:34px}
   .lock-card .raf-logo{height:60px}
 }
+
+
+/* ===== v10.3: proste automatyczne ulubione ===== */
+.photo-fav.active{
+  background:rgba(10,10,12,.78) !important;
+  color:#ff3b4d !important;
+  border-color:rgba(255,59,77,.72) !important;
+  box-shadow:0 0 0 1px rgba(255,59,77,.15), 0 8px 24px rgba(0,0,0,.28);
+}
+
+#lightboxFav{
+  color:#fff;
+}
+#lightboxFav.is-active{
+  color:#ff3b4d !important;
+  border-color:rgba(255,59,77,.72) !important;
+}
+
+/* Nie ma już dolnego paska zatwierdzania */
+.selection-dock{
+  display:none !important;
+}
+
+.photo-grid{
+  padding-bottom:70px;
+}
+
+.client-body footer{
+  padding-bottom:70px;
+}

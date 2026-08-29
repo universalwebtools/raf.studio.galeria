@@ -27,7 +27,7 @@ async function init(){
     $("#heroTitle").textContent=gallery.title||slug;
     $("#heroSubtitle").textContent=gallery.subtitle||"Wybierz swoje ulubione zdjęcia.";
     if(gallery.expiresAt)$("#expiryLabel").textContent=`Dostęp do ${gallery.expiresAt}`;
-    if(maxFav()>0){$("#maxFavoritesLabel").textContent=` / ${maxFav()}`;$("#dockLimit").textContent=` / ${maxFav()}`;$("#progressWrap").hidden=false}
+    if(maxFav()>0){$("#maxFavoritesLabel").textContent=` / ${maxFav()}`;$("#progressWrap").hidden=false}
     if(gallery.selectionEnabled===false){$("#favoritesToggle").hidden=true;$("#favFilter").hidden=true}
 
     if(sessionStorage.getItem(`raf-access-${slug}`)==="1")openGallery();
@@ -146,14 +146,6 @@ async function toggleFav(name, button=null){
         favorites.get(name)
       );
     }
-
-    if(meta?.submittedAt&&!gallery.lockAfterSubmit){
-      meta.submittedAt=null;
-      await update(
-        ref(db,`galleries/${slug}/selections/${uid}/meta`),
-        {submittedAt:null,updatedAt:Date.now()}
-      );
-    }
   }catch(err){
     // Cofnij zmianę, jeśli Firebase odrzuci zapis.
     if(wasSelected){
@@ -182,18 +174,19 @@ function updateHeartVisuals(name){
   });
 
   if(!$("#lightbox").hidden && photos[current]?.filename===name){
-    $("#lightboxFav").textContent=favorites.has(name)?"♥":"♡";
+    $("#lightboxFav").textContent=favorites.has(name)?"♥":"♡";$("#lightboxFav").classList.toggle("is-active",favorites.has(name));
   }
 }
 
 function updateUI(){
   const n=favorites.size;
-  $("#favCount").textContent=n;$("#selectedCount").textContent=n;$("#dockCount").textContent=n;
-  if(maxFav()>0){$("#selectProgress").style.width=`${Math.min(100,n/maxFav()*100)}%`;$("#progressText").textContent=`${n} z ${maxFav()} wybranych`}
-  $("#selectionDock").hidden=gallery?.selectionEnabled===false||n===0;
-  $("#submitSelectionBtn").textContent=meta?.submittedAt?"Wybór zatwierdzony ✓":"Zatwierdź wybór";
-  $("#submitSelectionBtn").disabled=locked();
-  $("#dockHint").textContent=meta?.submittedAt?(locked()?"Wybór jest zamknięty.":"Zmiana zdjęcia cofnie zatwierdzenie."):"Wybór zapisuje się automatycznie.";
+  $("#favCount").textContent=n;
+  $("#selectedCount").textContent=n;
+
+  if(maxFav()>0){
+    $("#selectProgress").style.width=`${Math.min(100,n/maxFav()*100)}%`;
+    $("#progressText").textContent=`${n} z ${maxFav()} wybranych`;
+  }
 }
 
 async function ensureOriginal(i){
@@ -209,7 +202,7 @@ async function openLightbox(i){
 function updateLightboxUI(){
   const p=photos[current];if(!p)return;
   $("#lightboxCaption").textContent=`${current+1} / ${photos.length} · ${p.filename}`;
-  $("#lightboxFav").textContent=favorites.has(p.filename)?"♥":"♡";
+  $("#lightboxFav").textContent=favorites.has(p.filename)?"♥":"♡";$("#lightboxFav").classList.toggle("is-active",favorites.has(p.filename));
   $("#lightboxDownload").hidden=gallery.downloadsEnabled===false;
   if(p.original)$("#lightboxDownload").href=p.original;
 }
@@ -234,8 +227,4 @@ $("#lightboxDownload").onclick=async e=>{if(!photos[current].original){e.prevent
 document.addEventListener("keydown",e=>{if($("#lightbox").hidden)return;if(e.key==="Escape")closeLightbox();if(e.key==="ArrowLeft")$("#prevPhoto").click();if(e.key==="ArrowRight")$("#nextPhoto").click()});
 $("#lightbox").addEventListener("touchstart",e=>touchX=e.changedTouches[0].clientX,{passive:true});
 $("#lightbox").addEventListener("touchend",e=>{const d=e.changedTouches[0].clientX-touchX;if(Math.abs(d)>60)(d>0?$("#prevPhoto"):$("#nextPhoto")).click()},{passive:true});
-$("#submitSelectionBtn").onclick=()=>{if(meta?.clientName)$("#clientNameInput").value=meta.clientName;if(meta?.note)$("#clientNoteInput").value=meta.note;$("#submitDialog").showModal()};
-$("#closeSubmitDialog").onclick=$("#cancelSubmitBtn").onclick=()=>$("#submitDialog").close();
-$("#confirmSubmitBtn").onclick=async()=>{const m={clientName:$("#clientNameInput").value.trim(),note:$("#clientNoteInput").value.trim(),submittedAt:Date.now(),updatedAt:Date.now()};await set(ref(db,`galleries/${slug}/selections/${uid}/meta`),m);meta=m;$("#submitDialog").close();$("#submittedDialog").showModal();updateUI()};
-$("#closeSubmittedBtn").onclick=()=>$("#submittedDialog").close();
 init();
