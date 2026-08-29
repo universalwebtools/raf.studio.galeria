@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#0b0b0c">
   <title>RAF.studio — Panel administratora</title>
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
   <section id="adminLogin" class="lock-screen">
@@ -14,8 +14,8 @@
       <p class="eyebrow">PANEL ADMINISTRATORA</p>
       <h1>Logowanie</h1>
       <form id="adminLoginForm">
-        <input id="adminEmail" type="email" placeholder="E-mail" autocomplete="username" required>
-        <input id="adminPassword" type="password" placeholder="Hasło" autocomplete="current-password" required>
+        <input id="adminEmail" type="email" placeholder="E-mail" required>
+        <input id="adminPassword" type="password" placeholder="Hasło" required>
         <button type="submit">Zaloguj</button>
         <p id="adminLoginError" class="error" hidden></p>
       </form>
@@ -35,18 +35,15 @@
     </header>
 
     <section class="admin-content">
-      <div class="admin-head">
-        <div>
-          <p class="eyebrow">GALERIE</p>
-          <h1>Twoje sesje</h1>
-        </div>
-      </div>
+      <p class="eyebrow">GALERIE</p>
+      <h1>Twoje sesje</h1>
+      <div id="globalMessage" class="admin-message" hidden></div>
       <div id="galleryList" class="admin-grid"></div>
     </section>
   </main>
 
   <dialog id="galleryDialog" class="admin-dialog">
-    <form id="galleryForm" method="dialog">
+    <form id="galleryForm">
       <div class="dialog-head">
         <div>
           <p class="eyebrow">USTAWIENIA GALERII</p>
@@ -66,7 +63,7 @@
       </label>
 
       <label>Hasło klienta
-        <input id="galleryPasswordInput" type="password" placeholder="Zostaw puste przy edycji, aby nie zmieniać">
+        <input id="galleryPasswordInput" type="password" placeholder="Dla nowej galerii wymagane">
       </label>
 
       <label>Opis
@@ -87,13 +84,42 @@
         </label>
       </div>
 
+      <div id="saveStatus" class="admin-message" hidden></div>
+
       <div class="dialog-actions">
         <button type="button" id="deleteGalleryBtn" class="danger" hidden>Usuń galerię</button>
         <span></span>
         <button type="button" id="cancelDialogBtn" class="ghost">Anuluj</button>
-        <button type="submit">Zapisz</button>
+        <button type="submit" id="saveGalleryBtn">Zapisz</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="uploadDialog" class="admin-dialog wide">
+    <div class="dialog-head">
+      <div>
+        <p class="eyebrow">ZDJĘCIA</p>
+        <h2 id="uploadTitle">Dodaj zdjęcia</h2>
+      </div>
+      <button type="button" id="closeUploadBtn" class="ghost icon-btn">×</button>
+    </div>
+
+    <p class="muted">Wybierz gotowe JPG/JPEG. Oryginały trafią do <code>originals</code>, a panel sam utworzy mniejsze podglądy do <code>previews</code>.</p>
+
+    <input id="photoFilesInput" type="file" accept="image/jpeg,image/jpg" multiple>
+    <div class="upload-summary">
+      <span id="uploadFileCount">0 plików</span>
+      <span id="uploadSize">0 MB</span>
+    </div>
+
+    <div class="progress-track"><div id="uploadProgress" class="progress-bar"></div></div>
+    <div id="uploadStatus" class="admin-message" hidden></div>
+
+    <div class="dialog-actions upload-actions">
+      <span></span><span></span>
+      <button type="button" id="cancelUploadBtn" class="ghost">Zamknij</button>
+      <button type="button" id="startUploadBtn">Wyślij zdjęcia</button>
+    </div>
   </dialog>
 
   <dialog id="selectionDialog" class="admin-dialog wide">
@@ -107,6 +133,6 @@
     <div id="selectionContent"></div>
   </dialog>
 
-  <script type="module" src="admin.js?v=4"></script>
+  <script type="module" src="admin.js?v=5"></script>
 </body>
 </html>

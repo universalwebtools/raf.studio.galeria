@@ -1,84 +1,24 @@
-RAF.studio GALERIA v4
+RAF.studio v5 — poprawiony panel admina
 
-CO DOSTAJESZ
-- index.html = galeria klienta
-- admin.html = panel administratora
-- zapis ulubionych do Realtime Database
-- logowanie admina przez Firebase Authentication
-- anonimowe logowanie klienta
-- tworzenie i edycja galerii
-- nazwa sesji, slug, hasło, limit ulubionych, pobieranie, aktywność
-- panel wyborów klienta
-- link galerii w formie: ?g=slug
+PODMIEŃ NA GITHUBIE:
+- admin.html
+- admin.js
+- style.css
+- firebase-config.js
 
-1. WRZUĆ NA GITHUB
-Podmień/dodaj:
-index.html
-admin.html
-style.css
-app.js
-admin.js
-firebase-config.js
+index.html i app.js z v4 mogą zostać.
 
-2. REALTIME DATABASE RULES
-Firebase -> Realtime Database -> Rules
-Wklej zawartość pliku:
-database-rules.json
-i kliknij Publish.
+WAŻNE:
+1. Realtime Database -> Rules -> wklej database-rules.json -> Publish
+2. Storage -> Rules -> wklej storage-rules.txt -> Publish
 
-3. STORAGE RULES
-Firebase -> Storage -> Rules
-Wklej zawartość:
-storage-rules.txt
-i kliknij Publish.
-
-4. PANEL ADMINA
-Adres:
-https://universalwebtools.github.io/raf.studio.galeria/admin.html
-
-Zaloguj się mailem i hasłem konta administratora utworzonego w Firebase Authentication.
-
-5. TWORZENIE GALERII
-W panelu:
-+ Nowa galeria
-np.
-Nazwa: Ślub Kowalscy
-Slug: kowalscy-2026
-Hasło: klient123
-Limit: 20
-
-Panel utworzy dane w Realtime Database.
-
-6. ZDJĘCIA
-Na razie zdjęcia nadal wrzucasz ręcznie w Firebase Storage:
-
-galleries/
-  kowalscy-2026/
-    previews/
-      RAF_0001.jpg
-      RAF_0002.jpg
-    originals/
-      RAF_0001.jpg
-      RAF_0002.jpg
-
-Nazwa preview i original musi być identyczna.
-
-7. LINK DLA KLIENTA
-Panel wygeneruje:
-https://universalwebtools.github.io/raf.studio.galeria/?g=kowalscy-2026
-
-8. ULUBIONE
-Klient po wpisaniu hasła loguje się anonimowo.
-Kliknięcie serca zapisuje wybór do:
-galleries/{slug}/selections/{clientUid}/...
-
-Ty w panelu klikasz:
-♥ Wybory
-
-i widzisz nazwy wybranych plików.
-
-WAŻNE O HAŚLE
-Hasło jest zapisane jako SHA-256 hash, nie jako czysty tekst.
-To jest lepsze niż hasło w JavaScript, ale ponieważ klient może odczytać hash z bazy,
-nie jest to jeszcze zabezpieczenie klasy profesjonalnej usługi.
-Docelowo możemy dodać Cloud Function do weryfikacji hasła po stronie serwera.
+NOWOŚCI:
+- po Zapisz dostajesz komunikat sukcesu albo dokładny błąd Firebase
+- każda galeria pokazuje gotowy link + przycisk Kopiuj
+- przycisk + Zdjęcia w każdej galerii
+- wybierasz wiele JPG naraz
+- oryginał trafia do originals/
+- podgląd max 2200 px jest automatycznie generowany w przeglądarce i trafia do previews/
+- pasek postępu
+- licznik zdjęć w panelu
+- naprawione [hidden], więc ekran logowania nie świeci w tle
