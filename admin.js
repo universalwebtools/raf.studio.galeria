@@ -1,459 +1,127 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-import { getStorage, ref as sRef, uploadBytesResumable, listAll } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=7";
+import { getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+import { getDatabase,ref,set,remove,update,onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+import { getStorage,ref as sRef,listAll,getDownloadURL,uploadBytesResumable,deleteObject } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
+import { firebaseConfig,ADMIN_UID } from "./firebase-config.js?v=8";
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getDatabase(app);
-const storage = getStorage(app);
-const $ = s => document.querySelector(s);
+const fb=initializeApp(firebaseConfig),auth=getAuth(fb),db=getDatabase(fb),storage=getStorage(fb),$=s=>document.querySelector(s);
+let galleries={},uploadSlug=null,createdSlug=null;
 
-let galleries = {};
-let uploadSlug = null;
-let createdSlug = null;
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+const slugify=v=>v.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9-]+/g,"-").replace(/^-+|-+$/g,"").replace(/-+/g,"-");
+async function hash(text){const d=new TextEncoder().encode(text),h=await crypto.subtle.digest("SHA-256",d);return [...new Uint8Array(h)].map(b=>b.toString(16).padStart(2,"0")).join("")}
+const galleryUrl=s=>location.href.replace(/admin\.html.*$/,"")+`?g=${encodeURIComponent(s)}`;
+function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(t._t);t._t=setTimeout(()=>t.hidden=true,1800)}
+function notice(el,m,type="ok"){el.hidden=false;el.className=`notice ${type}`;el.textContent=m}
+function fmt(ts){return ts?new Date(ts).toLocaleString("pl-PL"):"—"}
 
-async function sha256(text){
-  const data = new TextEncoder().encode(text);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,"0")).join("");
-}
-function cleanSlug(value){
-  return value.trim().toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g,"")
-    .replace(/[^a-z0-9-]+/g,"-")
-    .replace(/^-+|-+$/g,"").replace(/-+/g,"-");
-}
-function escapeHtml(s){
-  return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
-}
-function galleryUrl(slug){
-  const base = location.href.replace(/admin\.html.*$/,"");
-  return `${base}?g=${encodeURIComponent(slug)}`;
-}
-function showMessage(el,text,type="ok"){
-  el.hidden=false;
-  el.className=`admin-message ${type}`;
-  el.textContent=text;
-}
-function hideMessage(el){el.hidden=true;}
-
-onAuthStateChanged(auth,user=>{
-  if(user && user.uid===ADMIN_UID){
-    $("#adminLogin").hidden=true;
-    $("#adminPanel").hidden=false;
-    loadGalleries();
-  }else{
-    $("#adminLogin").hidden=false;
-    $("#adminPanel").hidden=true;
-    if(user && user.uid!==ADMIN_UID) signOut(auth);
-  }
+onAuthStateChanged(auth,u=>{
+  if(u&&u.uid===ADMIN_UID){
+    $("#adminLogin").hidden=true;$("#adminPanel").hidden=false;$("#adminEmailLabel").textContent=u.email||"Administrator";
+    onValue(ref(db,"galleries"),s=>{galleries=s.exists()?s.val():{};renderAll()});
+  }else{$("#adminLogin").hidden=false;$("#adminPanel").hidden=true;if(u&&u.uid!==ADMIN_UID)signOut(auth)}
 });
-
-$("#adminLoginForm").addEventListener("submit",async e=>{
-  e.preventDefault();
-  $("#adminLoginError").hidden=true;
-  try{
-    const cred=await signInWithEmailAndPassword(auth,$("#adminEmail").value,$("#adminPassword").value);
-    if(cred.user.uid!==ADMIN_UID){
-      await signOut(auth);
-      throw new Error("To konto nie ma uprawnień administratora.");
-    }
-  }catch(err){
-    $("#adminLoginError").hidden=false;
-    $("#adminLoginError").textContent=err.message||String(err);
-  }
-});
+$("#adminLoginForm").onsubmit=async e=>{e.preventDefault();$("#adminLoginError").hidden=true;try{const c=await signInWithEmailAndPassword(auth,$("#adminEmail").value,$("#adminPassword").value);if(c.user.uid!==ADMIN_UID)throw new Error("Brak uprawnień administratora.")}catch(err){$("#adminLoginError").hidden=false;$("#adminLoginError").textContent=err.message||err}};
 $("#adminLogoutBtn").onclick=()=>signOut(auth);
 
-async function loadGalleries(){
-  hideMessage($("#globalMessage"));
-  try{
-    const snap=await get(ref(db,"galleries"));
-    galleries=snap.exists()?snap.val():{};
-    renderGalleries(); // render immediately, no Storage wait
-    refreshPhotoCounts(); // counts later
-  }catch(err){
-    showMessage($("#globalMessage"),"Nie mogę odczytać galerii: "+(err.message||err),"error");
-  }
+function summary(g){const s=g?.selections||{};let clients=0,submitted=0;for(const x of Object.values(s)){if(Object.keys(x?.items||{}).length)clients++;if(x?.meta?.submittedAt)submitted++}return{clients,submitted}}
+function renderAll(){
+  const all=Object.values(galleries);let photos=0,sel=0,sub=0;all.forEach(g=>{photos+=Number(g?.public?.photoCount||0);const s=summary(g);sel+=s.clients;sub+=s.submitted});
+  $("#statGalleries").textContent=all.length;$("#statPhotos").textContent=photos;$("#statSelections").textContent=sel;$("#statSubmitted").textContent=sub;renderCards()
 }
-
-function selectionSummary(g){
-  const selections=(g && g.selections)||{};
-  let total=0;
-  for(const entries of Object.values(selections)){
-    for(const item of Object.values(entries||{})){
-      if(item?.filename) total++;
-    }
-  }
-  return {total,clients:Object.keys(selections).length};
+function filtered(){
+  const q=$("#gallerySearch").value.trim().toLowerCase(),st=$("#galleryStatusFilter").value;
+  return Object.entries(galleries).filter(([slug,g])=>{
+    const p=g?.public||{},s=summary(g),m=!q||(p.title||"").toLowerCase().includes(q)||slug.includes(q);
+    const ok=st==="all"||(st==="active"&&p.active!==false)||(st==="inactive"&&p.active===false)||(st==="submitted"&&s.submitted>0);
+    return m&&ok
+  }).sort((a,b)=>(b[1]?.public?.createdAt||0)-(a[1]?.public?.createdAt||0))
 }
-
-function renderGalleries(){
-  const list=$("#galleryList");
-  list.innerHTML="";
-  const entries=Object.entries(galleries||{});
-
-  if(!entries.length){
-    list.innerHTML='<div class="empty">Nie masz jeszcze galerii. Kliknij „+ Nowa galeria”.</div>';
-    return;
-  }
-
-  entries.sort((a,b)=>(b[1]?.public?.createdAt||0)-(a[1]?.public?.createdAt||0));
-
-  for(const [slug,gRaw] of entries){
-    const g=gRaw||{};
-    const pub=g.public||{};
-    const sum=selectionSummary(g);
-    const card=document.createElement("article");
-    card.className="admin-card";
-    card.dataset.slug=slug;
-    card.innerHTML=`
-      <h3>${escapeHtml(pub.title||slug)}</h3>
-      <div class="meta">
-        <div>Slug: <strong>${escapeHtml(slug)}</strong></div>
-        <div>Zdjęcia: <strong class="photo-count">...</strong></div>
-        <div>Klienci: <strong>${sum.clients}</strong></div>
-        <div>Zaznaczenia: <strong>${sum.total}</strong></div>
-        <div>Limit: <strong>${Number(pub.maxFavorites||0)===0?"bez limitu":pub.maxFavorites}</strong></div>
-      </div>
-      <div class="pill ${pub.active===false?"off":""}">${pub.active===false?"Wyłączona":"Aktywna"}</div>
-
-      <div class="gallery-link">
-        <input value="${galleryUrl(slug)}" readonly>
-        <button class="ghost" data-copy="${slug}">Kopiuj</button>
-      </div>
-
-      <div class="card-actions">
-        <button data-upload="${slug}">+ Dodaj zdjęcia</button>
-        <button data-edit="${slug}" class="ghost">Edytuj</button>
-        <button data-selection="${slug}" class="ghost">♥ Wybory</button>
-        <a class="button-link" href="${galleryUrl(slug)}" target="_blank">Otwórz</a>
-      </div>`;
-    list.appendChild(card);
-  }
-
-  list.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEdit(b.dataset.edit));
-  list.querySelectorAll("[data-upload]").forEach(b=>b.onclick=()=>openUpload(b.dataset.upload));
-  list.querySelectorAll("[data-selection]").forEach(b=>b.onclick=()=>openSelections(b.dataset.selection));
-  list.querySelectorAll("[data-copy]").forEach(b=>b.onclick=async()=>{
-    await navigator.clipboard.writeText(galleryUrl(b.dataset.copy));
-    b.textContent="Skopiowano ✓";
-    setTimeout(()=>b.textContent="Kopiuj",1200);
+function renderCards(){
+  const list=$("#galleryList");list.innerHTML="";
+  const rows=filtered();if(!rows.length){list.innerHTML='<div class="notice">Brak galerii pasujących do filtra.</div>';return}
+  rows.forEach(([slug,g])=>{
+    const p=g.public||{},s=summary(g),submitted=s.submitted>0,card=document.createElement("article");card.className="gallery-card";
+    card.innerHTML=`<div class="gallery-cover"><div class="gallery-status ${p.active===false?"off":submitted?"submitted":""}">${p.active===false?"Wyłączona":submitted?`✓ ${s.submitted} zatwierdz.`:"Aktywna"}</div></div><div class="gallery-body"><h3>${esc(p.title||slug)}</h3><div class="gallery-meta"><span>${Number(p.photoCount||0)} zdjęć</span><span>${s.clients} wyborów</span><span>${p.maxFavorites?`limit ${p.maxFavorites}`:"bez limitu"}</span></div><div class="gallery-link"><input readonly value="${galleryUrl(slug)}"><button class="ghost" data-copy="${slug}">Kopiuj</button></div><div class="gallery-actions"><button class="primary" data-upload="${slug}">+ Zdjęcia</button><button class="ghost" data-manage="${slug}">Zarządzaj</button><button class="ghost" data-select="${slug}">♡ Wybory</button><button class="ghost" data-edit="${slug}">Ustawienia</button><a class="ghost" href="${galleryUrl(slug)}" target="_blank">Otwórz</a></div></div>`;
+    list.appendChild(card);loadCover(card.querySelector(".gallery-cover"),slug,p.coverFile)
   });
+  list.querySelectorAll("[data-copy]").forEach(b=>b.onclick=async()=>{await navigator.clipboard.writeText(galleryUrl(b.dataset.copy));toast("Link skopiowany")});
+  list.querySelectorAll("[data-upload]").forEach(b=>b.onclick=()=>openUpload(b.dataset.upload));
+  list.querySelectorAll("[data-manage]").forEach(b=>b.onclick=()=>openPhotos(b.dataset.manage));
+  list.querySelectorAll("[data-select]").forEach(b=>b.onclick=()=>openSelections(b.dataset.select));
+  list.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEdit(b.dataset.edit))
 }
-
-async function refreshPhotoCounts(){
-  const cards=[...document.querySelectorAll(".admin-card[data-slug]")];
-  for(const card of cards){
-    const slug=card.dataset.slug;
-    let count=0;
-    try{
-      const result=await listAll(sRef(storage,`galleries/${slug}/previews`));
-      count=result.items.length;
-    }catch(_){}
-    const target=card.querySelector(".photo-count");
-    if(target) target.textContent=count;
-  }
-}
+async function loadCover(el,slug,file){if(!file)return;try{el.style.backgroundImage=`url("${await getDownloadURL(sRef(storage,`galleries/${slug}/previews/${file}`))}")`}catch(_){}}
+$("#gallerySearch").oninput=renderCards;$("#galleryStatusFilter").onchange=renderCards;
 
 function resetForm(){
-  $("#editingSlug").value="";
-  $("#galleryTitleInput").value="";
-  $("#gallerySlugInput").value="";
-  $("#galleryPasswordInput").value="";
-  $("#gallerySubtitleInput").value="";
-  $("#maxFavoritesInput").value="0";
-  $("#downloadsEnabledInput").checked=true;
-  $("#galleryActiveInput").checked=true;
-  $("#deleteGalleryBtn").hidden=true;
-  $("#gallerySlugInput").disabled=false;
-  hideMessage($("#saveStatus"));
+  $("#editingSlug").value="";$("#galleryTitleInput").value="";$("#gallerySlugInput").value="";$("#gallerySlugInput").disabled=false;$("#galleryPasswordInput").value="";$("#gallerySubtitleInput").value="";$("#expiresAtInput").value="";$("#maxFavoritesInput").value=0;$("#downloadsEnabledInput").checked=true;$("#galleryActiveInput").checked=true;$("#selectionEnabledInput").checked=true;$("#lockAfterSubmitInput").checked=false;$("#deleteGalleryBtn").hidden=true;$("#saveStatus").hidden=true
 }
-$("#newGalleryBtn").onclick=()=>{
-  resetForm();
-  $("#dialogTitle").textContent="Nowa galeria";
-  $("#galleryDialog").showModal();
-};
-
+$("#newGalleryBtn").onclick=()=>{resetForm();$("#dialogTitle").textContent="Nowa galeria";$("#galleryDialog").showModal()};
 function openEdit(slug){
-  const pub=galleries[slug]?.public||{};
-  resetForm();
-  $("#dialogTitle").textContent="Edytuj galerię";
-  $("#editingSlug").value=slug;
-  $("#galleryTitleInput").value=pub.title||"";
-  $("#gallerySlugInput").value=slug;
-  $("#gallerySlugInput").disabled=true;
-  $("#gallerySubtitleInput").value=pub.subtitle||"";
-  $("#maxFavoritesInput").value=Number(pub.maxFavorites||0);
-  $("#downloadsEnabledInput").checked=pub.downloadsEnabled!==false;
-  $("#galleryActiveInput").checked=pub.active!==false;
-  $("#deleteGalleryBtn").hidden=false;
-  $("#galleryDialog").showModal();
+  const p=galleries[slug]?.public||{};resetForm();$("#dialogTitle").textContent="Ustawienia galerii";$("#editingSlug").value=slug;$("#galleryTitleInput").value=p.title||"";$("#gallerySlugInput").value=slug;$("#gallerySlugInput").disabled=true;$("#gallerySubtitleInput").value=p.subtitle||"";$("#expiresAtInput").value=p.expiresAt||"";$("#maxFavoritesInput").value=Number(p.maxFavorites||0);$("#downloadsEnabledInput").checked=p.downloadsEnabled!==false;$("#galleryActiveInput").checked=p.active!==false;$("#selectionEnabledInput").checked=p.selectionEnabled!==false;$("#lockAfterSubmitInput").checked=!!p.lockAfterSubmit;$("#deleteGalleryBtn").hidden=false;$("#galleryDialog").showModal()
 }
-
-$("#galleryForm").addEventListener("submit",async e=>{
-  e.preventDefault();
-  const btn=$("#saveGalleryBtn");
-  btn.disabled=true;btn.textContent="Zapisywanie…";
-  hideMessage($("#saveStatus"));
-
+$("#galleryForm").onsubmit=async e=>{
+  e.preventDefault();const btn=$("#saveGalleryBtn");btn.disabled=true;btn.textContent="Zapisywanie…";
   try{
-    const editing=$("#editingSlug").value;
-    const slug=editing||cleanSlug($("#gallerySlugInput").value);
-    if(!slug) throw new Error("Podaj poprawny adres / slug.");
+    const edit=$("#editingSlug").value,slug=edit||slugify($("#gallerySlugInput").value);if(!slug)throw new Error("Podaj poprawny slug.");
+    const old=galleries[slug]?.public||{},pass=$("#galleryPasswordInput").value;let passwordHash=old.passwordHash||"";if(pass)passwordHash=await hash(pass);if(!passwordHash)throw new Error("Ustaw hasło klienta.");
+    const data={...old,title:$("#galleryTitleInput").value.trim()||slug,subtitle:$("#gallerySubtitleInput").value.trim(),passwordHash,expiresAt:$("#expiresAtInput").value||"",maxFavorites:Number($("#maxFavoritesInput").value||0),downloadsEnabled:$("#downloadsEnabledInput").checked,active:$("#galleryActiveInput").checked,selectionEnabled:$("#selectionEnabledInput").checked,lockAfterSubmit:$("#lockAfterSubmitInput").checked,photoCount:Number(old.photoCount||0),createdAt:old.createdAt||Date.now(),updatedAt:Date.now()};
+    await set(ref(db,`galleries/${slug}/public`),data);$("#galleryDialog").close();
+    if(!edit){createdSlug=slug;$("#createdLink").value=galleryUrl(slug);$("#createdDialog").showModal()}else toast("Ustawienia zapisane")
+  }catch(err){notice($("#saveStatus"),err.message||String(err),"error")}
+  finally{btn.disabled=false;btn.textContent="Zapisz"}
+};
+$("#deleteGalleryBtn").onclick=async()=>{const slug=$("#editingSlug").value;if(slug&&confirm(`Usunąć galerię ${slug} z bazy?`)){await remove(ref(db,`galleries/${slug}`));$("#galleryDialog").close();toast("Galeria usunięta")}};
+$("#closeGalleryDialog").onclick=$("#cancelGalleryBtn").onclick=()=>$("#galleryDialog").close();
+$("#copyCreatedLink").onclick=async()=>{await navigator.clipboard.writeText($("#createdLink").value);toast("Link skopiowany")};
+$("#openCreatedGalleryBtn").onclick=()=>window.open(galleryUrl(createdSlug),"_blank");
+$("#addPhotosNowBtn").onclick=()=>{$("#createdDialog").close();openUpload(createdSlug)};
 
-    const existing=galleries[slug]?.public||{};
-    const password=$("#galleryPasswordInput").value;
-    let passwordHash=existing.passwordHash||"";
-    if(password) passwordHash=await sha256(password);
-    if(!passwordHash) throw new Error("Dla nowej galerii ustaw hasło klienta.");
-
-    const data={
-      title:$("#galleryTitleInput").value.trim()||slug,
-      subtitle:$("#gallerySubtitleInput").value.trim(),
-      passwordHash,
-      maxFavorites:Number($("#maxFavoritesInput").value||0),
-      downloadsEnabled:$("#downloadsEnabledInput").checked,
-      active:$("#galleryActiveInput").checked,
-      createdAt:existing.createdAt||Date.now(),
-      updatedAt:Date.now()
-    };
-
-    await set(ref(db,`galleries/${slug}/public`),data);
-
-    // immediate local update so card appears even before reread
-    galleries[slug]=galleries[slug]||{};
-    galleries[slug].public=data;
-    renderGalleries();
-    refreshPhotoCounts();
-
-    $("#galleryDialog").close();
-
-    if(!editing){
-      createdSlug=slug;
-      $("#createdLink").value=galleryUrl(slug);
-      $("#createdDialog").showModal();
-    }else{
-      showMessage($("#globalMessage"),`Galeria „${data.title}” została zaktualizowana.`,"ok");
+function openUpload(slug){uploadSlug=slug;$("#uploadTitle").textContent=`Dodaj zdjęcia — ${galleries[slug]?.public?.title||slug}`;$("#photoFilesInput").value="";$("#uploadFileCount").textContent="0 plików";$("#uploadSize").textContent="0 MB";$("#uploadProgress").style.width="0%";$("#uploadStatus").hidden=true;$("#uploadDialog").showModal()}
+const dz=$("#dropZone");["dragenter","dragover"].forEach(x=>dz.addEventListener(x,e=>{e.preventDefault()}));dz.addEventListener("drop",e=>{e.preventDefault();const dt=new DataTransfer();[...e.dataTransfer.files].filter(f=>/image\/jpe?g/i.test(f.type)).forEach(f=>dt.items.add(f));$("#photoFilesInput").files=dt.files;fileMeta()});$("#photoFilesInput").onchange=fileMeta;
+function fileMeta(){const f=[...$("#photoFilesInput").files],b=f.reduce((a,x)=>a+x.size,0);$("#uploadFileCount").textContent=`${f.length} plików`;$("#uploadSize").textContent=`${(b/1024/1024).toFixed(1)} MB`}
+async function preview(file,max=1800,q=.78){const u=URL.createObjectURL(file),img=await new Promise((r,j)=>{const i=new Image();i.onload=()=>r(i);i.onerror=j;i.src=u});let w=img.naturalWidth,h=img.naturalHeight,s=Math.min(1,max/Math.max(w,h));w=Math.round(w*s);h=Math.round(h*s);const c=document.createElement("canvas");c.width=w;c.height=h;c.getContext("2d",{alpha:false}).drawImage(img,0,0,w,h);URL.revokeObjectURL(u);return await new Promise((r,j)=>c.toBlob(b=>b?r(b):j(new Error("Błąd podglądu")),"image/jpeg",q))}
+function task(r,data,cb){return new Promise((ok,bad)=>{const t=uploadBytesResumable(r,data,{contentType:"image/jpeg"});t.on("state_changed",s=>cb(s.totalBytes?s.bytesTransferred/s.totalBytes:0),bad,ok)})}
+$("#startUploadBtn").onclick=async()=>{
+  const files=[...$("#photoFilesInput").files];if(!uploadSlug||!files.length)return notice($("#uploadStatus"),"Wybierz zdjęcia JPG.","error");
+  const btn=$("#startUploadBtn");btn.disabled=true;btn.textContent="Wysyłanie…";
+  try{
+    for(let i=0;i<files.length;i++){
+      const f=files[i],base=i/files.length,weight=1/files.length;notice($("#uploadStatus"),`${i+1}/${files.length}: ${f.name} — podgląd…`);
+      const p=await preview(f);await task(sRef(storage,`galleries/${uploadSlug}/previews/${f.name}`),p,x=>$("#uploadProgress").style.width=`${Math.round((base+weight*x*.15)*100)}%`);
+      notice($("#uploadStatus"),`${i+1}/${files.length}: ${f.name} — oryginał…`);await task(sRef(storage,`galleries/${uploadSlug}/originals/${f.name}`),f,x=>$("#uploadProgress").style.width=`${Math.round((base+weight*(.15+x*.85))*100)}%`);
+      if(i===0&&!galleries[uploadSlug]?.public?.coverFile)await update(ref(db,`galleries/${uploadSlug}/public`),{coverFile:f.name})
     }
-  }catch(err){
-    showMessage($("#saveStatus"),"Nie udało się zapisać: "+(err.message||err),"error");
-  }finally{
-    btn.disabled=false;btn.textContent="Zapisz";
-  }
-});
+    const all=await listAll(sRef(storage,`galleries/${uploadSlug}/previews`));await update(ref(db,`galleries/${uploadSlug}/public`),{photoCount:all.items.length,updatedAt:Date.now()});$("#uploadProgress").style.width="100%";notice($("#uploadStatus"),`Gotowe — ${files.length} zdjęć wysłanych.`,"ok")
+  }catch(err){notice($("#uploadStatus"),`${err.code||"Błąd"}: ${err.message||err}`,"error")}
+  finally{btn.disabled=false;btn.textContent="Rozpocznij wysyłanie"}
+};
+$("#closeUploadDialog").onclick=$("#cancelUploadBtn").onclick=()=>$("#uploadDialog").close();
 
-$("#deleteGalleryBtn").onclick=async()=>{
-  const slug=$("#editingSlug").value;
-  if(!slug||!confirm(`Usunąć galerię "${slug}" z bazy? Zdjęcia w Storage pozostaną.`)) return;
+async function openPhotos(slug){
+  $("#photosTitle").textContent=`Zdjęcia — ${galleries[slug]?.public?.title||slug}`;$("#photoManagerGrid").innerHTML="";$("#photoManagerLoading").hidden=false;$("#photosDialog").showModal();
   try{
-    await remove(ref(db,`galleries/${slug}`));
-    delete galleries[slug];
-    $("#galleryDialog").close();
-    renderGalleries();
-  }catch(err){
-    showMessage($("#saveStatus"),err.message||String(err),"error");
-  }
-};
-
-$("#copyCreatedLink").onclick=async()=>{
-  await navigator.clipboard.writeText($("#createdLink").value);
-  $("#copyCreatedLink").textContent="Skopiowano ✓";
-  setTimeout(()=>$("#copyCreatedLink").textContent="Kopiuj link",1200);
-};
-$("#openGalleryNowBtn").onclick=()=>{
-  if(createdSlug) window.open(galleryUrl(createdSlug),"_blank");
-};
-$("#addPhotosNowBtn").onclick=()=>{
-  if(!createdSlug) return;
-  $("#createdDialog").close();
-  openUpload(createdSlug);
-};
-
-function openUpload(slug){
-  uploadSlug=slug;
-  $("#uploadTitle").textContent=`Dodaj zdjęcia — ${galleries[slug]?.public?.title||slug}`;
-  $("#photoFilesInput").value="";
-  $("#uploadProgress").style.width="0%";
-  $("#uploadFileCount").textContent="0 plików";
-  $("#uploadSize").textContent="0 MB";
-  hideMessage($("#uploadStatus"));
-  $("#uploadDialog").showModal();
-}
-
-$("#photoFilesInput").addEventListener("change",()=>{
-  const files=[...$("#photoFilesInput").files];
-  const bytes=files.reduce((sum,f)=>sum+f.size,0);
-  $("#uploadFileCount").textContent=`${files.length} plików`;
-  $("#uploadSize").textContent=`${(bytes/1024/1024).toFixed(1)} MB`;
-});
-
-async function makePreview(file, maxSide=1600, quality=.76){
-  // Mobile-friendly path with fallback; avoids relying only on createImageBitmap.
-  const dataUrl = await new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Nie udało się odczytać zdjęcia."));
-    reader.readAsDataURL(file);
-  });
-
-  const img = await new Promise((resolve, reject) => {
-    const i = new Image();
-    i.onload = () => resolve(i);
-    i.onerror = () => reject(new Error("Nie udało się otworzyć zdjęcia."));
-    i.src = dataUrl;
-  });
-
-  let w = img.naturalWidth, h = img.naturalHeight;
-  const scale = Math.min(1, maxSide / Math.max(w,h));
-  w = Math.max(1, Math.round(w*scale));
-  h = Math.max(1, Math.round(h*scale));
-
-  const canvas = document.createElement("canvas");
-  canvas.width = w; canvas.height = h;
-  const ctx = canvas.getContext("2d", {alpha:false});
-  ctx.drawImage(img, 0, 0, w, h);
-
-  return await new Promise((resolve,reject)=>{
-    canvas.toBlob(
-      blob => blob ? resolve(blob) : reject(new Error("Nie udało się utworzyć podglądu.")),
-      "image/jpeg",
-      quality
-    );
-  });
-}
-
-function uploadWithProgress(storageRef, data, metadata, onProgress){
-  return new Promise((resolve,reject)=>{
-    const task = uploadBytesResumable(storageRef, data, metadata);
-    task.on("state_changed",
-      snap => {
-        const pct = snap.totalBytes ? (snap.bytesTransferred / snap.totalBytes) : 0;
-        onProgress(Math.max(0, Math.min(1, pct)));
-      },
-      reject,
-      resolve
-    );
-  });
-}
-
-$("#startUploadBtn").onclick = async () => {
-  const files = [...$("#photoFilesInput").files];
-
-  if(!uploadSlug || !files.length){
-    showMessage($("#uploadStatus"), "Najpierw wybierz zdjęcia JPG.", "error");
-    return;
-  }
-
-  const btn = $("#startUploadBtn");
-  btn.disabled = true;
-  btn.textContent = "Wysyłanie…";
-  $("#uploadProgress").style.width = "0%";
-
-  try{
-    for(let i=0; i<files.length; i++){
-      const file = files[i];
-
-      if(!/image\/jpe?g/i.test(file.type)){
-        throw new Error(`${file.name} nie jest JPG/JPEG.`);
-      }
-
-      showMessage(
-        $("#uploadStatus"),
-        `${i+1}/${files.length}: ${file.name} — przygotowuję podgląd…`
-      );
-
-      // Make the small preview first. If this fails, don't waste time uploading the original.
-      const preview = await makePreview(file);
-
-      const perFileBase = i / files.length;
-      const perFileWeight = 1 / files.length;
-
-      showMessage(
-        $("#uploadStatus"),
-        `${i+1}/${files.length}: ${file.name} — wysyłam podgląd…`
-      );
-
-      await uploadWithProgress(
-        sRef(storage, `galleries/${uploadSlug}/previews/${file.name}`),
-        preview,
-        {contentType:"image/jpeg"},
-        p => {
-          // preview = first 15% of this file's visual progress
-          const overall = perFileBase + perFileWeight * (p * 0.15);
-          $("#uploadProgress").style.width = `${Math.round(overall*100)}%`;
-        }
-      );
-
-      showMessage(
-        $("#uploadStatus"),
-        `${i+1}/${files.length}: ${file.name} — wysyłam oryginał…`
-      );
-
-      await uploadWithProgress(
-        sRef(storage, `galleries/${uploadSlug}/originals/${file.name}`),
-        file,
-        {contentType:"image/jpeg"},
-        p => {
-          // original = remaining 85%
-          const overall = perFileBase + perFileWeight * (0.15 + p * 0.85);
-          $("#uploadProgress").style.width = `${Math.round(overall*100)}%`;
-        }
-      );
+    const r=await listAll(sRef(storage,`galleries/${slug}/previews`));
+    for(const item of r.items.sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}))){
+      const url=await getDownloadURL(item),w=document.createElement("article");w.className="pm-item";w.innerHTML=`<div class="pm-thumb" style="background-image:url('${url}')"></div><div class="pm-info"><div class="pm-name">${esc(item.name)}</div><div class="pm-actions"><button class="ghost cover">Okładka</button><button class="danger del">Usuń</button></div></div>`;
+      w.querySelector(".cover").onclick=async()=>{await update(ref(db,`galleries/${slug}/public`),{coverFile:item.name});toast("Okładka ustawiona")};
+      w.querySelector(".del").onclick=async()=>{if(!confirm(`Usunąć ${item.name}?`))return;await deleteObject(sRef(storage,`galleries/${slug}/previews/${item.name}`));await deleteObject(sRef(storage,`galleries/${slug}/originals/${item.name}`)).catch(()=>{});w.remove();const left=await listAll(sRef(storage,`galleries/${slug}/previews`));await update(ref(db,`galleries/${slug}/public`),{photoCount:left.items.length});toast("Zdjęcie usunięte")};
+      $("#photoManagerGrid").appendChild(w)
     }
+  }finally{$("#photoManagerLoading").hidden=true}
+}
+$("#closePhotosDialog").onclick=()=>$("#photosDialog").close();
 
-    $("#uploadProgress").style.width = "100%";
-    showMessage($("#uploadStatus"), `Gotowe — dodano ${files.length} zdjęć.`, "ok");
-    refreshPhotoCounts();
-
-  }catch(err){
-    console.error(err);
-    showMessage(
-      $("#uploadStatus"),
-      `Błąd uploadu: ${err.code ? err.code + " — " : ""}${err.message || err}`,
-      "error"
-    );
-  }finally{
-    btn.disabled = false;
-    btn.textContent = "Wyślij zdjęcia";
-  }
-};
-
+function download(name,text,type="text/plain"){const b=new Blob([text],{type}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function openSelections(slug){
-  const g=galleries[slug]||{};
-  const selections=g.selections||{};
-  $("#selectionTitle").textContent=`${g.public?.title||slug} — wybory`;
-
-  const wrap=$("#selectionContent");
-  wrap.innerHTML="";
-  const clients=Object.entries(selections);
-
-  if(!clients.length){
-    wrap.innerHTML='<div class="empty">Klient nie zaznaczył jeszcze żadnych zdjęć.</div>';
-  }else{
-    for(const [clientUid,entries] of clients){
-      const items=Object.values(entries||{})
-        .filter(v=>v?.filename)
-        .sort((a,b)=>a.filename.localeCompare(b.filename,undefined,{numeric:true}));
-
-      const group=document.createElement("section");
-      group.className="selection-group";
-      group.innerHTML=`
-        <h4>Klient ${escapeHtml(clientUid.slice(0,8))}… — ${items.length} zdjęć</h4>
-        <div class="selection-list">
-          ${items.map(x=>`<div class="selection-item">${escapeHtml(x.filename)}</div>`).join("")}
-        </div>`;
-      wrap.appendChild(group);
-    }
-  }
-  $("#selectionDialog").showModal();
+  const g=galleries[slug]||{},sels=g.selections||{},wrap=$("#selectionContent");$("#selectionTitle").textContent=`${g.public?.title||slug} — wybory`;wrap.innerHTML="";
+  const clients=Object.entries(sels);if(!clients.length)wrap.innerHTML='<div class="notice">Klienci nie zaznaczyli jeszcze zdjęć.</div>';
+  clients.forEach(([id,s])=>{
+    const items=Object.values(s?.items||{}).filter(x=>x?.filename).sort((a,b)=>a.filename.localeCompare(b.filename,undefined,{numeric:true})),m=s?.meta||{},sub=!!m.submittedAt,sec=document.createElement("section");sec.className="selection-client";
+    sec.innerHTML=`<div class="selection-head"><div><h3>${esc(m.clientName||`Klient ${id.slice(0,8)}…`)}</h3><div class="gallery-meta"><span>${items.length} zdjęć</span><span>${sub?`zatwierdzono ${fmt(m.submittedAt)}`:"wybór roboczy"}</span></div>${m.note?`<p class="muted">${esc(m.note)}</p>`:""}</div><span class="selection-badge ${sub?"submitted":""}">${sub?"✓ Zatwierdzony":"Roboczy"}</span></div><div class="selection-list">${items.map(x=>`<div class="selection-item">${esc(x.filename)}</div>`).join("")}</div><div class="selection-tools"><button class="ghost txt">TXT</button><button class="ghost csv">CSV</button></div>`;
+    sec.querySelector(".txt").onclick=()=>download(`${slug}-wybor.txt`,items.map(x=>x.filename).join("\r\n"));
+    sec.querySelector(".csv").onclick=()=>download(`${slug}-wybor.csv`,"filename\r\n"+items.map(x=>`"${x.filename.replaceAll('"','""')}"`).join("\r\n"),"text/csv");wrap.appendChild(sec)
+  });$("#selectionDialog").showModal()
 }
-
-$("#closeDialogBtn").onclick=()=>$("#galleryDialog").close();
-$("#cancelDialogBtn").onclick=()=>$("#galleryDialog").close();
-$("#closeCreatedBtn").onclick=()=>$("#createdDialog").close();
-$("#closeUploadBtn").onclick=()=>$("#uploadDialog").close();
-$("#cancelUploadBtn").onclick=()=>$("#uploadDialog").close();
-$("#closeSelectionBtn").onclick=()=>$("#selectionDialog").close();
+$("#closeSelectionDialog").onclick=()=>$("#selectionDialog").close();

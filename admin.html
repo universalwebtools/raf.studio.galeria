@@ -1,157 +1,20 @@
-<!doctype html>
-<html lang="pl">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="theme-color" content="#0b0b0c">
-  <title>RAF.studio — Panel administratora</title>
-  <link rel="stylesheet" href="style.css?v=7">
-</head>
-<body>
-  <section id="adminLogin" class="lock-screen">
-    <div class="lock-card">
-      <div class="brand">RAF<span>.studio</span></div>
-      <p class="eyebrow">PANEL ADMINISTRATORA</p>
-      <h1>Logowanie</h1>
-      <form id="adminLoginForm">
-        <input id="adminEmail" type="email" placeholder="E-mail" required>
-        <input id="adminPassword" type="password" placeholder="Hasło" required>
-        <button type="submit">Zaloguj</button>
-        <p id="adminLoginError" class="error" hidden></p>
-      </form>
-    </div>
-  </section>
-
-  <main id="adminPanel" class="admin-shell" hidden>
-    <header class="topbar">
-      <div>
-        <div class="brand small">RAF<span>.studio</span></div>
-        <div class="gallery-name">Panel administratora</div>
-      </div>
-      <div class="header-actions">
-        <button id="newGalleryBtn">+ Nowa galeria</button>
-        <button id="adminLogoutBtn" class="ghost">Wyloguj</button>
-      </div>
-    </header>
-
-    <section class="admin-content">
-      <p class="eyebrow">GALERIE</p>
-      <h1>Twoje sesje</h1>
-      <div id="globalMessage" class="admin-message" hidden></div>
-      <div id="galleryList" class="admin-grid"></div>
-    </section>
-  </main>
-
-  <dialog id="galleryDialog" class="admin-dialog">
-    <form id="galleryForm">
-      <div class="dialog-head">
-        <div>
-          <p class="eyebrow">USTAWIENIA GALERII</p>
-          <h2 id="dialogTitle">Nowa galeria</h2>
-        </div>
-        <button type="button" id="closeDialogBtn" class="ghost icon-btn">×</button>
-      </div>
-
-      <input type="hidden" id="editingSlug">
-
-      <label>Nazwa sesji
-        <input id="galleryTitleInput" required placeholder="np. Ślub Kowalscy">
-      </label>
-
-      <label>Adres / slug
-        <input id="gallerySlugInput" required placeholder="np. kowalscy-2026">
-      </label>
-
-      <label>Hasło klienta
-        <input id="galleryPasswordInput" type="password" placeholder="Dla nowej galerii wymagane">
-      </label>
-
-      <label>Opis
-        <input id="gallerySubtitleInput" placeholder="np. Wybierz 20 ulubionych zdjęć">
-      </label>
-
-      <div class="form-row">
-        <label>Limit ulubionych
-          <input id="maxFavoritesInput" type="number" min="0" value="0">
-        </label>
-        <label class="check-label">
-          <input id="downloadsEnabledInput" type="checkbox" checked>
-          Pobieranie oryginałów
-        </label>
-        <label class="check-label">
-          <input id="galleryActiveInput" type="checkbox" checked>
-          Galeria aktywna
-        </label>
-      </div>
-
-      <div id="saveStatus" class="admin-message" hidden></div>
-
-      <div class="dialog-actions">
-        <button type="button" id="deleteGalleryBtn" class="danger" hidden>Usuń galerię</button>
-        <span></span>
-        <button type="button" id="cancelDialogBtn" class="ghost">Anuluj</button>
-        <button type="submit" id="saveGalleryBtn">Zapisz</button>
-      </div>
-    </form>
-  </dialog>
-
-  <dialog id="createdDialog" class="admin-dialog">
-    <div class="dialog-head">
-      <div>
-        <p class="eyebrow">GOTOWE</p>
-        <h2>Galeria utworzona</h2>
-      </div>
-      <button type="button" id="closeCreatedBtn" class="ghost icon-btn">×</button>
-    </div>
-    <p class="muted">Link dla klienta:</p>
-    <div class="gallery-link big-link">
-      <input id="createdLink" readonly>
-      <button id="copyCreatedLink" class="ghost">Kopiuj link</button>
-    </div>
-    <div class="created-actions">
-      <button id="addPhotosNowBtn">+ Dodaj zdjęcia teraz</button>
-      <button id="openGalleryNowBtn" class="ghost">Otwórz galerię</button>
-    </div>
-  </dialog>
-
-  <dialog id="uploadDialog" class="admin-dialog wide">
-    <div class="dialog-head">
-      <div>
-        <p class="eyebrow">ZDJĘCIA</p>
-        <h2 id="uploadTitle">Dodaj zdjęcia</h2>
-      </div>
-      <button type="button" id="closeUploadBtn" class="ghost icon-btn">×</button>
-    </div>
-
-    <p class="muted">Wybierz JPG/JPEG. Oryginały trafią do <code>originals</code>, a podglądy zostaną utworzone automatycznie.</p>
-    <input id="photoFilesInput" type="file" accept="image/jpeg,image/jpg" multiple>
-
-    <div class="upload-summary">
-      <span id="uploadFileCount">0 plików</span>
-      <span id="uploadSize">0 MB</span>
-    </div>
-
-    <div class="progress-track"><div id="uploadProgress" class="progress-bar"></div></div>
-    <div id="uploadStatus" class="admin-message" hidden></div>
-
-    <div class="dialog-actions">
-      <span></span><span></span>
-      <button type="button" id="cancelUploadBtn" class="ghost">Zamknij</button>
-      <button type="button" id="startUploadBtn">Wyślij zdjęcia</button>
-    </div>
-  </dialog>
-
-  <dialog id="selectionDialog" class="admin-dialog wide">
-    <div class="dialog-head">
-      <div>
-        <p class="eyebrow">WYBÓR KLIENTA</p>
-        <h2 id="selectionTitle">Ulubione</h2>
-      </div>
-      <button type="button" id="closeSelectionBtn" class="ghost icon-btn">×</button>
-    </div>
-    <div id="selectionContent"></div>
-  </dialog>
-
-  <script type="module" src="admin.js?v=7"></script>
-</body>
-</html>
+<!doctype html><html lang="pl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#0a0a0b"><title>RAF.studio — Studio Manager</title><link rel="stylesheet" href="style.css?v=8"></head>
+<body class="admin-body">
+<section id="adminLogin" class="lock-screen"><div class="lock-card"><div class="brand">RAF<span>.studio</span></div><p class="eyebrow">STUDIO MANAGER</p><h1>Panel fotografa</h1><p class="muted">Galerie, zdjęcia i wybory klientów w jednym miejscu.</p><form id="adminLoginForm"><input id="adminEmail" type="email" placeholder="E-mail" required><input id="adminPassword" type="password" placeholder="Hasło" required><button class="primary" type="submit">Zaloguj</button><p id="adminLoginError" class="error" hidden></p></form></div></section>
+<main id="adminPanel" hidden><aside class="sidebar"><div><div class="brand">RAF<span>.studio</span></div><small>Studio Manager</small></div><div class="side-bottom"><div id="adminEmailLabel"></div><button id="adminLogoutBtn" class="ghost">Wyloguj</button></div></aside>
+<section class="admin-main"><header class="admin-head"><div><p class="eyebrow">STUDIO MANAGER</p><h1>Galerie klientów</h1><p class="muted">Twórz sesje, dodawaj zdjęcia i odbieraj finalne wybory.</p></div><button id="newGalleryBtn" class="primary">+ Nowa galeria</button></header>
+<section class="stats"><article><span>Galerie</span><strong id="statGalleries">0</strong></article><article><span>Zdjęcia</span><strong id="statPhotos">0</strong></article><article><span>Wybory</span><strong id="statSelections">0</strong></article><article><span>Zatwierdzone</span><strong id="statSubmitted">0</strong></article></section>
+<div class="toolbar"><input id="gallerySearch" type="search" placeholder="Szukaj galerii…"><select id="galleryStatusFilter"><option value="all">Wszystkie</option><option value="active">Aktywne</option><option value="submitted">Z zatwierdzonym wyborem</option><option value="inactive">Wyłączone</option></select></div>
+<div id="globalMessage" class="notice" hidden></div><section id="galleryList" class="gallery-cards"></section></section></main>
+<dialog id="galleryDialog" class="dialog wide"><form id="galleryForm"><div class="dialog-head"><div><p class="eyebrow">GALERIA</p><h2 id="dialogTitle">Nowa galeria</h2></div><button id="closeGalleryDialog" type="button" class="ghost">×</button></div><input id="editingSlug" type="hidden">
+<div class="form2"><label>Nazwa sesji<input id="galleryTitleInput" required placeholder="np. Ślub — Anna i Michał"></label><label>Adres / slug<input id="gallerySlugInput" required placeholder="np. anna-michal-2026"></label></div>
+<label>Opis<input id="gallerySubtitleInput" placeholder="np. Wybierzcie 30 ulubionych zdjęć"></label>
+<div class="form2"><label>Hasło klienta<input id="galleryPasswordInput" type="password" placeholder="Wymagane przy tworzeniu"></label><label>Data wygaśnięcia<input id="expiresAtInput" type="date"></label></div>
+<div class="form3"><label>Limit ulubionych<input id="maxFavoritesInput" type="number" min="0" value="0"><small>0 = bez limitu</small></label><label class="check"><input id="downloadsEnabledInput" type="checkbox" checked>Pobieranie oryginałów</label><label class="check"><input id="galleryActiveInput" type="checkbox" checked>Galeria aktywna</label></div>
+<div class="form2"><label class="check"><input id="selectionEnabledInput" type="checkbox" checked>Wybór ulubionych</label><label class="check"><input id="lockAfterSubmitInput" type="checkbox">Zablokuj po zatwierdzeniu</label></div>
+<div id="saveStatus" class="notice" hidden></div><div class="actions"><button id="deleteGalleryBtn" type="button" class="danger" hidden>Usuń galerię</button><span class="spacer"></span><button id="cancelGalleryBtn" type="button" class="ghost">Anuluj</button><button id="saveGalleryBtn" type="submit" class="primary">Zapisz</button></div></form></dialog>
+<dialog id="createdDialog" class="dialog small"><div class="success">✓</div><h2>Galeria gotowa</h2><p class="muted">Skopiuj link lub od razu dodaj zdjęcia.</p><div class="copy"><input id="createdLink" readonly><button id="copyCreatedLink" class="ghost">Kopiuj</button></div><div class="actions equal"><button id="openCreatedGalleryBtn" class="ghost">Otwórz</button><button id="addPhotosNowBtn" class="primary">+ Dodaj zdjęcia</button></div></dialog>
+<dialog id="uploadDialog" class="dialog wide"><div class="dialog-head"><div><p class="eyebrow">UPLOAD</p><h2 id="uploadTitle">Dodaj zdjęcia</h2></div><button id="closeUploadDialog" class="ghost">×</button></div><label id="dropZone" class="drop"><input id="photoFilesInput" type="file" accept="image/jpeg,image/jpg" multiple hidden><b>＋</b><strong>Przeciągnij zdjęcia tutaj</strong><span>lub kliknij, aby wybrać JPG/JPEG</span><small>Podglądy tworzą się automatycznie. Oryginały zostają w pełnej jakości.</small></label><div class="upload-meta"><span id="uploadFileCount">0 plików</span><span id="uploadSize">0 MB</span></div><div class="progress-track"><div id="uploadProgress" class="progress-bar"></div></div><div id="uploadStatus" class="notice" hidden></div><div class="actions right"><button id="cancelUploadBtn" class="ghost">Zamknij</button><button id="startUploadBtn" class="primary">Rozpocznij wysyłanie</button></div></dialog>
+<dialog id="photosDialog" class="dialog xl"><div class="dialog-head"><div><p class="eyebrow">ZDJĘCIA</p><h2 id="photosTitle">Zarządzaj zdjęciami</h2></div><button id="closePhotosDialog" class="ghost">×</button></div><div id="photoManagerLoading" class="loading">Ładowanie…</div><div id="photoManagerGrid" class="photo-manager"></div></dialog>
+<dialog id="selectionDialog" class="dialog wide"><div class="dialog-head"><div><p class="eyebrow">WYBÓR KLIENTA</p><h2 id="selectionTitle">Wybrane zdjęcia</h2></div><button id="closeSelectionDialog" class="ghost">×</button></div><div id="selectionContent"></div></dialog>
+<div id="toast" class="toast" hidden></div><script type="module" src="admin.js?v=8"></script></body></html>
