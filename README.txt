@@ -1,34 +1,44 @@
-RAF.studio v12.2 — LOGIN FIX
+RAF.studio v12.3 — LOGIN + DOWNLOAD STABLE
 
-ZNALEZIONY BŁĄD:
-admin.js miał:
-updateMetadata, updateMetadata
+LOGOWANIE ADMINA:
+- Chrome password popup nie jest już podstawą działania
+- formularz ma autocomplete=off
+- checkbox: Zapamiętaj dane na tym urządzeniu
+- po zaznaczeniu aplikacja zapisuje email + hasło w localStorage TEJ PRZEGLĄDARKI
+- po następnym wejściu oba pola są automatycznie wypełnione
+- Pokaż hasło jest osobnym linkiem POD polami, więc popup Chrome go nie zasłania
+- kliknięcie zmienia password <-> text
 
-Duplikat importu powodował, że cały moduł administratora nie uruchamiał się w przeglądarce.
+UWAGA:
+Zapis hasła w localStorage jest wygodny, ale mniej bezpieczny niż systemowy menedżer haseł.
+Używaj tego tylko na swoim prywatnym komputerze.
 
-SKUTKI BYŁY DOKŁADNIE TAKIE:
-- Pokaż hasło nie działało
-- event logowania nie działał
-- formularz wysyłał się natywnie
-- username/password trafiały do URL
+POBIERANIE:
+Kolejność:
+1. originalPath z manifestu
+2. galleries/{slug}/originals/{filename}
+3. preview
 
-NAPRAWIONE:
-- usunięty duplikat importu
-- formularz ma action=javascript:void(0), więc nawet przy awarii JS nie wyśle hasła w URL
-- Pokaż hasło ma też prosty inline fallback i działa nawet gdy admin.js jeszcze się ładuje
-- standardowe autocomplete=username / current-password
-- aplikacja pamięta tylko email
-- hasła NIE zapisujemy ręcznie w localStorage
-- Chrome/Edge może normalnie zapisać hasło swoim natywnym menedżerem
-- usunięty checkbox i niestabilne PasswordCredential API
+Jeśli oryginału naprawdę nie ma, klient dostanie preview zamiast błędu.
 
-POBIERANIA, SERDUSZEK, UPLOADU JPG/PNG/WEBP NIE ZMIENIANO.
+Panel -> ⚙ Napraw pobieranie:
+- ustawia Content-Disposition: attachment dla ORIGINALS
+- ustawia Content-Disposition: attachment również dla PREVIEWS
+- dzięki temu fallback preview też pobiera się zamiast otwierać w nowej karcie
 
-NA GITHUBIE PODMIEŃ:
-admin.html
-admin.js
-index.html
-app.js
-style.css
+CO ZROBIĆ:
+1. GitHub — podmień:
+   admin.html
+   admin.js
+   index.html
+   app.js
+   style.css
 
-REGUŁ FIREBASE NIE ZMIENIAJ.
+2. Nie zmieniaj reguł Firebase.
+
+3. Przy istniejącej galerii kliknij raz:
+   ⚙ Napraw pobieranie
+
+4. Ctrl+F5.
+
+Pobierania masowego nadal są bez ZIP i bez Google Cloud Console.

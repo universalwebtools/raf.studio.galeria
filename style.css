@@ -326,3 +326,67 @@ input,select{width:100%;background:#0e0e10;border:1px solid #34343a;color:#fff;b
   z-index:10;
   pointer-events:auto;
 }
+
+
+/* ===== v12.3: przewidywalne logowanie ===== */
+#adminLoginForm{
+  display:grid;
+  gap:10px;
+}
+
+.login-options{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin:1px 0 2px;
+}
+
+.remember-login{
+  display:flex !important;
+  flex-direction:row !important;
+  align-items:center !important;
+  gap:7px !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  color:#8b8b91 !important;
+  font-size:10px !important;
+  cursor:pointer;
+}
+
+.remember-login input{
+  width:auto !important;
+  margin:0 !important;
+}
+
+.show-password-under{
+  flex-shrink:0;
+  border:0;
+  background:transparent;
+  color:#b6b6bc;
+  padding:4px 0;
+  font-size:10px;
+  font-weight:750;
+  cursor:pointer;
+  text-decoration:underline;
+  text-underline-offset:2px;
+}
+
+.show-password-under:hover{
+  color:#fff;
+}
+
+/* Hide browser's native reveal decoration where available */
+#adminPassword::-ms-reveal,
+#adminPassword::-ms-clear{
+  display:none;
+}
+
+@media(max-width:500px){
+  .login-options{
+    align-items:flex-start;
+    flex-direction:column;
+    gap:5px;
+  }
+}

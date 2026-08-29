@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=12.2";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=12.3";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -74,10 +74,39 @@ function selectionCountForSlug(slug) {
   ).length;
 }
 
-const savedAdminEmail = localStorage.getItem("raf-admin-email");
-if (savedAdminEmail && $("#adminEmail")) {
-  $("#adminEmail").value = savedAdminEmail;
+function restoreSavedAdminLogin() {
+  try {
+    const raw = localStorage.getItem("raf-admin-login");
+    if (!raw) return;
+
+    const saved = JSON.parse(raw);
+
+    if (saved?.email) $("#adminEmail").value = saved.email;
+    if (saved?.password) $("#adminPassword").value = saved.password;
+    if ($("#rememberAdminLogin")) $("#rememberAdminLogin").checked = true;
+  } catch (error) {
+    console.debug("Saved login restore failed:", error);
+  }
 }
+
+function saveAdminLoginIfRequested() {
+  const remember = $("#rememberAdminLogin")?.checked;
+
+  if (!remember) {
+    localStorage.removeItem("raf-admin-login");
+    return;
+  }
+
+  localStorage.setItem(
+    "raf-admin-login",
+    JSON.stringify({
+      email: $("#adminEmail").value.trim(),
+      password: $("#adminPassword").value
+    })
+  );
+}
+
+restoreSavedAdminLogin();
 
 onAuthStateChanged(auth, (user) => {
   if (user && user.uid === ADMIN_UID) {
@@ -141,7 +170,7 @@ $("#adminLoginForm").addEventListener("submit", async (event) => {
 
     // Remember only the email ourselves.
     // Password is left to Chrome/Edge password manager.
-    localStorage.setItem("raf-admin-email", $("#adminEmail").value.trim());
+    saveAdminLoginIfRequested();
   } catch (error) {
     console.error("ADMIN LOGIN ERROR", error);
     $("#adminLoginError").textContent = error.message || String(error);
@@ -152,17 +181,15 @@ $("#adminLoginForm").addEventListener("submit", async (event) => {
 
 const togglePasswordButton = $("#toggleAdminPassword");
 if (togglePasswordButton) {
-  togglePasswordButton.addEventListener("click", function(event) {
+  togglePasswordButton.addEventListener("click", (event) => {
     event.preventDefault();
-    event.stopPropagation();
 
-    const passwordInput = $("#adminPassword");
-    if (!passwordInput) return;
+    const input = $("#adminPassword");
+    if (!input) return;
 
-    const reveal = passwordInput.type === "password";
-    passwordInput.type = reveal ? "text" : "password";
-    this.textContent = reveal ? "Ukryj hasło" : "Pokaż hasło";
-    this.setAttribute("aria-pressed", reveal ? "true" : "false");
+    const willShow = input.type === "password";
+    input.type = willShow ? "text" : "password";
+    togglePasswordButton.textContent = willShow ? "Ukryj hasło" : "Pokaż hasło";
   });
 }
 
@@ -691,27 +718,37 @@ async function repairDownloadMetadata(slug, button) {
   button.textContent = "Naprawiam…";
 
   try {
-    const result = await listAll(sRef(storage, `galleries/${slug}/originals`));
+    const [originals, previews] = await Promise.all([
+      listAll(sRef(storage, `galleries/${slug}/originals`)),
+      listAll(sRef(storage, `galleries/${slug}/previews`))
+    ]);
 
+    const all = [...originals.items, ...previews.items];
     let done = 0;
-    for (const item of result.items) {
+
+    for (const item of all) {
       const lower = item.name.toLowerCase();
+
       const contentType =
         lower.endsWith(".png") ? "image/png" :
         lower.endsWith(".webp") ? "image/webp" :
         "image/jpeg";
 
+      const downloadName = item.name.endsWith(".webp") && item.fullPath.includes("/previews/")
+        ? item.name.slice(0, -5)
+        : item.name;
+
       await updateMetadata(item, {
         contentType,
-        contentDisposition: `attachment; filename="${item.name.replaceAll('"', '')}"`
+        contentDisposition: `attachment; filename="${downloadName.replaceAll('"', '')}"`
       });
 
       done++;
-      button.textContent = `Naprawiam ${done}/${result.items.length}`;
+      button.textContent = `Naprawiam ${done}/${all.length}`;
     }
 
     await update(ref(db, `galleries/${slug}/public`), {
-      downloadMetadataVersion: 3,
+      downloadMetadataVersion: 4,
       updatedAt: Date.now()
     });
 

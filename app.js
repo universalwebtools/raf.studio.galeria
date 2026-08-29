@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=12.2";
+import { firebaseConfig } from "./firebase-config.js?v=12.3";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -420,9 +420,13 @@ async function downloadSinglePhoto(index) {
   try {
     toast("Rozpoczynam pobieranie…");
     const url = await getOriginalUrl(index);
-    if (!url) throw new Error("Brak oryginału.");
+    if (!url) throw new Error("Brak pliku.");
 
     startAttachmentDownload(url, photo.filename);
+
+    if (photo.downloadSource === "preview") {
+      toast("Oryginału brak — pobieram wersję podglądową.");
+    }
   } catch (error) {
     console.error("SINGLE DOWNLOAD ERROR", error);
     toast(`Nie udało się pobrać: ${error.message || error}`);
@@ -479,20 +483,32 @@ async function getOriginalUrl(index) {
 
   if (photo.originalUrl) return photo.originalUrl;
 
-  // Never trust an old manifest path here.
-  // Original filename is authoritative.
-  const originalRef = sRef(
-    storage,
-    `galleries/${slug}/originals/${photo.filename}`
-  );
+  const candidates = [];
 
-  try {
-    photo.originalUrl = await getDownloadURL(originalRef);
-    return photo.originalUrl;
-  } catch (error) {
-    console.error("ORIGINAL DOWNLOAD URL ERROR", photo.filename, error);
-    throw new Error(`Nie znaleziono oryginału ${photo.filename}`);
+  // 1) exact path stored in manifest
+  if (photo.originalPath) {
+    candidates.push(photo.originalPath);
   }
+
+  // 2) canonical originals path
+  candidates.push(`galleries/${slug}/originals/${photo.filename}`);
+
+  for (const path of [...new Set(candidates)]) {
+    try {
+      photo.originalUrl = await getDownloadURL(sRef(storage, path));
+      photo.downloadSource = "original";
+      return photo.originalUrl;
+    } catch (_) {}
+  }
+
+  // 3) last resort: preview — better than failing completely.
+  if (photo.preview) {
+    photo.originalUrl = photo.preview;
+    photo.downloadSource = "preview";
+    return photo.originalUrl;
+  }
+
+  throw new Error(`Nie znaleziono pliku ${photo.filename}`);
 }
 
 async function openLightbox(index) {

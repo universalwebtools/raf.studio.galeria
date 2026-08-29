@@ -5,25 +5,32 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
   <title>RAF.studio — Studio Manager</title>
-  <link rel="stylesheet" href="style.css?v=12.2">
+  <link rel="stylesheet" href="style.css?v=12.3">
 </head>
 <body class="admin-body">
 
 <section id="adminLogin" class="lock-screen">
   <div class="lock-card">
-    <img class="raf-logo login-logo" src="logo-white.png?v=12.2" alt="RAF.studio">
+    <img class="raf-logo login-logo" src="logo-white.png?v=12.3" alt="RAF.studio">
     <p class="eyebrow">STUDIO MANAGER</p>
     <h1>Panel fotografa</h1>
     <p class="muted">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
-    <form id="adminLoginForm" autocomplete="on" action="javascript:void(0)">
-      <input id="adminEmail" name="username" type="email" placeholder="E-mail" autocomplete="username" autocapitalize="none" spellcheck="false" required>
-      <div class="admin-password-wrap">
-        <input id="adminPassword" name="password" type="password" placeholder="Hasło" autocomplete="current-password" required>
-        <button id="toggleAdminPassword" class="show-password-btn" type="button"
-          onclick="const p=document.getElementById('adminPassword');const show=p.type==='password';p.type=show?'text':'password';this.textContent=show?'Ukryj hasło':'Pokaż hasło';return false;">
+    <form id="adminLoginForm" autocomplete="off" action="javascript:void(0)">
+      <input id="adminEmail" type="email" placeholder="E-mail" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+
+      <input id="adminPassword" type="password" placeholder="Hasło" autocomplete="new-password" required>
+
+      <div class="login-options">
+        <label class="remember-login">
+          <input id="rememberAdminLogin" type="checkbox">
+          <span>Zapamiętaj dane na tym urządzeniu</span>
+        </label>
+
+        <button id="toggleAdminPassword" class="show-password-under" type="button">
           Pokaż hasło
         </button>
       </div>
+
       <button class="primary" type="submit">Zaloguj</button>
       <p id="adminLoginError" class="error" hidden></p>
     </form>
@@ -33,7 +40,7 @@
 <main id="adminPanel" hidden>
   <aside class="sidebar">
     <div>
-      <img class="raf-logo sidebar-logo" src="logo-white.png?v=12.2" alt="RAF.studio">
+      <img class="raf-logo sidebar-logo" src="logo-white.png?v=12.3" alt="RAF.studio">
       <small>Studio Manager</small>
     </div>
     <div class="side-bottom">
@@ -206,6 +213,6 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<script type="module" src="admin.js?v=12.2"></script>
+<script type="module" src="admin.js?v=12.3"></script>
 </body>
 </html>
