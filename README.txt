@@ -1,38 +1,48 @@
-RAF.studio v11.5 — PASSWORD + DOWNLOAD FIX
+RAF.studio v12.1 — NO CLOUD
 
-LOGOWANIE ADMINA:
-- pola mają standardowe name=username / name=password
-- autocomplete=username / current-password
-- Chrome / Edge może zapisać oba pola w swoim menedżerze haseł
-- dodany przycisk Pokaż hasło / Ukryj hasło
-- aplikacja NIE zapisuje hasła w localStorage
-- tam gdzie Chromium wspiera Credential Management API, aplikacja dodatkowo zgłasza poprawne dane menedżerowi haseł
+WARIANT BEZ GOOGLE CLOUD CONSOLE.
 
 POBIERANIE:
-- klient ignoruje stare originalPath i zawsze szuka:
-  galleries/{slug}/originals/{filename}
-- nie używa już <a target="_blank">
-- pobieranie odbywa się przez ukrytą ramkę iframe
-- jeśli plik ma Content-Disposition: attachment, Chrome pobiera go bez widocznej nowej karty
-- pobieranie wielu plików korzysta z wielu ukrytych ramek
+- bez getBlob()
+- bez fetch()
+- bez ZIP
+- bez CORS
+- bez Google Cloud Console
 
-STARE GALERIE:
-Po pierwszym zalogowaniu do panelu v11.5 panel AUTOMATYCZNIE:
-- znajduje originals
-- ustawia Content-Disposition: attachment
-- odbudowuje originalPath
-- naprawia previewUrl
-- oznacza galerię downloadMetadataVersion=2
+↓ pojedyncze zdjęcie:
+- pobiera oryginał z Firebase Storage
+- korzysta z Content-Disposition: attachment
 
-Nie trzeba już ręcznie klikać „Napraw pobieranie”.
+Pobierz wybrane:
+- uruchamia kolejne normalne pobrania
+- każde zdjęcie osobno
+- Chrome może przy pierwszej próbie zapytać o zgodę na wiele pobrań
 
-CO PODMIENIĆ NA GITHUBIE:
-- index.html
-- admin.html
-- style.css
-- app.js
-- admin.js
+WAŻNE DLA STARYCH GALERII:
+W panelu admina jest przycisk:
+⚙ Napraw pobieranie
+
+Kliknij go raz dla istniejącej galerii.
+Ustawia Content-Disposition: attachment na wszystkich oryginałach.
+NIE trzeba ponownie wysyłać zdjęć.
+
+UPLOAD:
+- JPG
+- JPEG
+- PNG
+- WEBP
+
+ADMIN LOGIN:
+- zachowane poprawki v12
+- Pokaż hasło
+- Zapamiętaj logowanie w przeglądarce
+
+NA GITHUBIE PODMIEŃ:
+index.html
+admin.html
+style.css
+app.js
+admin.js
 
 REGUŁ FIREBASE NIE ZMIENIAJ.
-Po aktualizacji zaloguj się raz do panelu administratora i poczekaj kilkanaście sekund,
-żeby automatyczna migracja metadanych zakończyła się dla istniejących galerii.
+GOOGLE CLOUD CONSOLE NIE JEST POTRZEBNE.

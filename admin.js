@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=11.5";
+import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata, updateMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=12.1";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -16,7 +16,7 @@ let favoritesRoot = {};
 let unsubscribeGalleries = null;
 let uploadSlug = null;
 let createdSlug = null;
-const downloadRepairRunning = new Set();
+
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, c => ({
@@ -74,6 +74,31 @@ function selectionCountForSlug(slug) {
   ).length;
 }
 
+async function restoreAdminCredentials() {
+  const savedEmail = localStorage.getItem("raf-admin-email");
+  if (savedEmail && $("#adminEmail")) {
+    $("#adminEmail").value = savedEmail;
+  }
+
+  try {
+    if (navigator.credentials?.get) {
+      const credential = await navigator.credentials.get({
+        password: true,
+        mediation: "optional"
+      });
+
+      if (credential?.id && credential?.password) {
+        $("#adminEmail").value = credential.id;
+        $("#adminPassword").value = credential.password;
+      }
+    }
+  } catch (error) {
+    console.debug("Credential autofill unavailable:", error);
+  }
+}
+
+restoreAdminCredentials();
+
 onAuthStateChanged(auth, (user) => {
   if (user && user.uid === ADMIN_UID) {
     $("#adminLogin").hidden = true;
@@ -87,7 +112,7 @@ onAuthStateChanged(auth, (user) => {
       (snapshot) => {
         galleries = snapshot.exists() ? snapshot.val() : {};
         renderAll();
-        queueAutomaticDownloadRepairs();
+
       },
       (error) => {
         console.error("GALLERIES READ ERROR", error);
@@ -133,20 +158,24 @@ $("#adminLoginForm").addEventListener("submit", async (event) => {
       await signOut(auth);
       throw new Error("To konto nie ma uprawnień administratora.");
     }
+    if ($("#rememberAdminLogin")?.checked) {
+      localStorage.setItem("raf-admin-email", $("#adminEmail").value.trim());
 
-    // Standard fields name=username/password + autocomplete are the main mechanism.
-    // This additionally hints compatible Chromium password managers.
-    try {
-      if ("PasswordCredential" in window && navigator.credentials?.store) {
-        const passwordCredential = new PasswordCredential({
-          id: $("#adminEmail").value.trim(),
-          password: $("#adminPassword").value,
-          name: $("#adminEmail").value.trim()
-        });
-        await navigator.credentials.store(passwordCredential);
+      try {
+        if ("PasswordCredential" in window && navigator.credentials?.store) {
+          await navigator.credentials.store(
+            new PasswordCredential({
+              id: $("#adminEmail").value.trim(),
+              password: $("#adminPassword").value,
+              name: "RAF.studio Studio Manager"
+            })
+          );
+        }
+      } catch (credentialError) {
+        console.debug("Browser password manager store unavailable:", credentialError);
       }
-    } catch (credentialError) {
-      console.debug("Password manager store skipped:", credentialError);
+    } else {
+      localStorage.removeItem("raf-admin-email");
     }
   } catch (error) {
     console.error("ADMIN LOGIN ERROR", error);
@@ -156,83 +185,24 @@ $("#adminLoginForm").addEventListener("submit", async (event) => {
 });
 
 
-$("#toggleAdminPassword")?.addEventListener("click", () => {
-  const input = $("#adminPassword");
-  const button = $("#toggleAdminPassword");
+const togglePasswordButton = $("#toggleAdminPassword");
+if (togglePasswordButton) {
+  togglePasswordButton.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
 
-  const showing = input.type === "text";
-  input.type = showing ? "password" : "text";
-  button.textContent = showing ? "Pokaż hasło" : "Ukryj hasło";
-});
+    const input = $("#adminPassword");
+    const show = input.type === "password";
+
+    input.type = show ? "text" : "password";
+    togglePasswordButton.textContent = show ? "Ukryj hasło" : "Pokaż hasło";
+    togglePasswordButton.setAttribute("aria-pressed", show ? "true" : "false");
+    input.focus();
+  });
+}
 
 $("#adminLogoutBtn").addEventListener("click", () => signOut(auth));
 
-
-function queueAutomaticDownloadRepairs() {
-  for (const [slug, gallery] of Object.entries(galleries)) {
-    const version = Number(gallery?.public?.downloadMetadataVersion || 0);
-
-    if (version < 2 && !downloadRepairRunning.has(slug)) {
-      downloadRepairRunning.add(slug);
-
-      // Delay slightly so admin dashboard is responsive first.
-      setTimeout(async () => {
-        try {
-          await repairDownloadsSilently(slug);
-        } catch (error) {
-          console.error("AUTO DOWNLOAD REPAIR ERROR", slug, error);
-        } finally {
-          downloadRepairRunning.delete(slug);
-        }
-      }, 300);
-    }
-  }
-}
-
-async function repairDownloadsSilently(slug) {
-  const [originals, previews] = await Promise.all([
-    listAll(sRef(storage, `galleries/${slug}/originals`)),
-    listAll(sRef(storage, `galleries/${slug}/previews`))
-  ]);
-
-  for (const item of originals.items) {
-    await updateMetadata(item, {
-      contentType: "image/jpeg",
-      contentDisposition: `attachment; filename="${item.name.replaceAll('"', '')}"`
-    });
-
-    await update(
-      ref(db, `galleries/${slug}/public/photos/${manifestKey(item.name)}`),
-      {
-        filename: item.name,
-        originalPath: item.fullPath
-      }
-    );
-  }
-
-  for (const item of previews.items) {
-    const originalName = item.name.endsWith(".webp")
-      ? item.name.slice(0, -5)
-      : item.name;
-
-    const previewUrl = await getDownloadURL(item);
-
-    await update(
-      ref(db, `galleries/${slug}/public/photos/${manifestKey(originalName)}`),
-      {
-        filename: originalName,
-        previewUrl,
-        originalPath: `galleries/${slug}/originals/${originalName}`
-      }
-    );
-  }
-
-  await update(ref(db, `galleries/${slug}/public`), {
-    photoCount: previews.items.length,
-    downloadMetadataVersion: 2,
-    updatedAt: Date.now()
-  });
-}
 
 function renderAll() {
   const entries = Object.values(galleries);
@@ -332,7 +302,7 @@ function renderCards() {
   );
 
   list.querySelectorAll("[data-repair]").forEach(button =>
-    button.addEventListener("click", () => repairDownloads(button.dataset.repair, button))
+    button.addEventListener("click", () => repairDownloadMetadata(button.dataset.repair, button))
   );
 
   list.querySelectorAll("[data-select]").forEach(button =>
@@ -552,7 +522,10 @@ dropZone.addEventListener("drop", event => {
   const transfer = new DataTransfer();
 
   [...event.dataTransfer.files]
-    .filter(file => /image\/jpe?g/i.test(file.type))
+    .filter(file =>
+      ["image/jpeg","image/png","image/webp"].includes(file.type) ||
+      /\.(jpe?g|png|webp)$/i.test(file.name)
+    )
     .forEach(file => transfer.items.add(file));
 
   $("#photoFilesInput").files = transfer.files;
@@ -567,6 +540,17 @@ function updateFileMeta() {
 
   $("#uploadFileCount").textContent = `${files.length} plików`;
   $("#uploadSize").textContent = `${(totalBytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function imageContentType(file) {
+  if (file.type && ["image/jpeg","image/png","image/webp"].includes(file.type)) {
+    return file.type;
+  }
+
+  const lower = file.name.toLowerCase();
+  if (lower.endsWith(".png")) return "image/png";
+  if (lower.endsWith(".webp")) return "image/webp";
+  return "image/jpeg";
 }
 
 async function makePreview(file) {
@@ -601,7 +585,7 @@ async function makePreview(file) {
       canvas.width = width;
       canvas.height = height;
 
-      canvas.getContext("2d", { alpha: false }).drawImage(image, 0, 0, width, height);
+      canvas.getContext("2d").drawImage(image, 0, 0, width, height);
 
       const blob = await new Promise((resolve, reject) => {
         canvas.toBlob(
@@ -646,7 +630,7 @@ $("#startUploadBtn").addEventListener("click", async () => {
   const files = [...$("#photoFilesInput").files];
 
   if (!uploadSlug || !files.length) {
-    showNotice($("#uploadStatus"), "Wybierz zdjęcia JPG.", "error");
+    showNotice($("#uploadStatus"), "Wybierz zdjęcia JPG, JPEG, PNG lub WEBP.", "error");
     return;
   }
 
@@ -688,7 +672,7 @@ $("#startUploadBtn").addEventListener("click", async () => {
         originalRef,
         file,
         {
-          contentType: "image/jpeg",
+          contentType: imageContentType(file),
           contentDisposition: `attachment; filename="${file.name.replaceAll('"', '')}"`
         },
         fraction => {
@@ -736,75 +720,43 @@ $("#startUploadBtn").addEventListener("click", async () => {
 $("#closeUploadDialog").addEventListener("click", () => $("#uploadDialog").close());
 $("#cancelUploadBtn").addEventListener("click", () => $("#uploadDialog").close());
 
-async function repairDownloads(slug, button) {
-  const oldText = button.textContent;
+async function repairDownloadMetadata(slug, button) {
+  const originalLabel = button.textContent;
   button.disabled = true;
   button.textContent = "Naprawiam…";
 
   try {
-    const [originals, previews] = await Promise.all([
-      listAll(sRef(storage, `galleries/${slug}/originals`)),
-      listAll(sRef(storage, `galleries/${slug}/previews`))
-    ]);
+    const result = await listAll(sRef(storage, `galleries/${slug}/originals`));
 
     let done = 0;
-    const total = originals.items.length + previews.items.length;
+    for (const item of result.items) {
+      const lower = item.name.toLowerCase();
+      const contentType =
+        lower.endsWith(".png") ? "image/png" :
+        lower.endsWith(".webp") ? "image/webp" :
+        "image/jpeg";
 
-    for (const item of originals.items) {
       await updateMetadata(item, {
+        contentType,
         contentDisposition: `attachment; filename="${item.name.replaceAll('"', '')}"`
       });
 
-      // Rebuild/repair originalPath in manifest.
-      await update(
-        ref(db, `galleries/${slug}/public/photos/${manifestKey(item.name)}`),
-        {
-          filename: item.name,
-          originalPath: item.fullPath
-        }
-      );
-
       done++;
-      button.textContent = `Naprawiam ${done}/${total}`;
-    }
-
-    for (const item of previews.items) {
-      const originalName = item.name.endsWith(".webp")
-        ? item.name.slice(0, -5)
-        : item.name;
-
-      await updateMetadata(item, {
-        contentDisposition: `attachment; filename="${originalName.replaceAll('"', '')}"`
-      });
-
-      const previewUrl = await getDownloadURL(item);
-
-      await update(
-        ref(db, `galleries/${slug}/public/photos/${manifestKey(originalName)}`),
-        {
-          filename: originalName,
-          previewUrl,
-          originalPath: `galleries/${slug}/originals/${originalName}`
-        }
-      );
-
-      done++;
-      button.textContent = `Naprawiam ${done}/${total}`;
+      button.textContent = `Naprawiam ${done}/${result.items.length}`;
     }
 
     await update(ref(db, `galleries/${slug}/public`), {
-      photoCount: previews.items.length,
-      downloadMetadataVersion: 2,
+      downloadMetadataVersion: 3,
       updatedAt: Date.now()
     });
 
-    toast(`Pobieranie naprawione dla ${previews.items.length} zdjęć.`);
+    toast(`Pobieranie naprawione dla ${done} plików.`);
   } catch (error) {
-    console.error("REPAIR DOWNLOADS ERROR", error);
+    console.error("REPAIR DOWNLOAD METADATA ERROR", error);
     toast(`Nie udało się naprawić: ${error.code || error.message || error}`);
   } finally {
     button.disabled = false;
-    button.textContent = oldText;
+    button.textContent = originalLabel;
   }
 }
 

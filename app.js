@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=11.5";
+import { firebaseConfig } from "./firebase-config.js?v=12.1";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -394,10 +394,9 @@ function updateDownloadUI() {
   }
 }
 
-function triggerNativeDownload(url, filename) {
-  // Cross-origin <a download> can be ignored by Chrome.
-  // A hidden iframe respects Content-Disposition: attachment
-  // without opening a visible new tab.
+function startAttachmentDownload(url, filename) {
+  // No fetch(), no Blob(), no CORS.
+  // Firebase Storage must return Content-Disposition: attachment.
   const frame = document.createElement("iframe");
   frame.className = "raf-download-frame";
   frame.title = `Pobieranie ${filename}`;
@@ -405,9 +404,8 @@ function triggerNativeDownload(url, filename) {
 
   document.body.appendChild(frame);
 
-  setTimeout(() => {
-    frame.remove();
-  }, 60000);
+  // Keep it alive long enough for browser to start the download.
+  setTimeout(() => frame.remove(), 90000);
 }
 
 async function downloadSinglePhoto(index) {
@@ -422,8 +420,9 @@ async function downloadSinglePhoto(index) {
   try {
     toast("Rozpoczynam pobieranie…");
     const url = await getOriginalUrl(index);
-    if (!url) throw new Error("Brak pliku.");
-    triggerNativeDownload(url, photo.filename);
+    if (!url) throw new Error("Brak oryginału.");
+
+    startAttachmentDownload(url, photo.filename);
   } catch (error) {
     console.error("SINGLE DOWNLOAD ERROR", error);
     toast(`Nie udało się pobrać: ${error.message || error}`);
@@ -456,10 +455,10 @@ async function downloadSelectedFiles() {
       const url = await getOriginalUrl(index);
       if (!url) continue;
 
-      triggerNativeDownload(url, photo.filename);
+      startAttachmentDownload(url, photo.filename);
 
-      // Short spacing prevents Chrome from swallowing every click at once.
-      await new Promise(resolve => setTimeout(resolve, 850));
+      // spacing for Chrome multi-download handling
+      await new Promise(resolve => setTimeout(resolve, 1100));
     }
 
     toast(`Uruchomiono pobieranie ${selected.length} zdjęć.`);
@@ -667,6 +666,7 @@ $("#clearDownloadSelectionBtn")?.addEventListener("click", () => {
   downloadSelection.clear();
   render();
 });
+
 
 
 init();
