@@ -2,10 +2,8 @@
   "rules": {
     "galleries": {
       ".read": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
-
       "$galleryId": {
         ".write": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
-
         "public": {
           ".read": "auth != null"
         }
@@ -14,11 +12,10 @@
 
     "favorites": {
       ".read": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
-
       "$galleryId": {
         "$clientUid": {
           ".read": "auth != null && (auth.uid === $clientUid || auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1')",
-          ".write": "auth != null && (auth.uid === $clientUid || auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1')"
+          ".write": "auth != null && auth.uid === $clientUid"
         }
       }
     }

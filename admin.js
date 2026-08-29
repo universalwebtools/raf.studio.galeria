@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=11.3";
+import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=11.4";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -210,7 +210,7 @@ function renderCards() {
 
         <div class="gallery-actions">
           <button type="button" class="primary" data-upload="${slug}">+ Zdjęcia</button>
-          <button type="button" class="ghost" data-manage="${slug}">Zarządzaj</button>
+          <button type="button" class="ghost" data-manage="${slug}">Zarządzaj</button><button type="button" class="ghost" data-repair="${slug}">⚙ Napraw pobieranie</button>
           <button type="button" class="ghost" data-select="${slug}">♥ Wybory</button>
           <button type="button" class="ghost" data-edit="${slug}">Ustawienia</button>
           <a class="ghost" href="${galleryUrl(slug)}" target="_blank" rel="noopener">Otwórz</a>
@@ -235,6 +235,10 @@ function renderCards() {
 
   list.querySelectorAll("[data-manage]").forEach(button =>
     button.addEventListener("click", () => openPhotos(button.dataset.manage))
+  );
+
+  list.querySelectorAll("[data-repair]").forEach(button =>
+    button.addEventListener("click", () => repairDownloads(button.dataset.repair, button))
   );
 
   list.querySelectorAll("[data-select]").forEach(button =>
@@ -523,11 +527,11 @@ async function makePreview(file) {
   }
 }
 
-function uploadTask(storageRef, data, contentType, onProgress) {
+function uploadTask(storageRef, data, metadata, onProgress) {
   return new Promise((resolve, reject) => {
     const task = uploadBytesResumable(storageRef, data, {
-      contentType,
-      cacheControl: "public,max-age=31536000,immutable"
+      cacheControl: "public,max-age=31536000,immutable",
+      ...metadata
     });
 
     task.on(
@@ -571,7 +575,10 @@ $("#startUploadBtn").addEventListener("click", async () => {
       await uploadTask(
         previewRef,
         previewBlob,
-        "image/webp",
+        {
+          contentType: "image/webp",
+          contentDisposition: `attachment; filename="${file.name}.webp"`
+        },
         fraction => {
           $("#uploadProgress").style.width = `${Math.round((base + weight * fraction * 0.15) * 100)}%`;
         }
@@ -586,7 +593,10 @@ $("#startUploadBtn").addEventListener("click", async () => {
       await uploadTask(
         originalRef,
         file,
-        "image/jpeg",
+        {
+          contentType: "image/jpeg",
+          contentDisposition: `attachment; filename="${file.name.replaceAll('"', '')}"`
+        },
         fraction => {
           $("#uploadProgress").style.width = `${Math.round((base + weight * (0.15 + fraction * 0.85)) * 100)}%`;
         }
@@ -630,6 +640,77 @@ $("#startUploadBtn").addEventListener("click", async () => {
 
 $("#closeUploadDialog").addEventListener("click", () => $("#uploadDialog").close());
 $("#cancelUploadBtn").addEventListener("click", () => $("#uploadDialog").close());
+
+async function repairDownloads(slug, button) {
+  const oldText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Naprawiam…";
+
+  try {
+    const [originals, previews] = await Promise.all([
+      listAll(sRef(storage, `galleries/${slug}/originals`)),
+      listAll(sRef(storage, `galleries/${slug}/previews`))
+    ]);
+
+    let done = 0;
+    const total = originals.items.length + previews.items.length;
+
+    for (const item of originals.items) {
+      await updateMetadata(item, {
+        contentDisposition: `attachment; filename="${item.name.replaceAll('"', '')}"`
+      });
+
+      // Rebuild/repair originalPath in manifest.
+      await update(
+        ref(db, `galleries/${slug}/public/photos/${manifestKey(item.name)}`),
+        {
+          filename: item.name,
+          originalPath: item.fullPath
+        }
+      );
+
+      done++;
+      button.textContent = `Naprawiam ${done}/${total}`;
+    }
+
+    for (const item of previews.items) {
+      const originalName = item.name.endsWith(".webp")
+        ? item.name.slice(0, -5)
+        : item.name;
+
+      await updateMetadata(item, {
+        contentDisposition: `attachment; filename="${originalName.replaceAll('"', '')}"`
+      });
+
+      const previewUrl = await getDownloadURL(item);
+
+      await update(
+        ref(db, `galleries/${slug}/public/photos/${manifestKey(originalName)}`),
+        {
+          filename: originalName,
+          previewUrl,
+          originalPath: `galleries/${slug}/originals/${originalName}`
+        }
+      );
+
+      done++;
+      button.textContent = `Naprawiam ${done}/${total}`;
+    }
+
+    await update(ref(db, `galleries/${slug}/public`), {
+      photoCount: previews.items.length,
+      updatedAt: Date.now()
+    });
+
+    toast(`Pobieranie naprawione dla ${previews.items.length} zdjęć.`);
+  } catch (error) {
+    console.error("REPAIR DOWNLOADS ERROR", error);
+    toast(`Nie udało się naprawić: ${error.code || error.message || error}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = oldText;
+  }
+}
 
 async function openPhotos(slug) {
   $("#photosTitle").textContent = `Zdjęcia — ${galleries[slug]?.public?.title || slug}`;

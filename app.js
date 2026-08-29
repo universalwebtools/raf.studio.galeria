@@ -2,8 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=11.3";
-import JSZip from "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm";
+import { firebaseConfig } from "./firebase-config.js?v=11.4";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -58,6 +57,14 @@ async function passwordMatches(entered) {
   }
 
   return false;
+}
+
+async function getCurrentClientUid() {
+  if (auth.currentUser) return auth.currentUser.uid;
+
+  const credential = await signInAnonymously(auth);
+  uid = credential.user.uid;
+  return uid;
 }
 
 function selectionKey(filename) {
@@ -166,7 +173,8 @@ async function openGallery() {
 
 async function loadFavorites() {
   try {
-    const snap = await get(ref(db, `favorites/${slug}/${uid}`));
+    const currentUid = await getCurrentClientUid();
+    const snap = await get(ref(db, `favorites/${slug}/${currentUid}`));
     favorites.clear();
 
     if (snap.exists()) {
@@ -320,7 +328,8 @@ async function toggleFavorite(filename) {
   render();
 
   try {
-    const target = ref(db, `favorites/${slug}/${uid}/${selectionKey(filename)}`);
+    const currentUid = await getCurrentClientUid();
+    const target = ref(db, `favorites/${slug}/${currentUid}/${selectionKey(filename)}`);
 
     if (wasSelected) {
       await remove(target);
@@ -366,14 +375,12 @@ function toggleDownloadSelection(filename) {
   } else {
     downloadSelection.add(filename);
   }
-
   render();
 }
 
 function updateDownloadUI() {
   const count = downloadSelection.size;
   const bar = $("#downloadBar");
-
   if (!bar) return;
 
   $("#downloadSelectedCount").textContent = count;
@@ -387,26 +394,15 @@ function updateDownloadUI() {
   }
 }
 
-async function forceBrowserDownload(url, filename) {
-  try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const blob = await response.blob();
-    const localUrl = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = localUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    setTimeout(() => URL.revokeObjectURL(localUrl), 1500);
-  } catch (error) {
-    console.warn("Direct download fallback:", error);
-    window.open(url, "_blank", "noopener");
-  }
+function triggerNativeDownload(url, filename) {
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.rel = "noopener";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 async function downloadSinglePhoto(index) {
@@ -418,18 +414,18 @@ async function downloadSinglePhoto(index) {
   const photo = photos[index];
   if (!photo) return;
 
-  toast("Przygotowuję zdjęcie…");
-
-  const url = await getOriginalUrl(index);
-  if (!url) {
-    toast("Nie udało się pobrać zdjęcia.");
-    return;
+  try {
+    toast("Rozpoczynam pobieranie…");
+    const url = await getOriginalUrl(index);
+    if (!url) throw new Error("Brak pliku.");
+    triggerNativeDownload(url, photo.filename);
+  } catch (error) {
+    console.error("SINGLE DOWNLOAD ERROR", error);
+    toast(`Nie udało się pobrać: ${error.message || error}`);
   }
-
-  await forceBrowserDownload(url, photo.filename);
 }
 
-async function downloadSelectedAsZip() {
+async function downloadSelectedFiles() {
   if (gallery.downloadsEnabled === false) {
     toast("Pobieranie zdjęć jest wyłączone dla tej galerii.");
     return;
@@ -442,75 +438,34 @@ async function downloadSelectedAsZip() {
     return;
   }
 
-  const dialog = $("#downloadDialog");
-  const text = $("#downloadDialogText");
-  const progress = $("#zipProgress");
-  const errorBox = $("#downloadDialogError");
-  const mainButton = $("#downloadSelectedBtn");
-
-  errorBox.hidden = true;
-  progress.style.width = "0%";
-  mainButton.disabled = true;
-  dialog.showModal();
+  const button = $("#downloadSelectedBtn");
+  button.disabled = true;
 
   try {
-    const zip = new JSZip();
-
     for (let i = 0; i < selected.length; i++) {
       const photo = selected[i];
-      const photoIndex = photos.findIndex(p => p.filename === photo.filename);
+      const index = photos.findIndex(p => p.filename === photo.filename);
 
-      text.textContent = `Pobieram ${i + 1} z ${selected.length}: ${photo.filename}`;
+      button.textContent = `Pobieram ${i + 1}/${selected.length}…`;
 
-      const url = await getOriginalUrl(photoIndex);
-      if (!url) throw new Error(`Brak oryginału: ${photo.filename}`);
+      const url = await getOriginalUrl(index);
+      if (!url) continue;
 
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Nie udało się pobrać ${photo.filename}`);
+      triggerNativeDownload(url, photo.filename);
 
-      const blob = await response.blob();
-      zip.file(photo.filename, blob);
-
-      progress.style.width = `${Math.round(((i + 1) / selected.length) * 75)}%`;
+      // Short spacing prevents Chrome from swallowing every click at once.
+      await new Promise(resolve => setTimeout(resolve, 450));
     }
 
-    text.textContent = "Pakuję zdjęcia do ZIP…";
-
-    const zipBlob = await zip.generateAsync(
-      { type: "blob", compression: "STORE" },
-      metadata => {
-        const percent = 75 + Math.round(metadata.percent * 0.25);
-        progress.style.width = `${Math.min(100, percent)}%`;
-      }
-    );
-
-    progress.style.width = "100%";
-    text.textContent = "Gotowe — rozpoczynam pobieranie…";
-
-    const zipUrl = URL.createObjectURL(zipBlob);
-    const link = document.createElement("a");
-    link.href = zipUrl;
-    link.download = `${slug}-wybrane-${selected.length}.zip`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    setTimeout(() => URL.revokeObjectURL(zipUrl), 3000);
-
+    toast(`Uruchomiono pobieranie ${selected.length} zdjęć.`);
     downloadSelection.clear();
     render();
-
-    setTimeout(() => {
-      if (dialog.open) dialog.close();
-    }, 700);
-
-    toast(`Pobrano ${selected.length} zdjęć w ZIP.`);
   } catch (error) {
-    console.error("ZIP DOWNLOAD ERROR", error);
-    errorBox.textContent = `Nie udało się przygotować ZIP: ${error.message || error}`;
-    errorBox.hidden = false;
+    console.error("MULTI DOWNLOAD ERROR", error);
+    toast(`Błąd pobierania: ${error.message || error}`);
   } finally {
-    mainButton.disabled = false;
+    button.disabled = false;
+    updateDownloadUI();
   }
 }
 
@@ -695,15 +650,12 @@ $("#lightbox").addEventListener("touchend", (event) => {
   if (Math.abs(delta) > 60) changeLightbox(delta > 0 ? -1 : 1);
 }, { passive: true });
 
-$("#downloadSelectedBtn")?.addEventListener("click", downloadSelectedAsZip);
+$("#downloadSelectedBtn")?.addEventListener("click", downloadSelectedFiles);
 
 $("#clearDownloadSelectionBtn")?.addEventListener("click", () => {
   downloadSelection.clear();
   render();
 });
 
-$("#closeDownloadDialog")?.addEventListener("click", () => {
-  if ($("#downloadDialog").open) $("#downloadDialog").close();
-});
 
 init();

@@ -1,39 +1,43 @@
-RAF.studio v11.3 — DOWNLOAD SELECTION
+RAF.studio v11.4 — STABLE DOWNLOADS
 
-Nowe funkcje klienta:
+NAPRAWIONE:
+1. Serduszka:
+   - przy każdym odczycie/zapisie używany jest aktualny auth.currentUser.uid
+   - nie ma już ryzyka zapisu pod stary UID
 
-❤️ Serce
-- nadal zapisuje wybór klienta dla fotografa w Firebase
-- nic w tej logice nie zostało zmienione
+2. Pobieranie jednego zdjęcia:
+   - usunięty fetch(), który powodował CORS / Failed to fetch
+   - upload ustawia Content-Disposition: attachment
+   - kliknięcie ↓ korzysta z natywnego pobierania przeglądarki
 
-↓ Pobierz
-- pobiera jedno konkretne zdjęcie w pełnej jakości
+3. Pobierz wybrane:
+   - usunięty ZIP w przeglądarce
+   - brak JSZip
+   - brak cross-origin fetch
+   - zdjęcia są uruchamiane jako osobne pobrania
+   - Chrome może za pierwszym razem poprosić o zgodę na wiele pobrań
 
-○ / ✓
-- osobne zaznaczenie do pobrania
-- NIE zapisuje się w Firebase
-- NIE wpływa na serduszka
-- istnieje tylko podczas bieżącego otwarcia strony
+4. STARE GALERIE:
+   - przy galerii w panelu jest przycisk:
+     ⚙ Napraw pobieranie
+   - ustawia poprawne Content-Disposition
+   - naprawia originalPath
+   - odświeża previewUrl/manifest
+   - NIE trzeba ponownie wysyłać zdjęć
 
-Po zaznaczeniu zdjęć pojawia się pasek:
-Pobierz wybrane (X)
+CO ZROBIĆ:
+A) GitHub — podmień:
+   index.html
+   admin.html
+   app.js
+   admin.js
+   style.css
 
-Pobierz wybrane:
-- pobiera oryginały zaznaczonych zdjęć
-- pakuje je do jednego ZIP
-- pokazuje postęp
-- pobiera plik np.:
-  milena-konrad2026-wybrane-15.zip
+B) Firebase Realtime Database -> Rules:
+   wklej database-rules.json z tej paczki -> Publish.
 
-WAŻNE:
-Przy bardzo dużej liczbie pełnych JPG ZIP może zużyć sporo pamięci RAM,
-szczególnie na telefonie. Dla 10–30 zdjęć na komputerze powinno być OK.
+C) Dla obecnej galerii:
+   Panel admina -> ⚙ Napraw pobieranie
+   poczekaj aż skończy.
 
-NA GITHUBIE PODMIEŃ:
-- index.html
-- style.css
-- app.js
-- admin.html
-- admin.js
-
-REGUŁ FIREBASE NIE ZMIENIAJ.
+Reguł Storage nie trzeba zmieniać.
