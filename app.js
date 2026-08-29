@@ -93,7 +93,7 @@ function render(){
     const idx=photos.findIndex(x=>x.filename===p.filename);
     const card=document.createElement("article");card.className="photo-card";
     card.innerHTML=`<div class="photo-skeleton"></div><img loading="lazy" src="${p.preview}" alt=""><button class="photo-fav ${favorites.has(p.filename)?"active":""}" ${gallery.selectionEnabled===false?"hidden":""}>${favorites.has(p.filename)?"♥":"♡"}</button>`;
-    const img=card.querySelector("img");img.onload=()=>img.classList.add("loaded");img.onclick=()=>openLightbox(idx);
+    const img=card.querySelector("img");img.onload=()=>{img.classList.add("loaded");card.classList.add("is-loaded")};if(img.complete&&img.naturalWidth>0){img.classList.add("loaded");card.classList.add("is-loaded")}img.onclick=()=>openLightbox(idx);
     const f=card.querySelector(".photo-fav");if(f)f.onclick=e=>{e.stopPropagation();toggleFav(p.filename)};
     grid.appendChild(card);
   });

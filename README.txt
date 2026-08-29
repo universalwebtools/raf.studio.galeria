@@ -1,38 +1,21 @@
-RAF.studio v10 INSTANT
+RAF.studio v10.1 — SKELETON FIX
 
-NAJWAŻNIEJSZA ZMIANA:
-Klient NIE skanuje już Firebase Storage przy każdym wejściu.
+Problem:
+Załadowane zdjęcia były przykrywane przez animowany skeleton.
+Na hover transform zdjęcia zmieniał stacking context i zdjęcie pojawiało się tylko pod kursorem.
 
-Podczas uploadu panel zapisuje gotowy manifest:
-galleries/{slug}/public/photos
+Naprawa:
+- skeleton ma z-index 0
+- zdjęcie ma z-index 1
+- serduszko ma z-index 3
+- po onload karta dostaje klasę is-loaded
+- skeleton znika na stałe po załadowaniu
+- obsługa zdjęć już znajdujących się w cache
 
-Każdy wpis zawiera:
-- filename
-- previewUrl
-- originalPath
+PODMIEŃ NA GITHUBIE:
+- style.css
+- app.js
+- index.html (tylko dla cache-bustingu ?v=10.1)
 
-Efekt:
-- wejście klienta = jeden odczyt Realtime Database
-- miniatury zaczynają się ładować natychmiast
-- zero listAll() po stronie klienta
-- zero getDownloadURL() dla previews po stronie klienta
-- oryginał pobierany dopiero po kliknięciu zdjęcia
-
-DLA STARYCH GALERII:
-W panelu przy galerii kliknij:
-⚡ Odbuduj indeks
-
-Panel jednorazowo przeskanuje previews i zapisze manifest.
-Potem klient ładuje galerię błyskawicznie.
-
-NOWE UPLOADY:
-Manifest tworzy się automatycznie podczas wysyłania każdego zdjęcia.
-
-PODMIEŃ:
-index.html
-admin.html
-style.css
-app.js
-admin.js
-
-REGUŁ FIREBASE NIE TRZEBA ZMIENIAĆ.
+admin.html/admin.js nie wymagają zmian funkcjonalnych.
+Reguł Firebase nie zmieniaj.

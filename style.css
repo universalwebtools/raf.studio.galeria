@@ -27,3 +27,41 @@
   .photo-card{margin-bottom:6px;border-radius:7px}
   .client-hero{min-height:270px;padding-top:82px}
 }
+
+
+/* ===== v10.1 FIX: skeleton nigdy nie przykrywa załadowanego zdjęcia ===== */
+.photo-card{
+  position:relative;
+  isolation:isolate;
+}
+
+.photo-skeleton{
+  position:absolute;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  transition:opacity .18s ease;
+}
+
+.photo-card img{
+  position:relative;
+  z-index:1;
+}
+
+.photo-card img.loaded{
+  opacity:1;
+}
+
+.photo-card img.loaded ~ .photo-fav{
+  z-index:3;
+}
+
+/* Wspieramy obie kolejności DOM i dodatkowo wygaszamy skeleton JS-em */
+.photo-card.is-loaded .photo-skeleton{
+  opacity:0;
+  visibility:hidden;
+}
+
+.photo-fav{
+  z-index:3;
+}
