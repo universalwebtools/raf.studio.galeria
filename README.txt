@@ -1,43 +1,38 @@
-RAF.studio v11.4 — STABLE DOWNLOADS
+RAF.studio v11.5 — PASSWORD + DOWNLOAD FIX
 
-NAPRAWIONE:
-1. Serduszka:
-   - przy każdym odczycie/zapisie używany jest aktualny auth.currentUser.uid
-   - nie ma już ryzyka zapisu pod stary UID
+LOGOWANIE ADMINA:
+- pola mają standardowe name=username / name=password
+- autocomplete=username / current-password
+- Chrome / Edge może zapisać oba pola w swoim menedżerze haseł
+- dodany przycisk Pokaż hasło / Ukryj hasło
+- aplikacja NIE zapisuje hasła w localStorage
+- tam gdzie Chromium wspiera Credential Management API, aplikacja dodatkowo zgłasza poprawne dane menedżerowi haseł
 
-2. Pobieranie jednego zdjęcia:
-   - usunięty fetch(), który powodował CORS / Failed to fetch
-   - upload ustawia Content-Disposition: attachment
-   - kliknięcie ↓ korzysta z natywnego pobierania przeglądarki
+POBIERANIE:
+- klient ignoruje stare originalPath i zawsze szuka:
+  galleries/{slug}/originals/{filename}
+- nie używa już <a target="_blank">
+- pobieranie odbywa się przez ukrytą ramkę iframe
+- jeśli plik ma Content-Disposition: attachment, Chrome pobiera go bez widocznej nowej karty
+- pobieranie wielu plików korzysta z wielu ukrytych ramek
 
-3. Pobierz wybrane:
-   - usunięty ZIP w przeglądarce
-   - brak JSZip
-   - brak cross-origin fetch
-   - zdjęcia są uruchamiane jako osobne pobrania
-   - Chrome może za pierwszym razem poprosić o zgodę na wiele pobrań
+STARE GALERIE:
+Po pierwszym zalogowaniu do panelu v11.5 panel AUTOMATYCZNIE:
+- znajduje originals
+- ustawia Content-Disposition: attachment
+- odbudowuje originalPath
+- naprawia previewUrl
+- oznacza galerię downloadMetadataVersion=2
 
-4. STARE GALERIE:
-   - przy galerii w panelu jest przycisk:
-     ⚙ Napraw pobieranie
-   - ustawia poprawne Content-Disposition
-   - naprawia originalPath
-   - odświeża previewUrl/manifest
-   - NIE trzeba ponownie wysyłać zdjęć
+Nie trzeba już ręcznie klikać „Napraw pobieranie”.
 
-CO ZROBIĆ:
-A) GitHub — podmień:
-   index.html
-   admin.html
-   app.js
-   admin.js
-   style.css
+CO PODMIENIĆ NA GITHUBIE:
+- index.html
+- admin.html
+- style.css
+- app.js
+- admin.js
 
-B) Firebase Realtime Database -> Rules:
-   wklej database-rules.json z tej paczki -> Publish.
-
-C) Dla obecnej galerii:
-   Panel admina -> ⚙ Napraw pobieranie
-   poczekaj aż skończy.
-
-Reguł Storage nie trzeba zmieniać.
+REGUŁ FIREBASE NIE ZMIENIAJ.
+Po aktualizacji zaloguj się raz do panelu administratora i poczekaj kilkanaście sekund,
+żeby automatyczna migracja metadanych zakończyła się dla istniejących galerii.

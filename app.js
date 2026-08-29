@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=11.4";
+import { firebaseConfig } from "./firebase-config.js?v=11.5";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -395,14 +395,19 @@ function updateDownloadUI() {
 }
 
 function triggerNativeDownload(url, filename) {
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.rel = "noopener";
-  link.style.display = "none";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
+  // Cross-origin <a download> can be ignored by Chrome.
+  // A hidden iframe respects Content-Disposition: attachment
+  // without opening a visible new tab.
+  const frame = document.createElement("iframe");
+  frame.className = "raf-download-frame";
+  frame.title = `Pobieranie ${filename}`;
+  frame.src = url;
+
+  document.body.appendChild(frame);
+
+  setTimeout(() => {
+    frame.remove();
+  }, 60000);
 }
 
 async function downloadSinglePhoto(index) {
@@ -454,7 +459,7 @@ async function downloadSelectedFiles() {
       triggerNativeDownload(url, photo.filename);
 
       // Short spacing prevents Chrome from swallowing every click at once.
-      await new Promise(resolve => setTimeout(resolve, 450));
+      await new Promise(resolve => setTimeout(resolve, 850));
     }
 
     toast(`Uruchomiono pobieranie ${selected.length} zdjęć.`);
@@ -475,14 +480,20 @@ async function getOriginalUrl(index) {
 
   if (photo.originalUrl) return photo.originalUrl;
 
-  try {
-    photo.originalUrl = await getDownloadURL(sRef(storage, photo.originalPath));
-  } catch (error) {
-    console.warn("ORIGINAL URL ERROR", error);
-    photo.originalUrl = photo.preview;
-  }
+  // Never trust an old manifest path here.
+  // Original filename is authoritative.
+  const originalRef = sRef(
+    storage,
+    `galleries/${slug}/originals/${photo.filename}`
+  );
 
-  return photo.originalUrl;
+  try {
+    photo.originalUrl = await getDownloadURL(originalRef);
+    return photo.originalUrl;
+  } catch (error) {
+    console.error("ORIGINAL DOWNLOAD URL ERROR", photo.filename, error);
+    throw new Error(`Nie znaleziono oryginału ${photo.filename}`);
+  }
 }
 
 async function openLightbox(index) {

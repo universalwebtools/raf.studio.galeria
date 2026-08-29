@@ -211,3 +211,47 @@ input,select{width:100%;background:#0e0e10;border:1px solid #34343a;color:#fff;b
     white-space:nowrap;
   }
 }
+
+
+/* ===== v11.5: logowanie administratora ===== */
+.admin-password-wrap{
+  position:relative;
+}
+.admin-password-wrap input{
+  padding-right:112px;
+}
+.show-password-btn{
+  position:absolute;
+  right:7px;
+  top:50%;
+  transform:translateY(-50%);
+  border:0;
+  background:transparent;
+  color:#777;
+  font-size:11px;
+  font-weight:750;
+  padding:8px;
+  cursor:pointer;
+}
+.show-password-btn:hover{
+  color:#eee;
+}
+.password-manager-note{
+  display:block;
+  color:#707077;
+  font-size:10px;
+  line-height:1.35;
+  text-align:center;
+}
+
+/* ukryte ramki służące wyłącznie do natywnego pobierania */
+.raf-download-frame{
+  position:fixed;
+  width:1px;
+  height:1px;
+  left:-9999px;
+  top:-9999px;
+  border:0;
+  opacity:0;
+  pointer-events:none;
+}

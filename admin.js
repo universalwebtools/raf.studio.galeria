@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=11.4";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=11.5";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -16,6 +16,7 @@ let favoritesRoot = {};
 let unsubscribeGalleries = null;
 let uploadSlug = null;
 let createdSlug = null;
+const downloadRepairRunning = new Set();
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, c => ({
@@ -86,6 +87,7 @@ onAuthStateChanged(auth, (user) => {
       (snapshot) => {
         galleries = snapshot.exists() ? snapshot.val() : {};
         renderAll();
+        queueAutomaticDownloadRepairs();
       },
       (error) => {
         console.error("GALLERIES READ ERROR", error);
@@ -131,6 +133,21 @@ $("#adminLoginForm").addEventListener("submit", async (event) => {
       await signOut(auth);
       throw new Error("To konto nie ma uprawnień administratora.");
     }
+
+    // Standard fields name=username/password + autocomplete are the main mechanism.
+    // This additionally hints compatible Chromium password managers.
+    try {
+      if ("PasswordCredential" in window && navigator.credentials?.store) {
+        const passwordCredential = new PasswordCredential({
+          id: $("#adminEmail").value.trim(),
+          password: $("#adminPassword").value,
+          name: $("#adminEmail").value.trim()
+        });
+        await navigator.credentials.store(passwordCredential);
+      }
+    } catch (credentialError) {
+      console.debug("Password manager store skipped:", credentialError);
+    }
   } catch (error) {
     console.error("ADMIN LOGIN ERROR", error);
     $("#adminLoginError").textContent = error.message || String(error);
@@ -138,7 +155,84 @@ $("#adminLoginForm").addEventListener("submit", async (event) => {
   }
 });
 
+
+$("#toggleAdminPassword")?.addEventListener("click", () => {
+  const input = $("#adminPassword");
+  const button = $("#toggleAdminPassword");
+
+  const showing = input.type === "text";
+  input.type = showing ? "password" : "text";
+  button.textContent = showing ? "Pokaż hasło" : "Ukryj hasło";
+});
+
 $("#adminLogoutBtn").addEventListener("click", () => signOut(auth));
+
+
+function queueAutomaticDownloadRepairs() {
+  for (const [slug, gallery] of Object.entries(galleries)) {
+    const version = Number(gallery?.public?.downloadMetadataVersion || 0);
+
+    if (version < 2 && !downloadRepairRunning.has(slug)) {
+      downloadRepairRunning.add(slug);
+
+      // Delay slightly so admin dashboard is responsive first.
+      setTimeout(async () => {
+        try {
+          await repairDownloadsSilently(slug);
+        } catch (error) {
+          console.error("AUTO DOWNLOAD REPAIR ERROR", slug, error);
+        } finally {
+          downloadRepairRunning.delete(slug);
+        }
+      }, 300);
+    }
+  }
+}
+
+async function repairDownloadsSilently(slug) {
+  const [originals, previews] = await Promise.all([
+    listAll(sRef(storage, `galleries/${slug}/originals`)),
+    listAll(sRef(storage, `galleries/${slug}/previews`))
+  ]);
+
+  for (const item of originals.items) {
+    await updateMetadata(item, {
+      contentType: "image/jpeg",
+      contentDisposition: `attachment; filename="${item.name.replaceAll('"', '')}"`
+    });
+
+    await update(
+      ref(db, `galleries/${slug}/public/photos/${manifestKey(item.name)}`),
+      {
+        filename: item.name,
+        originalPath: item.fullPath
+      }
+    );
+  }
+
+  for (const item of previews.items) {
+    const originalName = item.name.endsWith(".webp")
+      ? item.name.slice(0, -5)
+      : item.name;
+
+    const previewUrl = await getDownloadURL(item);
+
+    await update(
+      ref(db, `galleries/${slug}/public/photos/${manifestKey(originalName)}`),
+      {
+        filename: originalName,
+        previewUrl,
+        originalPath: `galleries/${slug}/originals/${originalName}`
+      }
+    );
+  }
+
+  await update(ref(db, `galleries/${slug}/public`), {
+    photoCount: previews.items.length,
+    downloadMetadataVersion: 2,
+    updatedAt: Date.now()
+  });
+}
 
 function renderAll() {
   const entries = Object.values(galleries);
@@ -624,6 +718,7 @@ $("#startUploadBtn").addEventListener("click", async () => {
 
     await update(ref(db, `galleries/${uploadSlug}/public`), {
       photoCount: currentCount + uniqueNew,
+      downloadMetadataVersion: 2,
       updatedAt: Date.now()
     });
 
@@ -699,6 +794,7 @@ async function repairDownloads(slug, button) {
 
     await update(ref(db, `galleries/${slug}/public`), {
       photoCount: previews.items.length,
+      downloadMetadataVersion: 2,
       updatedAt: Date.now()
     });
 

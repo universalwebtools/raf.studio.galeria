@@ -16,9 +16,13 @@
     <h1>Panel fotografa</h1>
     <p class="muted">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
     <form id="adminLoginForm">
-      <input id="adminEmail" type="email" placeholder="E-mail" autocomplete="username" required>
-      <input id="adminPassword" type="password" placeholder="Hasło" autocomplete="current-password" required>
+      <input id="adminEmail" name="username" type="email" placeholder="E-mail" autocomplete="username" required>
+      <div class="admin-password-wrap">
+        <input id="adminPassword" name="password" type="password" placeholder="Hasło" autocomplete="current-password" required>
+        <button id="toggleAdminPassword" class="show-password-btn" type="button">Pokaż hasło</button>
+      </div>
       <button class="primary" type="submit">Zaloguj</button>
+      <small class="password-manager-note">Chrome / Edge może zapamiętać e-mail i hasło w menedżerze haseł.</small>
       <p id="adminLoginError" class="error" hidden></p>
     </form>
   </div>
