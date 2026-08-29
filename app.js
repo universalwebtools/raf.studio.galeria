@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=13.0";
+import { firebaseConfig } from "./firebase-config.js?v=14.0";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -22,6 +22,9 @@ let filter = "all";
 let touchStartX = 0;
 let slideshowTimer = null;
 let slideshowActive = false;
+let galleryLoaded = false;
+let rejected = new Set();
+let compareSelection = [];
 
 async function sha256(text) {
   const data = new TextEncoder().encode(text);
@@ -107,10 +110,63 @@ function daysLeft(dateString) {
   return diff;
 }
 
+function storageKeyRejected() {
+  return `raf-rejected-${slug}`;
+}
+
+function loadRejectedState() {
+  try {
+    const raw = localStorage.getItem(storageKeyRejected());
+    rejected = new Set(JSON.parse(raw || "[]"));
+  } catch (_) {
+    rejected = new Set();
+  }
+}
+
+function saveRejectedState() {
+  localStorage.setItem(storageKeyRejected(), JSON.stringify([...rejected]));
+}
+
+function detectOrientation(width, height) {
+  if (!width || !height) return "";
+  if (height > width) return "portrait";
+  if (width > height) return "landscape";
+  return "square";
+}
+
+function warmupOrientation(photo) {
+  if (!photo || photo.orientation || photo._orientationPromise) return;
+  photo._orientationPromise = new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      photo.width = img.naturalWidth;
+      photo.height = img.naturalHeight;
+      photo.orientation = detectOrientation(img.naturalWidth, img.naturalHeight);
+      resolve();
+      if (["portrait", "landscape"].includes(filter)) render();
+    };
+    img.onerror = () => resolve();
+    img.src = photo.preview;
+  });
+}
+
+function filteredPhotos() {
+  switch (filter) {
+    case "favorites":
+      return photos.filter(photo => favorites.has(photo.filename) && !rejected.has(photo.filename));
+    case "portrait":
+      return photos.filter(photo => photo.orientation === "portrait" && !rejected.has(photo.filename));
+    case "landscape":
+      return photos.filter(photo => photo.orientation === "landscape" && !rejected.has(photo.filename));
+    case "hidden":
+      return photos.filter(photo => rejected.has(photo.filename));
+    default:
+      return photos.filter(photo => !rejected.has(photo.filename));
+  }
+}
+
 function visiblePhotos() {
-  return filter === "favorites"
-    ? photos.filter(photo => favorites.has(photo.filename))
-    : photos;
+  return filteredPhotos();
 }
 
 function showFatal(message) {
@@ -149,8 +205,10 @@ async function init() {
 
     applyGalleryMeta();
 
+    loadRejectedState();
+
     if (sessionStorage.getItem(`raf-access-${slug}`) === "1") {
-      await openGallery();
+      showIntro();
     }
   } catch (error) {
     console.error("INIT ERROR", error);
@@ -159,14 +217,54 @@ async function init() {
 }
 
 function applyGalleryMeta() {
-  $("#lockTitle").textContent = gallery.title || "Galeria klienta";
-  $("#heroTitle").textContent = gallery.title || slug;
-  $("#heroSubtitle").textContent = gallery.subtitle || "Wybierz ulubione zdjęcia.";
+  const title = gallery.title || "Galeria klienta";
+  const subtitle = gallery.subtitle || "Wybierz ulubione zdjęcia.";
+  const photoCount = Number(gallery.photoCount || Object.keys(gallery.photos || {}).length || 0);
+
+  $("#lockTitle").textContent = title;
+  $("#heroTitle").textContent = title;
+  $("#heroSubtitle").textContent = subtitle;
+  $("#introTitle").textContent = title;
+  $("#introSubtitle").textContent = subtitle || "Twoje zdjęcia są gotowe do obejrzenia.";
+  $("#introPhotoCount").textContent = `${photoCount} zdjęć`;
+
+  if (gallery.eventDate) {
+    $("#introDate").textContent = formatDate(gallery.eventDate);
+    $("#introDate").hidden = false;
+  } else {
+    $("#introDate").hidden = true;
+  }
 
   if (gallery.expiresAt) {
     const left = daysLeft(gallery.expiresAt);
     const suffix = left === null ? "" : left < 0 ? "" : left === 0 ? " • wygasa dziś" : left === 1 ? " • jeszcze 1 dzień" : ` • jeszcze ${left} dni`;
-    $("#expiryLabel").textContent = `Dostęp do ${formatDate(gallery.expiresAt)}${suffix}`;
+    const expiryText = `Dostęp do ${formatDate(gallery.expiresAt)}${suffix}`;
+    $("#expiryLabel").textContent = expiryText;
+    $("#introExpiry").textContent = expiryText;
+    $("#introExpiry").hidden = false;
+  } else {
+    $("#expiryLabel").textContent = "";
+    $("#introExpiry").hidden = true;
+  }
+
+  const footerThanks = $("#footerThanks");
+  const footerOutro = $("#footerOutro");
+  if (footerThanks) footerThanks.textContent = "Dziękuję za wspólnie spędzony czas ❤️";
+  if (footerOutro) footerOutro.textContent = gallery.outroMessage || "Mam nadzieję, że ta galeria będzie piękną pamiątką.";
+
+  const instagram = $("#footerInstagram");
+  const website = $("#footerWebsite");
+  if (instagram) {
+    if (gallery.instagram) {
+      instagram.href = gallery.instagram;
+      instagram.hidden = false;
+    } else instagram.hidden = true;
+  }
+  if (website) {
+    if (gallery.website) {
+      website.href = gallery.website;
+      website.hidden = false;
+    } else website.hidden = true;
   }
 
   if (maxFavorites() > 0) {
@@ -176,27 +274,46 @@ function applyGalleryMeta() {
     $("#maxFavoritesLabel").textContent = "";
     $("#progressWrap").hidden = true;
   }
+
+  const manifest = Object.values(gallery.photos || {});
+  const coverItem = manifest.find(item => item?.filename === gallery.coverFile && item?.previewUrl) || manifest[0];
+  if (coverItem?.previewUrl) {
+    $("#introBackdrop").style.backgroundImage = `url("${coverItem.previewUrl}")`;
+    $("#introBackdrop").style.backgroundPosition = `${Number(gallery.coverPositionX ?? 50)}% ${Number(gallery.coverPositionY ?? 38)}%`;
+  }
+}
+
+
+function showIntro() {
+  $("#lockScreen").hidden = true;
+  $("#introScreen").hidden = false;
+  $("#galleryView").hidden = true;
 }
 
 async function openGallery() {
-  // Open immediately after password validation.
   $("#lockScreen").hidden = true;
+  $("#introScreen").hidden = true;
   $("#galleryView").hidden = false;
-  $("#loading").hidden = false;
 
-  loadManifest();
+  if (!galleryLoaded) {
+    galleryLoaded = true;
+    $("#loading").hidden = false;
+    loadManifest();
 
-  // Favorites are secondary. A permissions/network problem here
-  // must NEVER make correct password look broken.
-  loadFavorites()
-    .then(() => {
-      render();
-      updateUI();
-    })
-    .catch(error => {
-      console.error("BACKGROUND FAVORITES ERROR", error);
-    });
+    loadFavorites()
+      .then(() => {
+        render();
+        updateUI();
+      })
+      .catch(error => {
+        console.error("BACKGROUND FAVORITES ERROR", error);
+      });
+  } else {
+    render();
+    updateUI();
+  }
 }
+
 
 async function loadFavorites() {
   try {
@@ -225,7 +342,10 @@ function loadManifest() {
       filename: item.filename,
       preview: item.previewUrl,
       originalPath: item.originalPath || `galleries/${slug}/originals/${item.filename}`,
-      originalUrl: null
+      originalUrl: null,
+      width: Number(item.width || 0),
+      height: Number(item.height || 0),
+      orientation: item.orientation || detectOrientation(Number(item.width || 0), Number(item.height || 0))
     }));
 
   $("#loading").hidden = true;
@@ -244,21 +364,25 @@ function loadManifest() {
     $("#hero").style.backgroundPosition = `${Number(gallery.coverPositionX ?? 50)}% ${Number(gallery.coverPositionY ?? 38)}%`;
   }
 
+  photos.forEach(warmupOrientation);
+
   render();
 }
 
 function render() {
-  const list = filter === "favorites"
-    ? photos.filter(photo => favorites.has(photo.filename))
-    : photos;
+  const list = filteredPhotos();
 
   const grid = $("#grid");
   grid.innerHTML = "";
 
   if (!list.length) {
-    grid.innerHTML = filter === "favorites"
-      ? '<div class="notice">Nie zaznaczono jeszcze żadnych zdjęć.</div>'
+    const empty = filter === "favorites"
+      ? "Nie zaznaczono jeszcze żadnych zdjęć."
+      : filter === "portrait" ? "Brak pionowych zdjęć."
+      : filter === "landscape" ? "Brak poziomych zdjęć."
+      : filter === "hidden" ? "Nie ukryto żadnych zdjęć."
       : "";
+    grid.innerHTML = empty ? `<div class="notice">${empty}</div>` : "";
     updateUI();
     return;
   }
@@ -266,9 +390,11 @@ function render() {
   list.forEach(photo => {
     const index = photos.findIndex(p => p.filename === photo.filename);
     const selected = favorites.has(photo.filename);
+    const isRejected = rejected.has(photo.filename);
+    const isCompared = compareSelection.includes(photo.filename);
 
     const card = document.createElement("article");
-    card.className = "photo-card";
+    card.className = `photo-card${selected ? " fav-active" : ""}${isRejected ? " rejected" : ""}${isCompared ? " compare-active" : ""}`;
 
     const skeleton = document.createElement("div");
     skeleton.className = "photo-skeleton";
@@ -286,23 +412,34 @@ function render() {
     heart.className = `photo-fav${selected ? " active" : ""}`;
     heart.textContent = selected ? "♥" : "♡";
     heart.title = selected ? "Usuń z wybranych dla fotografa" : "Dodaj do wybranych dla fotografa";
-    heart.setAttribute("aria-label", heart.title);
-    heart.setAttribute("aria-pressed", selected ? "true" : "false");
+
+    const rejectBtn = document.createElement("button");
+    rejectBtn.type = "button";
+    rejectBtn.className = `photo-reject${isRejected ? " active" : ""}`;
+    rejectBtn.textContent = "×";
+    rejectBtn.title = isRejected ? "Przywróć zdjęcie" : "Ukryj / odrzuć zdjęcie";
+
+    const compareBtn = document.createElement("button");
+    compareBtn.type = "button";
+    compareBtn.className = `photo-compare${isCompared ? " active" : ""}`;
+    compareBtn.textContent = "A/B";
+    compareBtn.title = "Dodaj do porównania";
 
     const downloadOne = document.createElement("button");
     downloadOne.type = "button";
     downloadOne.className = "photo-download";
     downloadOne.textContent = "↓";
     downloadOne.title = "Pobierz to zdjęcie";
-    downloadOne.setAttribute("aria-label", downloadOne.title);
 
     const selectDownload = document.createElement("button");
     selectDownload.type = "button";
     selectDownload.className = `photo-select-download${downloadSelection.has(photo.filename) ? " active" : ""}`;
     selectDownload.textContent = downloadSelection.has(photo.filename) ? "✓" : "○";
     selectDownload.title = "Zaznacz do pobrania";
-    selectDownload.setAttribute("aria-label", selectDownload.title);
-    selectDownload.setAttribute("aria-pressed", downloadSelection.has(photo.filename) ? "true" : "false");
+
+    const filename = document.createElement("div");
+    filename.className = "photo-filename";
+    filename.textContent = photo.filename;
 
     img.addEventListener("load", () => {
       img.classList.add("loaded");
@@ -322,6 +459,18 @@ function render() {
       await toggleFavorite(photo.filename);
     });
 
+    rejectBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleRejected(photo.filename);
+    });
+
+    compareBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleCompareSelection(photo.filename);
+    });
+
     downloadOne.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -334,8 +483,8 @@ function render() {
       toggleDownloadSelection(photo.filename);
     });
 
-    tools.append(heart, downloadOne, selectDownload);
-    card.append(skeleton, img, tools);
+    tools.append(heart, rejectBtn, compareBtn, downloadOne, selectDownload);
+    card.append(skeleton, img, tools, filename);
     grid.appendChild(card);
   });
 
@@ -383,6 +532,97 @@ async function toggleFavorite(filename) {
   }
 }
 
+function toggleRejected(filename) {
+  if (rejected.has(filename)) {
+    rejected.delete(filename);
+    toast("Przywrócono zdjęcie");
+  } else {
+    rejected.add(filename);
+    downloadSelection.delete(filename);
+    compareSelection = compareSelection.filter(name => name !== filename);
+    toast("Ukryto zdjęcie");
+  }
+  saveRejectedState();
+  render();
+}
+
+function toggleCompareSelection(filename) {
+  if (compareSelection.includes(filename)) {
+    compareSelection = compareSelection.filter(name => name !== filename);
+  } else if (compareSelection.length >= 2) {
+    toast("Do porównania wybierz maksymalnie 2 zdjęcia.");
+    return;
+  } else {
+    compareSelection.push(filename);
+  }
+  render();
+}
+
+function clearCompareSelection() {
+  compareSelection = [];
+  updateCompareUI();
+  render();
+}
+
+async function openCompareDialog() {
+  if (compareSelection.length !== 2) {
+    toast("Wybierz dokładnie 2 zdjęcia do porównania.");
+    return;
+  }
+  const [nameA, nameB] = compareSelection;
+  const indexA = photos.findIndex(photo => photo.filename === nameA);
+  const indexB = photos.findIndex(photo => photo.filename === nameB);
+  const photoA = photos[indexA];
+  const photoB = photos[indexB];
+  if (!photoA || !photoB) return;
+
+  $("#compareCaptionA").textContent = photoA.filename;
+  $("#compareCaptionB").textContent = photoB.filename;
+  $("#compareImageA").src = photoA.preview;
+  $("#compareImageB").src = photoB.preview;
+  $("#compareDialog").hidden = false;
+  document.body.style.overflow = "hidden";
+
+  try {
+    const [urlA, urlB] = await Promise.all([getOriginalUrl(indexA), getOriginalUrl(indexB)]);
+    if (urlA) $("#compareImageA").src = urlA;
+    if (urlB) $("#compareImageB").src = urlB;
+  } catch (_) {}
+}
+
+function closeCompareDialog() {
+  $("#compareDialog").hidden = true;
+  document.body.style.overflow = "";
+}
+
+function swapCompareSelection() {
+  if (compareSelection.length === 2) {
+    compareSelection = [compareSelection[1], compareSelection[0]];
+    openCompareDialog();
+    updateCompareUI();
+  }
+}
+
+function updateCompareUI() {
+  const bar = $("#compareBar");
+  const count = compareSelection.length;
+  if (!bar) return;
+
+  $("#compareSelectedCount").textContent = count;
+  $("#compareSelectedNames").textContent = count ? compareSelection.join("  •  ") : "Wybierz dwa zdjęcia do porównania obok siebie";
+  bar.hidden = count === 0;
+  $("#openCompareBtn").disabled = count !== 2;
+}
+
+function setFilter(next) {
+  filter = next;
+  ["all", "favorites", "portrait", "landscape", "hidden"].forEach(name => {
+    const button = document.getElementById(`${name === "favorites" ? "fav" : name}Filter`) || document.getElementById(`${name}Filter`);
+    if (button) button.classList.toggle("active", filter === name);
+  });
+  render();
+}
+
 function updateUI() {
   const count = favorites.size;
 
@@ -396,6 +636,7 @@ function updateUI() {
   }
 
   updateDownloadUI();
+  updateCompareUI();
 }
 
 
@@ -603,6 +844,7 @@ function updateLightboxUI() {
   $("#lightboxCaption").textContent = `${currentIndex + 1} / ${photos.length} · ${photo.filename}`;
   $("#lightboxFav").textContent = selected ? "♥" : "♡";
   $("#lightboxFav").classList.toggle("active", selected);
+  $("#lightboxReject").classList.toggle("active", rejected.has(photo.filename));
   $("#lightboxDownload").hidden = gallery.downloadsEnabled === false;
   updateSlideshowButtons();
 
@@ -666,7 +908,7 @@ $("#passwordForm").addEventListener("submit", async (event) => {
     }
 
     sessionStorage.setItem(`raf-access-${slug}`, "1");
-    await openGallery();
+    showIntro();
   } catch (error) {
     console.error("LOGIN ERROR", error);
     errorEl.textContent = `Błąd logowania: ${error.code || error.message || error}`;
@@ -677,21 +919,14 @@ $("#passwordForm").addEventListener("submit", async (event) => {
   }
 });
 
-$("#allFilter").addEventListener("click", () => {
-  filter = "all";
-  $("#allFilter").classList.add("active");
-  $("#favFilter").classList.remove("active");
-  render();
-});
+$("#allFilter").addEventListener("click", () => setFilter("all"));
+$("#favFilter").addEventListener("click", () => setFilter("favorites"));
+$("#portraitFilter").addEventListener("click", () => setFilter("portrait"));
+$("#landscapeFilter").addEventListener("click", () => setFilter("landscape"));
+$("#hiddenFilter").addEventListener("click", () => setFilter("hidden"));
 
-$("#favFilter").addEventListener("click", () => {
-  filter = "favorites";
-  $("#favFilter").classList.add("active");
-  $("#allFilter").classList.remove("active");
-  render();
-});
-
-$("#favoritesToggle").addEventListener("click", () => $("#favFilter").click());
+$("#favoritesToggle").addEventListener("click", () => setFilter("favorites"));
+$("#startGalleryBtn").addEventListener("click", openGallery);
 
 $("#slideshowBtn")?.addEventListener("click", () => {
   const list = visiblePhotos();
@@ -728,20 +963,22 @@ $("#lightboxFav").addEventListener("click", async () => {
   updateLightboxUI();
 });
 
+$("#lightboxReject")?.addEventListener("click", () => {
+  const photo = photos[currentIndex];
+  if (!photo) return;
+  toggleRejected(photo.filename);
+  updateLightboxUI();
+});
+
 $("#lightboxSlideshow")?.addEventListener("click", () => toggleSlideshow(currentIndex));
 
 $("#lightboxDownload").addEventListener("click", async (event) => {
-  const photo = photos[currentIndex];
-  if (!photo) return;
-
-  if (!photo.originalUrl) {
-    event.preventDefault();
-    const url = await getOriginalUrl(currentIndex);
-    if (url) window.open(url, "_blank", "noopener");
-  }
+  event.preventDefault();
+  await downloadSinglePhoto(currentIndex);
 });
 
 document.addEventListener("keydown", (event) => {
+  if (!$("#compareDialog").hidden && event.key === "Escape") closeCompareDialog();
   if ($("#lightbox").hidden) return;
   if (event.key === "Escape") closeLightbox();
   if (event.key === "ArrowLeft") changeLightbox(-1);
@@ -764,6 +1001,12 @@ $("#clearDownloadSelectionBtn")?.addEventListener("click", () => {
   render();
 });
 
-
+$("#openCompareBtn")?.addEventListener("click", openCompareDialog);
+$("#clearCompareSelectionBtn")?.addEventListener("click", clearCompareSelection);
+$("#closeCompareDialog")?.addEventListener("click", closeCompareDialog);
+$("#swapCompareBtn")?.addEventListener("click", swapCompareSelection);
+$("#compareDialog")?.addEventListener("click", (event) => {
+  if (event.target.id === "compareDialog") closeCompareDialog();
+});
 
 init();

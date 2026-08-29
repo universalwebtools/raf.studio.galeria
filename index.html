@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
   <title>RAF.studio — Galeria klienta</title>
-  <link rel="stylesheet" href="style.css?v=13.0">
+  <link rel="stylesheet" href="style.css?v=14.0">
 </head>
 <body class="client-body">
 
 <section id="lockScreen" class="lock-screen">
   <div class="lock-card">
-    <img class="raf-logo login-logo" src="logo-white.png?v=13.0" alt="RAF.studio">
+    <img class="raf-logo login-logo" src="logo-white.png?v=14.0" alt="RAF.studio">
     <p class="eyebrow">PRYWATNA GALERIA</p>
     <h1 id="lockTitle">Galeria klienta</h1>
     <p class="muted">Wpisz hasło otrzymane od fotografa.</p>
@@ -26,9 +26,27 @@
   </div>
 </section>
 
+
+<section id="introScreen" class="intro-screen" hidden>
+  <div class="intro-backdrop" id="introBackdrop"></div>
+  <div class="intro-overlay"></div>
+  <div class="intro-card">
+    <img class="raf-logo login-logo" src="logo-white.png?v=14.0" alt="RAF.studio">
+    <p class="eyebrow">WITAJ W GALERII</p>
+    <p id="introDate" class="intro-date" hidden></p>
+    <h1 id="introTitle">Galeria klienta</h1>
+    <p id="introSubtitle" class="muted">Twoje zdjęcia są gotowe do obejrzenia.</p>
+    <div class="intro-meta">
+      <span id="introPhotoCount">0 zdjęć</span>
+      <span id="introExpiry" hidden></span>
+    </div>
+    <button id="startGalleryBtn" class="primary" type="button">Wejdź do galerii</button>
+  </div>
+</section>
+
 <main id="galleryView" hidden>
   <header class="client-topbar">
-    <img class="raf-logo top-logo" src="logo-white.png?v=13.0" alt="RAF.studio">
+    <img class="raf-logo top-logo" src="logo-white.png?v=14.0" alt="RAF.studio">
     <div class="top-actions">
       <button id="favoritesToggle" type="button" class="ghost">♥ Wybrane <span id="favCount">0</span></button>
       <button id="slideshowBtn" type="button" class="ghost">▶ Slideshow</button>
@@ -51,9 +69,12 @@
   </section>
 
   <section class="client-controls">
-    <div class="segments">
+    <div class="segments wide-segments">
       <button id="allFilter" type="button" class="seg active">Wszystkie</button>
       <button id="favFilter" type="button" class="seg">Wybrane</button>
+      <button id="portraitFilter" type="button" class="seg">Pionowe</button>
+      <button id="landscapeFilter" type="button" class="seg">Poziome</button>
+      <button id="hiddenFilter" type="button" class="seg">Ukryte</button>
     </div>
     <div class="selection-count">Wybrano <strong id="selectedCount">0</strong><span id="maxFavoritesLabel"></span></div>
   </section>
@@ -74,13 +95,32 @@
     </div>
   </div>
 
+  <div id="compareBar" class="compare-bar" hidden>
+    <div class="compare-bar-info">
+      <strong>Porównanie A/B: <span id="compareSelectedCount">0</span>/2</strong>
+      <small id="compareSelectedNames">Wybierz dwa zdjęcia do porównania obok siebie</small>
+    </div>
+    <div class="compare-bar-actions">
+      <button id="clearCompareSelectionBtn" type="button" class="ghost">Wyczyść</button>
+      <button id="openCompareBtn" type="button" class="primary">↔ Porównaj dwa zdjęcia</button>
+    </div>
+  </div>
+
   <div id="loading" class="loading"><span class="spinner"></span>Ładowanie galerii…</div>
   <div id="storageError" class="notice error-box" hidden></div>
 
   <section id="grid" class="photo-grid"></section>
 
   <footer class="client-footer">
-    <img class="raf-logo footer-logo" src="logo-white.png?v=13.0" alt="RAF.studio">
+    <img class="raf-logo footer-logo" src="logo-white.png?v=14.0" alt="RAF.studio">
+    <div class="footer-message">
+      <h3 id="footerThanks">Dziękuję za wspólnie spędzony czas ❤️</h3>
+      <p id="footerOutro">Mam nadzieję, że ta galeria będzie piękną pamiątką.</p>
+      <div class="footer-links">
+        <a id="footerInstagram" href="#" target="_blank" rel="noopener" hidden>Instagram</a>
+        <a id="footerWebsite" href="#" target="_blank" rel="noopener" hidden>Strona internetowa</a>
+      </div>
+    </div>
   </footer>
 </main>
 
@@ -89,6 +129,7 @@
     <span id="lightboxCaption"></span>
     <div class="lightbox-actions">
       <button id="lightboxFav" type="button" class="lb-btn" aria-label="Ulubione">♡</button>
+      <button id="lightboxReject" type="button" class="lb-btn" aria-label="Odrzuć">×</button>
       <button id="lightboxSlideshow" type="button" class="lb-btn" aria-label="Slideshow">▶</button>
       <a id="lightboxDownload" class="lb-btn" target="_blank" rel="noopener" aria-label="Pobierz">↓</a>
       <button id="closeLightbox" type="button" class="lb-btn" aria-label="Zamknij">×</button>
@@ -100,8 +141,33 @@
   <button id="nextPhoto" type="button" class="lb-arrow lb-right">›</button>
 </div>
 
+
+<div id="compareDialog" class="compare-dialog" hidden>
+  <div class="compare-dialog-card">
+    <div class="lightbox-top compare-top">
+      <span>Porównanie A/B</span>
+      <div class="lightbox-actions">
+        <button id="swapCompareBtn" type="button" class="lb-btn" aria-label="Zamień">⇄</button>
+        <button id="closeCompareDialog" type="button" class="lb-btn" aria-label="Zamknij">×</button>
+      </div>
+    </div>
+    <div class="compare-stage">
+      <div class="compare-pane">
+        <span class="compare-label">A</span>
+        <img id="compareImageA" alt="Porównanie A">
+        <div id="compareCaptionA" class="compare-caption"></div>
+      </div>
+      <div class="compare-pane">
+        <span class="compare-label">B</span>
+        <img id="compareImageB" alt="Porównanie B">
+        <div id="compareCaptionB" class="compare-caption"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast" hidden></div>
 
-<script type="module" src="app.js?v=13.0"></script>
+<script type="module" src="app.js?v=14.0"></script>
 </body>
 </html>

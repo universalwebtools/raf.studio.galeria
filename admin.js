@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=13.0";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=14.0";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -299,6 +299,7 @@ function renderCards() {
           <span>${selectedClients} klientów z wyborem</span>
           <span>${pub.maxFavorites ? `limit ${pub.maxFavorites}` : "bez limitu"}</span>
           <span>${escapeHtml(expiryBadgeText(pub))}</span>
+          ${pub.eventDate ? `<span>${escapeHtml(formatDate(pub.eventDate))}</span>` : ""}
         </div>
 
         <div class="gallery-link">
@@ -372,6 +373,10 @@ function resetForm() {
   $("#gallerySlugInput").disabled = false;
   $("#galleryPasswordInput").value = "";
   $("#gallerySubtitleInput").value = "";
+  $("#eventDateInput").value = "";
+  $("#outroMessageInput").value = "";
+  $("#instagramInput").value = "";
+  $("#websiteInput").value = "";
   $("#expiresAtInput").value = "";
   $("#maxFavoritesInput").value = "0";
   $("#validDaysInput").value = "0";
@@ -398,6 +403,10 @@ function openEdit(slug) {
   $("#gallerySlugInput").value = slug;
   $("#gallerySlugInput").disabled = true;
   $("#gallerySubtitleInput").value = pub.subtitle || "";
+  $("#eventDateInput").value = pub.eventDate || "";
+  $("#outroMessageInput").value = pub.outroMessage || "";
+  $("#instagramInput").value = pub.instagram || "";
+  $("#websiteInput").value = pub.website || "";
   $("#validDaysInput").value = Number(pub.validDays || 0);
   $("#expiresAtInput").value = pub.expiresAt || "";
   $("#maxFavoritesInput").value = Number(pub.maxFavorites || 0);
@@ -451,6 +460,10 @@ $("#galleryForm").addEventListener("submit", async (event) => {
       ...old,
       title: $("#galleryTitleInput").value.trim() || slug,
       subtitle: $("#gallerySubtitleInput").value.trim(),
+      eventDate: $("#eventDateInput").value || "",
+      outroMessage: $("#outroMessageInput").value.trim(),
+      instagram: $("#instagramInput").value.trim(),
+      website: $("#websiteInput").value.trim(),
       passwordHash,
       passwordHashTrimmed,
       passwordVersion: 2,
@@ -604,6 +617,42 @@ function imageContentType(file) {
   return "image/jpeg";
 }
 
+function roundedRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawPreviewWatermark(ctx, width, height) {
+  const pad = Math.max(14, Math.round(Math.min(width, height) * 0.02));
+  const fontSize = Math.max(16, Math.round(Math.min(width, height) * 0.035));
+  const text = "RAF.studio";
+
+  ctx.save();
+  ctx.font = `700 ${fontSize}px Arial, sans-serif`;
+  const metrics = ctx.measureText(text);
+  const textWidth = Math.ceil(metrics.width);
+  const boxW = textWidth + pad * 1.6;
+  const boxH = fontSize + pad * 0.9;
+  const x = width - boxW - pad;
+  const y = height - boxH - pad;
+
+  ctx.globalAlpha = 0.42;
+  ctx.fillStyle = "#000";
+  roundedRect(ctx, x, y, boxW, boxH, Math.max(10, Math.round(boxH * 0.28)));
+  ctx.fill();
+
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = "#fff";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x + pad * 0.8, y + boxH / 2 + 1);
+  ctx.restore();
+}
+
 async function makePreview(file) {
   const objectUrl = URL.createObjectURL(file);
 
@@ -636,7 +685,9 @@ async function makePreview(file) {
       canvas.width = width;
       canvas.height = height;
 
-      canvas.getContext("2d").drawImage(image, 0, 0, width, height);
+      const context = canvas.getContext("2d");
+      context.drawImage(image, 0, 0, width, height);
+      drawPreviewWatermark(context, width, height);
 
       const blob = await new Promise((resolve, reject) => {
         canvas.toBlob(
@@ -650,7 +701,12 @@ async function makePreview(file) {
       if (blob.size <= 650 * 1024) break;
     }
 
-    return lastBlob;
+    return {
+      blob: lastBlob,
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      orientation: image.naturalHeight > image.naturalWidth ? "portrait" : image.naturalWidth > image.naturalHeight ? "landscape" : "square"
+    };
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
@@ -697,13 +753,13 @@ $("#startUploadBtn").addEventListener("click", async () => {
 
       showNotice($("#uploadStatus"), `${index + 1}/${files.length}: ${file.name} — tworzę podgląd…`);
 
-      const previewBlob = await makePreview(file);
+      const previewData = await makePreview(file);
       const previewName = `${file.name}.webp`;
       const previewRef = sRef(storage, `galleries/${uploadSlug}/previews/${previewName}`);
 
       await uploadTask(
         previewRef,
-        previewBlob,
+        previewData.blob,
         {
           contentType: "image/webp",
           contentDisposition: `attachment; filename="${file.name}.webp"`
@@ -734,7 +790,10 @@ $("#startUploadBtn").addEventListener("click", async () => {
       await update(ref(db, `galleries/${uploadSlug}/public/photos/${manifestKey(file.name)}`), {
         filename: file.name,
         previewUrl,
-        originalPath: `galleries/${uploadSlug}/originals/${file.name}`
+        originalPath: `galleries/${uploadSlug}/originals/${file.name}`,
+        width: previewData.width,
+        height: previewData.height,
+        orientation: previewData.orientation
       });
 
       if (!galleries[uploadSlug]?.public?.coverFile) {
