@@ -15,6 +15,11 @@ function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeou
 function notice(el,m,type="ok"){el.hidden=false;el.className=`notice ${type}`;el.textContent=m}
 function fmt(ts){return ts?new Date(ts).toLocaleString("pl-PL"):"—"}
 function originalNameFromPreview(name){return name.toLowerCase().endsWith(".webp")?name.slice(0,-5):name}
+function manifestKey(name){
+  const b=new TextEncoder().encode(name);let s="";
+  b.forEach(x=>s+=String.fromCharCode(x));
+  return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+}
 
 onAuthStateChanged(auth,u=>{
   if(u&&u.uid===ADMIN_UID){
@@ -43,12 +48,13 @@ function renderCards(){
   const rows=filtered();if(!rows.length){list.innerHTML='<div class="notice">Brak galerii pasujących do filtra.</div>';return}
   rows.forEach(([slug,g])=>{
     const p=g.public||{},s=summary(g),submitted=s.submitted>0,card=document.createElement("article");card.className="gallery-card";
-    card.innerHTML=`<div class="gallery-cover"><div class="gallery-status ${p.active===false?"off":submitted?"submitted":""}">${p.active===false?"Wyłączona":submitted?`✓ ${s.submitted} zatwierdz.`:"Aktywna"}</div></div><div class="gallery-body"><h3>${esc(p.title||slug)}</h3><div class="gallery-meta"><span>${Number(p.photoCount||0)} zdjęć</span><span>${s.clients} wyborów</span><span>${p.maxFavorites?`limit ${p.maxFavorites}`:"bez limitu"}</span></div><div class="gallery-link"><input readonly value="${galleryUrl(slug)}"><button class="ghost" data-copy="${slug}">Kopiuj</button></div><div class="gallery-actions"><button class="primary" data-upload="${slug}">+ Zdjęcia</button><button class="ghost" data-manage="${slug}">Zarządzaj</button><button class="ghost" data-select="${slug}">♡ Wybory</button><button class="ghost" data-edit="${slug}">Ustawienia</button><a class="ghost" href="${galleryUrl(slug)}" target="_blank">Otwórz</a></div></div>`;
+    card.innerHTML=`<div class="gallery-cover"><div class="gallery-status ${p.active===false?"off":submitted?"submitted":""}">${p.active===false?"Wyłączona":submitted?`✓ ${s.submitted} zatwierdz.`:"Aktywna"}</div></div><div class="gallery-body"><h3>${esc(p.title||slug)}</h3><div class="gallery-meta"><span>${Number(p.photoCount||0)} zdjęć</span><span>${s.clients} wyborów</span><span>${p.maxFavorites?`limit ${p.maxFavorites}`:"bez limitu"}</span></div><div class="gallery-link"><input readonly value="${galleryUrl(slug)}"><button class="ghost" data-copy="${slug}">Kopiuj</button></div><div class="gallery-actions"><button class="primary" data-upload="${slug}">+ Zdjęcia</button><button class="ghost" data-manage="${slug}">Zarządzaj</button><button class="ghost" data-index="${slug}">⚡ Odbuduj indeks</button><button class="ghost" data-select="${slug}">♡ Wybory</button><button class="ghost" data-edit="${slug}">Ustawienia</button><a class="ghost" href="${galleryUrl(slug)}" target="_blank">Otwórz</a></div></div>`;
     list.appendChild(card);loadCover(card.querySelector(".gallery-cover"),slug,p.coverFile)
   });
   list.querySelectorAll("[data-copy]").forEach(b=>b.onclick=async()=>{await navigator.clipboard.writeText(galleryUrl(b.dataset.copy));toast("Link skopiowany")});
   list.querySelectorAll("[data-upload]").forEach(b=>b.onclick=()=>openUpload(b.dataset.upload));
   list.querySelectorAll("[data-manage]").forEach(b=>b.onclick=()=>openPhotos(b.dataset.manage));
+  list.querySelectorAll("[data-index]").forEach(b=>b.onclick=()=>rebuildFastIndex(b.dataset.index));
   list.querySelectorAll("[data-select]").forEach(b=>b.onclick=()=>openSelections(b.dataset.select));
   list.querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openEdit(b.dataset.edit))
 }
@@ -129,12 +135,22 @@ $("#startUploadBtn").onclick=async()=>{
       const p=await makeWebpPreview(f);
       const previewName=`${f.name}.webp`;
 
+      const previewRef=sRef(storage,`galleries/${uploadSlug}/previews/${previewName}`);
       await task(
-        sRef(storage,`galleries/${uploadSlug}/previews/${previewName}`),
+        previewRef,
         p,
         x=>$("#uploadProgress").style.width=`${Math.round((base+weight*x*.15)*100)}%`,
         "image/webp"
       );
+
+      // Save ready preview URL into Realtime Database once, during upload.
+      // Client will never need listAll/getDownloadURL for previews again.
+      const previewUrl=await getDownloadURL(previewRef);
+      await update(ref(db,`galleries/${uploadSlug}/public/photos/${manifestKey(f.name)}`),{
+        filename:f.name,
+        previewUrl,
+        originalPath:`galleries/${uploadSlug}/originals/${f.name}`
+      });
 
       notice($("#uploadStatus"),`${i+1}/${files.length}: ${f.name} — wysyłam oryginał…`);
       await task(
@@ -156,6 +172,38 @@ $("#startUploadBtn").onclick=async()=>{
 };
 $("#closeUploadDialog").onclick=$("#cancelUploadBtn").onclick=()=>$("#uploadDialog").close();
 
+
+async function rebuildFastIndex(slug){
+  const btn=document.querySelector(`[data-index="${slug}"]`);
+  if(btn){btn.disabled=true;btn.textContent="Indeksowanie…";}
+  try{
+    const r=await listAll(sRef(storage,`galleries/${slug}/previews`));
+    const manifest={};
+    let n=0;
+    for(const item of r.items){
+      const filename=originalNameFromPreview(item.name);
+      const previewUrl=await getDownloadURL(item);
+      manifest[manifestKey(filename)]={
+        filename,
+        previewUrl,
+        originalPath:`galleries/${slug}/originals/${filename}`
+      };
+      n++;
+      if(btn)btn.textContent=`Indeks ${n}/${r.items.length}`;
+    }
+    await update(ref(db,`galleries/${slug}/public`),{
+      photos:manifest,
+      photoCount:n,
+      fastIndexAt:Date.now()
+    });
+    toast(`Szybki indeks gotowy: ${n} zdjęć`);
+  }catch(e){
+    alert(`Nie udało się zbudować indeksu: ${e.code||""} ${e.message||e}`);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent="⚡ Odbuduj indeks";}
+  }
+}
+
 async function openPhotos(slug){
   $("#photosTitle").textContent=`Zdjęcia — ${galleries[slug]?.public?.title||slug}`;$("#photoManagerGrid").innerHTML="";$("#photoManagerLoading").hidden=false;$("#photosDialog").showModal();
   try{
@@ -165,7 +213,7 @@ async function openPhotos(slug){
       const url=await getDownloadURL(item),w=document.createElement("article");w.className="pm-item";
       w.innerHTML=`<div class="pm-thumb" style="background-image:url('${url}')"></div><div class="pm-info"><div class="pm-name">${esc(originalName)}</div><div class="pm-actions"><button class="ghost cover">Okładka</button><button class="danger del">Usuń</button></div></div>`;
       w.querySelector(".cover").onclick=async()=>{await update(ref(db,`galleries/${slug}/public`),{coverFile:originalName});toast("Okładka ustawiona")};
-      w.querySelector(".del").onclick=async()=>{if(!confirm(`Usunąć ${originalName}?`))return;await deleteObject(item);await deleteObject(sRef(storage,`galleries/${slug}/originals/${originalName}`)).catch(()=>{});w.remove();const left=await listAll(sRef(storage,`galleries/${slug}/previews`));await update(ref(db,`galleries/${slug}/public`),{photoCount:left.items.length});toast("Zdjęcie usunięte")};
+      w.querySelector(".del").onclick=async()=>{if(!confirm(`Usunąć ${originalName}?`))return;await deleteObject(item);await deleteObject(sRef(storage,`galleries/${slug}/originals/${originalName}`)).catch(()=>{});await remove(ref(db,`galleries/${slug}/public/photos/${manifestKey(originalName)}`)).catch(()=>{});w.remove();const left=await listAll(sRef(storage,`galleries/${slug}/previews`));await update(ref(db,`galleries/${slug}/public`),{photoCount:left.items.length});toast("Zdjęcie usunięte")};
       $("#photoManagerGrid").appendChild(w)
     }
   }finally{$("#photoManagerLoading").hidden=true}

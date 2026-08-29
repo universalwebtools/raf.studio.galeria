@@ -13,3 +13,17 @@
 .photo-skeleton{position:absolute;inset:0;min-height:180px;background:linear-gradient(100deg,#151518 30%,#222226 45%,#151518 60%);background-size:200% 100%;animation:skeletonMove 1.2s linear infinite}
 .photo-card img.loaded + .photo-fav{}
 @keyframes skeletonMove{to{background-position:-200% 0}}
+
+/* v10: szybszy, bardziej zwarty masonry jak w pierwszej wersji */
+.client-hero{height:auto;min-height:300px;padding-top:90px;background-position:center}
+.hero-content{padding-bottom:38px}
+.hero-content h1{font-size:clamp(46px,6vw,82px)}
+.photo-grid{columns:4 270px;column-gap:10px;padding:16px max(10px,calc((100vw - 1500px)/2)) 120px}
+.photo-card{margin-bottom:10px;border-radius:9px}
+.photo-card img{min-height:120px}
+.photo-skeleton{min-height:220px}
+@media(max-width:760px){
+  .photo-grid{columns:2 150px;column-gap:6px;padding:8px 6px 120px}
+  .photo-card{margin-bottom:6px;border-radius:7px}
+  .client-hero{min-height:270px;padding-top:82px}
+}
