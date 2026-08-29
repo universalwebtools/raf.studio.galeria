@@ -5,20 +5,20 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
   <title>RAF.studio — Studio Manager</title>
-  <link rel="stylesheet" href="style.css?v=12.3">
+  <link rel="stylesheet" href="style.css?v=13.0">
 </head>
 <body class="admin-body">
 
 <section id="adminLogin" class="lock-screen">
   <div class="lock-card">
-    <img class="raf-logo login-logo" src="logo-white.png?v=12.3" alt="RAF.studio">
+    <img class="raf-logo login-logo" src="logo-white.png?v=13.0" alt="RAF.studio">
     <p class="eyebrow">STUDIO MANAGER</p>
     <h1>Panel fotografa</h1>
     <p class="muted">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
-    <form id="adminLoginForm" autocomplete="off" action="javascript:void(0)">
-      <input id="adminEmail" type="email" placeholder="E-mail" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+    <form id="adminLoginForm" autocomplete="on" action="javascript:void(0)">
+      <input id="adminEmail" type="email" placeholder="E-mail" autocomplete="username" autocapitalize="none" spellcheck="false" required>
 
-      <input id="adminPassword" type="password" placeholder="Hasło" autocomplete="new-password" required>
+      <input id="adminPassword" type="password" placeholder="Hasło" autocomplete="current-password" required>
 
       <div class="login-options">
         <label class="remember-login">
@@ -40,7 +40,7 @@
 <main id="adminPanel" hidden>
   <aside class="sidebar">
     <div>
-      <img class="raf-logo sidebar-logo" src="logo-white.png?v=12.3" alt="RAF.studio">
+      <img class="raf-logo sidebar-logo" src="logo-white.png?v=13.0" alt="RAF.studio">
       <small>Studio Manager</small>
     </div>
     <div class="side-bottom">
@@ -104,12 +104,17 @@
       <input id="gallerySubtitleInput" placeholder="np. Macie do wyboru 20 zdjęć :)">
     </label>
 
-    <div class="form2">
+    <div class="form3">
       <label>Hasło klienta
         <input id="galleryPasswordInput" type="password" placeholder="Wymagane przy tworzeniu">
       </label>
+      <label>Ważna przez (dni)
+        <input id="validDaysInput" type="number" min="0" value="0">
+        <small>0 = bez końca, np. 30 = wygaśnie za 30 dni</small>
+      </label>
       <label>Data wygaśnięcia
         <input id="expiresAtInput" type="date">
+        <small>Opcjonalnie ręcznie lub zostanie policzona z liczby dni</small>
       </label>
     </div>
 
@@ -196,6 +201,25 @@
   </div>
 
   <div id="photoManagerLoading" class="loading">Ładowanie…</div>
+  <section id="coverEditor" class="cover-editor" hidden>
+    <div id="coverPreview" class="cover-editor-preview"></div>
+    <div class="cover-editor-panel">
+      <div>
+        <p class="eyebrow">OKŁADKA GALERII</p>
+        <h3 id="coverEditorTitle">Kadrowanie okładki</h3>
+        <p class="muted">Wybierz zdjęcie przyciskiem „Okładka”, a potem ustaw kadr suwakami i zapisz.</p>
+      </div>
+      <label>Pozycja pozioma
+        <input id="coverPositionXInput" type="range" min="0" max="100" value="50">
+      </label>
+      <label>Pozycja pionowa
+        <input id="coverPositionYInput" type="range" min="0" max="100" value="38">
+      </label>
+      <div class="actions right">
+        <button id="saveCoverPositionBtn" type="button" class="primary">Zapisz kadr okładki</button>
+      </div>
+    </div>
+  </section>
   <div id="photoManagerGrid" class="photo-manager"></div>
 </dialog>
 
@@ -211,8 +235,30 @@
   <div id="selectionContent"></div>
 </dialog>
 
+<dialog id="qrDialog" class="dialog small">
+  <div class="dialog-head">
+    <div>
+      <p class="eyebrow">QR KOD</p>
+      <h2>Udostępnij galerię</h2>
+    </div>
+    <button id="closeQrDialog" type="button" class="ghost close-btn">×</button>
+  </div>
+  <div class="qr-wrap">
+    <canvas id="qrCanvas" width="280" height="280"></canvas>
+  </div>
+  <div class="copy">
+    <input id="qrLink" readonly>
+    <button id="copyQrLinkBtn" type="button" class="ghost">Kopiuj link</button>
+  </div>
+  <div class="actions equal">
+    <button id="openQrGalleryBtn" type="button" class="ghost">Otwórz galerię</button>
+    <button id="downloadQrBtn" type="button" class="primary">Pobierz QR PNG</button>
+  </div>
+</dialog>
+
 <div id="toast" class="toast" hidden></div>
 
-<script type="module" src="admin.js?v=12.3"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
+<script type="module" src="admin.js?v=13.0"></script>
 </body>
 </html>

@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=12.3";
+import { firebaseConfig } from "./firebase-config.js?v=13.0";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -20,6 +20,8 @@ let favorites = new Map();
 let currentIndex = 0;
 let filter = "all";
 let touchStartX = 0;
+let slideshowTimer = null;
+let slideshowActive = false;
 
 async function sha256(text) {
   const data = new TextEncoder().encode(text);
@@ -91,6 +93,26 @@ function isExpired() {
   return new Date(`${gallery.expiresAt}T23:59:59`) < new Date();
 }
 
+
+function formatDate(dateString) {
+  if (!dateString) return "";
+  const date = new Date(`${dateString}T12:00:00`);
+  return date.toLocaleDateString("pl-PL");
+}
+
+function daysLeft(dateString) {
+  if (!dateString) return null;
+  const target = new Date(`${dateString}T23:59:59`);
+  const diff = Math.ceil((target - new Date()) / 86400000);
+  return diff;
+}
+
+function visiblePhotos() {
+  return filter === "favorites"
+    ? photos.filter(photo => favorites.has(photo.filename))
+    : photos;
+}
+
 function showFatal(message) {
   $("#galleryNotFound").textContent = message;
   $("#galleryNotFound").hidden = false;
@@ -142,12 +164,17 @@ function applyGalleryMeta() {
   $("#heroSubtitle").textContent = gallery.subtitle || "Wybierz ulubione zdjęcia.";
 
   if (gallery.expiresAt) {
-    $("#expiryLabel").textContent = `Dostęp do ${gallery.expiresAt}`;
+    const left = daysLeft(gallery.expiresAt);
+    const suffix = left === null ? "" : left < 0 ? "" : left === 0 ? " • wygasa dziś" : left === 1 ? " • jeszcze 1 dzień" : ` • jeszcze ${left} dni`;
+    $("#expiryLabel").textContent = `Dostęp do ${formatDate(gallery.expiresAt)}${suffix}`;
   }
 
   if (maxFavorites() > 0) {
-    $("#maxFavoritesLabel").textContent = ` / ${maxFavorites()}`;
+    $("#maxFavoritesLabel").textContent = ` z ${maxFavorites()}`;
     $("#progressWrap").hidden = false;
+  } else {
+    $("#maxFavoritesLabel").textContent = "";
+    $("#progressWrap").hidden = true;
   }
 }
 
@@ -212,7 +239,10 @@ function loadManifest() {
   }
 
   const cover = photos.find(p => p.filename === gallery.coverFile) || photos[0];
-  if (cover) $("#hero").style.backgroundImage = `url("${cover.preview}")`;
+  if (cover) {
+    $("#hero").style.backgroundImage = `url("${cover.preview}")`;
+    $("#hero").style.backgroundPosition = `${Number(gallery.coverPositionX ?? 50)}% ${Number(gallery.coverPositionY ?? 38)}%`;
+  }
 
   render();
 }
@@ -362,7 +392,7 @@ function updateUI() {
   if (maxFavorites() > 0) {
     const percent = Math.min(100, (count / maxFavorites()) * 100);
     $("#selectProgress").style.width = `${percent}%`;
-    $("#progressText").textContent = `${count} z ${maxFavorites()} wybranych`;
+    $("#progressText").textContent = `Wybrano ${count} z ${maxFavorites()} zdjęć`;
   }
 
   updateDownloadUI();
@@ -392,6 +422,41 @@ function updateDownloadUI() {
       ? `↓ Pobierz wybrane (${count})`
       : "↓ Pobierz wybrane";
   }
+}
+
+
+function updateSlideshowButtons() {
+  const label = slideshowActive ? "❚❚ Stop" : "▶ Slideshow";
+  const topButton = $("#slideshowBtn");
+  const lbButton = $("#lightboxSlideshow");
+  if (topButton) topButton.textContent = label;
+  if (lbButton) lbButton.textContent = slideshowActive ? "❚❚" : "▶";
+}
+
+function stopSlideshow() {
+  slideshowActive = false;
+  if (slideshowTimer) {
+    clearInterval(slideshowTimer);
+    slideshowTimer = null;
+  }
+  updateSlideshowButtons();
+}
+
+async function startSlideshow(index = 0) {
+  if (!photos.length) return;
+  await openLightbox(index);
+  slideshowActive = true;
+  updateSlideshowButtons();
+  if (document.fullscreenElement == null && document.documentElement.requestFullscreen) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  }
+  if (slideshowTimer) clearInterval(slideshowTimer);
+  slideshowTimer = setInterval(() => changeLightbox(1), 3200);
+}
+
+function toggleSlideshow(index = currentIndex) {
+  if (slideshowActive) stopSlideshow();
+  else startSlideshow(index);
 }
 
 function startAttachmentDownload(url, filename) {
@@ -520,6 +585,7 @@ async function openLightbox(index) {
   $("#lightboxImage").src = photo.preview;
 
   updateLightboxUI();
+  updateSlideshowButtons();
 
   const original = await getOriginalUrl(index);
   if (currentIndex === index && original) {
@@ -538,6 +604,7 @@ function updateLightboxUI() {
   $("#lightboxFav").textContent = selected ? "♥" : "♡";
   $("#lightboxFav").classList.toggle("active", selected);
   $("#lightboxDownload").hidden = gallery.downloadsEnabled === false;
+  updateSlideshowButtons();
 
   if (photo.originalUrl) $("#lightboxDownload").href = photo.originalUrl;
 }
@@ -557,8 +624,12 @@ async function changeLightbox(delta) {
 }
 
 function closeLightbox() {
+  stopSlideshow();
   $("#lightbox").hidden = true;
   document.body.style.overflow = "";
+  if (document.fullscreenElement && document.exitFullscreen) {
+    document.exitFullscreen().catch(() => {});
+  }
 }
 
 $("#passwordForm").addEventListener("submit", async (event) => {
@@ -622,6 +693,14 @@ $("#favFilter").addEventListener("click", () => {
 
 $("#favoritesToggle").addEventListener("click", () => $("#favFilter").click());
 
+$("#slideshowBtn")?.addEventListener("click", () => {
+  const list = visiblePhotos();
+  if (!list.length) return;
+  const firstVisible = list[0];
+  const index = photos.findIndex(photo => photo.filename === firstVisible.filename);
+  toggleSlideshow(Math.max(0, index));
+});
+
 $("#shareBtn").addEventListener("click", async () => {
   try {
     if (navigator.share) {
@@ -648,6 +727,8 @@ $("#lightboxFav").addEventListener("click", async () => {
   await toggleFavorite(photo.filename);
   updateLightboxUI();
 });
+
+$("#lightboxSlideshow")?.addEventListener("click", () => toggleSlideshow(currentIndex));
 
 $("#lightboxDownload").addEventListener("click", async (event) => {
   const photo = photos[currentIndex];

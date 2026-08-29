@@ -390,3 +390,9 @@ input,select{width:100%;background:#0e0e10;border:1px solid #34343a;color:#fff;b
     gap:5px;
   }
 }
+
+
+/* ===== v13: cover, slideshow, QR, expiry ===== */
+.cover-editor{display:grid;grid-template-columns:minmax(260px,420px) 1fr;gap:16px;align-items:stretch;margin-bottom:16px;padding:16px;border:1px solid #2d2d31;border-radius:18px;background:#151518}.cover-editor-preview{min-height:210px;border-radius:16px;background:#1b1b1f center/cover no-repeat;border:1px solid #2d2d31}.cover-editor-panel{display:grid;gap:12px;align-content:start}.cover-editor-panel h3{margin:0;font-size:24px}.cover-editor-panel label{margin:0!important}.qr-wrap{display:grid;place-items:center;padding:14px 0 18px}.qr-wrap canvas{background:#fff;border-radius:18px;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,.26)}
+.photo-manager .pm-item.current-cover{outline:2px solid rgba(255,255,255,.6)}
+@media(max-width:760px){.cover-editor{grid-template-columns:1fr}.cover-editor-preview{min-height:180px}}

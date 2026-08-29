@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=12.3";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=13.0";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -16,6 +16,9 @@ let favoritesRoot = {};
 let unsubscribeGalleries = null;
 let uploadSlug = null;
 let createdSlug = null;
+let currentPhotosSlug = null;
+let qrGallerySlug = null;
+let qrInstance = null;
 
 
 function escapeHtml(value) {
@@ -51,6 +54,44 @@ function manifestKey(filename) {
 
 function galleryUrl(slug) {
   return `${location.href.replace(/admin\.html.*$/,"")}?g=${encodeURIComponent(slug)}`;
+}
+
+
+function formatDate(dateString) {
+  if (!dateString) return "";
+  const date = new Date(`${dateString}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return dateString;
+  return date.toLocaleDateString("pl-PL");
+}
+
+function todayIso() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function addDaysToIso(days) {
+  const date = new Date();
+  date.setHours(12,0,0,0);
+  date.setDate(date.getDate() + Number(days || 0));
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function daysLeft(dateString) {
+  if (!dateString) return null;
+  const target = new Date(`${dateString}T23:59:59`);
+  const now = new Date();
+  const diff = Math.ceil((target - now) / 86400000);
+  return diff;
+}
+
+function expiryBadgeText(pub) {
+  if (!pub?.expiresAt) return "bez terminu";
+  const left = daysLeft(pub.expiresAt);
+  if (left === null) return `do ${formatDate(pub.expiresAt)}`;
+  if (left < 0) return `wygasła ${formatDate(pub.expiresAt)}`;
+  if (left === 0) return `wygasa dziś`;
+  if (left === 1) return `jeszcze 1 dzień`;
+  return `jeszcze ${left} dni`;
 }
 
 function toast(message) {
@@ -257,6 +298,7 @@ function renderCards() {
           <span>${Number(pub.photoCount || 0)} zdjęć</span>
           <span>${selectedClients} klientów z wyborem</span>
           <span>${pub.maxFavorites ? `limit ${pub.maxFavorites}` : "bez limitu"}</span>
+          <span>${escapeHtml(expiryBadgeText(pub))}</span>
         </div>
 
         <div class="gallery-link">
@@ -268,6 +310,7 @@ function renderCards() {
           <button type="button" class="primary" data-upload="${slug}">+ Zdjęcia</button>
           <button type="button" class="ghost" data-manage="${slug}">Zarządzaj</button><button type="button" class="ghost" data-repair="${slug}">⚙ Napraw pobieranie</button>
           <button type="button" class="ghost" data-select="${slug}">♥ Wybory</button>
+          <button type="button" class="ghost" data-qr="${slug}">QR</button>
           <button type="button" class="ghost" data-edit="${slug}">Ustawienia</button>
           <a class="ghost" href="${galleryUrl(slug)}" target="_blank" rel="noopener">Otwórz</a>
         </div>
@@ -275,7 +318,7 @@ function renderCards() {
     `;
 
     list.appendChild(card);
-    loadCover(card.querySelector(".gallery-cover"), pub.coverFile, pub.photos);
+    loadCover(card.querySelector(".gallery-cover"), pub.coverFile, pub.photos, pub.coverPositionX, pub.coverPositionY);
   });
 
   list.querySelectorAll("[data-copy]").forEach(button => {
@@ -301,15 +344,22 @@ function renderCards() {
     button.addEventListener("click", () => openSelections(button.dataset.select))
   );
 
+  list.querySelectorAll("[data-qr]").forEach(button =>
+    button.addEventListener("click", () => openQrDialog(button.dataset.qr))
+  );
+
   list.querySelectorAll("[data-edit]").forEach(button =>
     button.addEventListener("click", () => openEdit(button.dataset.edit))
   );
 }
 
-function loadCover(element, coverFile, manifest) {
+function loadCover(element, coverFile, manifest, coverX = 50, coverY = 38) {
   if (!coverFile || !manifest) return;
   const match = Object.values(manifest).find(item => item?.filename === coverFile && item?.previewUrl);
-  if (match) element.style.backgroundImage = `url("${match.previewUrl}")`;
+  if (match) {
+    element.style.backgroundImage = `url("${match.previewUrl}")`;
+    element.style.backgroundPosition = `${coverX}% ${coverY}%`;
+  }
 }
 
 $("#gallerySearch").addEventListener("input", renderCards);
@@ -324,6 +374,7 @@ function resetForm() {
   $("#gallerySubtitleInput").value = "";
   $("#expiresAtInput").value = "";
   $("#maxFavoritesInput").value = "0";
+  $("#validDaysInput").value = "0";
   $("#downloadsEnabledInput").checked = true;
   $("#galleryActiveInput").checked = true;
   $("#deleteGalleryBtn").hidden = true;
@@ -347,6 +398,7 @@ function openEdit(slug) {
   $("#gallerySlugInput").value = slug;
   $("#gallerySlugInput").disabled = true;
   $("#gallerySubtitleInput").value = pub.subtitle || "";
+  $("#validDaysInput").value = Number(pub.validDays || 0);
   $("#expiresAtInput").value = pub.expiresAt || "";
   $("#maxFavoritesInput").value = Number(pub.maxFavorites || 0);
   $("#downloadsEnabledInput").checked = pub.downloadsEnabled !== false;
@@ -376,6 +428,7 @@ $("#galleryForm").addEventListener("submit", async (event) => {
 
     const old = galleries[slug]?.public || {};
     const enteredPassword = $("#galleryPasswordInput").value;
+    const validDays = Math.max(0, Number($("#validDaysInput").value || 0));
 
     let passwordHash = old.passwordHash || "";
     let passwordHashTrimmed = old.passwordHashTrimmed || old.passwordHash || "";
@@ -391,6 +444,9 @@ $("#galleryForm").addEventListener("submit", async (event) => {
 
     if (!passwordHash && !passwordHashTrimmed) throw new Error("Ustaw hasło klienta.");
 
+    let expiresAt = $("#expiresAtInput").value || "";
+    if (validDays > 0) expiresAt = addDaysToIso(validDays);
+
     const data = {
       ...old,
       title: $("#galleryTitleInput").value.trim() || slug,
@@ -398,13 +454,16 @@ $("#galleryForm").addEventListener("submit", async (event) => {
       passwordHash,
       passwordHashTrimmed,
       passwordVersion: 2,
-      expiresAt: $("#expiresAtInput").value || "",
+      validDays,
+      expiresAt,
       maxFavorites: Number($("#maxFavoritesInput").value || 0),
       downloadsEnabled: $("#downloadsEnabledInput").checked,
       active: $("#galleryActiveInput").checked,
       photoCount: Number(old.photoCount || 0),
       photos: old.photos || {},
       coverFile: old.coverFile || "",
+      coverPositionX: Number(old.coverPositionX ?? 50),
+      coverPositionY: Number(old.coverPositionY ?? 38),
       createdAt: old.createdAt || Date.now(),
       updatedAt: Date.now()
     };
@@ -762,11 +821,69 @@ async function repairDownloadMetadata(slug, button) {
   }
 }
 
+
+function syncCoverEditor(slug) {
+  const pub = galleries[slug]?.public || {};
+  const coverEditor = $("#coverEditor");
+  const coverPreview = $("#coverPreview");
+  if (!coverEditor || !coverPreview) return;
+
+  const match = Object.values(pub.photos || {}).find(item => item?.filename === pub.coverFile && item?.previewUrl);
+  if (!match) {
+    coverEditor.hidden = true;
+    return;
+  }
+
+  const x = Number(pub.coverPositionX ?? 50);
+  const y = Number(pub.coverPositionY ?? 38);
+
+  $("#coverPositionXInput").value = x;
+  $("#coverPositionYInput").value = y;
+  $("#coverEditorTitle").textContent = `Kadrowanie okładki — ${pub.coverFile}`;
+  coverPreview.style.backgroundImage = `url("${match.previewUrl}")`;
+  coverPreview.style.backgroundPosition = `${x}% ${y}%`;
+  coverEditor.hidden = false;
+}
+
+function previewCoverPosition() {
+  const coverPreview = $("#coverPreview");
+  if (!coverPreview) return;
+  coverPreview.style.backgroundPosition = `${$("#coverPositionXInput").value}% ${$("#coverPositionYInput").value}%`;
+}
+
+async function openQrDialog(slug) {
+  qrGallerySlug = slug;
+  const url = galleryUrl(slug);
+  $("#qrLink").value = url;
+
+  const canvas = $("#qrCanvas");
+  if (window.QRious) {
+    if (!qrInstance) {
+      qrInstance = new window.QRious({
+        element: canvas,
+        size: 280,
+        value: url,
+        level: "H",
+        foreground: "#111111",
+        background: "#ffffff"
+      });
+    } else {
+      qrInstance.value = url;
+      qrInstance.size = 280;
+    }
+  }
+
+  $("#qrDialog").showModal();
+}
+
 async function openPhotos(slug) {
+  currentPhotosSlug = slug;
   $("#photosTitle").textContent = `Zdjęcia — ${galleries[slug]?.public?.title || slug}`;
   $("#photoManagerGrid").innerHTML = "";
   $("#photoManagerLoading").hidden = false;
+  $("#coverEditor").hidden = true;
   $("#photosDialog").showModal();
+  syncCoverEditor(slug);
 
   try {
     const result = await listAll(sRef(storage, `galleries/${slug}/previews`));
@@ -780,7 +897,7 @@ async function openPhotos(slug) {
         : previewRef.name;
 
       const item = document.createElement("article");
-      item.className = "pm-item";
+      item.className = `pm-item${galleries[slug]?.public?.coverFile === originalName ? " current-cover" : ""}`;
 
       item.innerHTML = `
         <div class="pm-thumb" style="background-image:url('${previewUrl}')"></div>
@@ -794,7 +911,8 @@ async function openPhotos(slug) {
       `;
 
       item.querySelector(".cover").addEventListener("click", async () => {
-        await update(ref(db, `galleries/${slug}/public`), { coverFile: originalName });
+        await update(ref(db, `galleries/${slug}/public`), { coverFile: originalName, updatedAt: Date.now() });
+        syncCoverEditor(slug);
         toast("Ustawiono okładkę");
       });
 
@@ -825,11 +943,53 @@ async function openPhotos(slug) {
   } catch (error) {
     $("#photoManagerGrid").innerHTML = `<div class="notice error">Błąd: ${escapeHtml(error.code || error.message || error)}</div>`;
   } finally {
+    syncCoverEditor(slug);
     $("#photoManagerLoading").hidden = true;
   }
 }
 
 $("#closePhotosDialog").addEventListener("click", () => $("#photosDialog").close());
+
+$("#coverPositionXInput")?.addEventListener("input", previewCoverPosition);
+$("#coverPositionYInput")?.addEventListener("input", previewCoverPosition);
+$("#saveCoverPositionBtn")?.addEventListener("click", async () => {
+  if (!currentPhotosSlug) return;
+  const button = $("#saveCoverPositionBtn");
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = "Zapisywanie…";
+  try {
+    await update(ref(db, `galleries/${currentPhotosSlug}/public`), {
+      coverPositionX: Number($("#coverPositionXInput").value || 50),
+      coverPositionY: Number($("#coverPositionYInput").value || 38),
+      updatedAt: Date.now()
+    });
+    syncCoverEditor(currentPhotosSlug);
+    toast("Kadr okładki zapisany");
+  } catch (error) {
+    console.error("SAVE COVER POSITION ERROR", error);
+    toast(`Nie udało się zapisać kadru: ${error.code || error.message || error}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+});
+
+$("#closeQrDialog")?.addEventListener("click", () => $("#qrDialog").close());
+$("#copyQrLinkBtn")?.addEventListener("click", async () => {
+  await navigator.clipboard.writeText($("#qrLink").value);
+  toast("Link skopiowany");
+});
+$("#openQrGalleryBtn")?.addEventListener("click", () => {
+  if (qrGallerySlug) window.open(galleryUrl(qrGallerySlug), "_blank", "noopener");
+});
+$("#downloadQrBtn")?.addEventListener("click", () => {
+  const canvas = $("#qrCanvas");
+  const link = document.createElement("a");
+  link.href = canvas.toDataURL("image/png");
+  link.download = `${qrGallerySlug || "galeria"}-qr.png`;
+  link.click();
+});
 
 function downloadText(filename, content, type = "text/plain") {
   const blob = new Blob([content], { type });
