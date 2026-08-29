@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=11";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=11.1";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -34,6 +34,10 @@ async function sha256(text) {
   const data = new TextEncoder().encode(text);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function normalizePassword(value) {
+  return String(value ?? "").trim();
 }
 
 function manifestKey(filename) {
@@ -302,15 +306,26 @@ $("#galleryForm").addEventListener("submit", async (event) => {
     const enteredPassword = $("#galleryPasswordInput").value;
 
     let passwordHash = old.passwordHash || "";
-    if (enteredPassword) passwordHash = await sha256(enteredPassword);
+    let passwordHashTrimmed = old.passwordHashTrimmed || old.passwordHash || "";
 
-    if (!passwordHash) throw new Error("Ustaw hasło klienta.");
+    if (enteredPassword) {
+      const normalizedPassword = normalizePassword(enteredPassword);
+
+      if (!normalizedPassword) throw new Error("Hasło nie może składać się ze spacji.");
+
+      passwordHash = await sha256(normalizedPassword);
+      passwordHashTrimmed = passwordHash;
+    }
+
+    if (!passwordHash && !passwordHashTrimmed) throw new Error("Ustaw hasło klienta.");
 
     const data = {
       ...old,
       title: $("#galleryTitleInput").value.trim() || slug,
       subtitle: $("#gallerySubtitleInput").value.trim(),
       passwordHash,
+      passwordHashTrimmed,
+      passwordVersion: 2,
       expiresAt: $("#expiresAtInput").value || "",
       maxFavorites: Number($("#maxFavoritesInput").value || 0),
       downloadsEnabled: $("#downloadsEnabledInput").checked,

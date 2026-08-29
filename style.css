@@ -2,7 +2,11 @@
 :root{--bg:#09090a;--panel:#121214;--panel2:#18181b;--line:#2b2b31;--text:#f4f4f2;--muted:#929298;--red:#ff3b4d;--green:#aee8ba}
 html,body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 body{min-height:100dvh}button,input,select{font:inherit}button{cursor:pointer}a{text-decoration:none}
-.raf-logo{display:block;width:auto;object-fit:contain}.login-logo{height:70px;max-width:100%}.top-logo{height:38px}.sidebar-logo{height:52px}.footer-logo{height:50px;margin:auto}
+.raf-logo{display:block;height:auto!important;object-fit:contain}
+.login-logo{width:190px;max-width:62vw}
+.top-logo{width:116px;max-width:34vw}
+.sidebar-logo{width:150px;max-width:100%}
+.footer-logo{width:140px;margin:auto}
 .eyebrow{font-size:10px;letter-spacing:.2em;font-weight:800;color:#aaa;margin:0 0 10px}.muted{color:var(--muted);line-height:1.5}.error{color:#ff9b9b}
 .primary,.ghost,.danger,.seg,.lb-btn{border:0;border-radius:12px;padding:12px 15px;font-weight:750}
 .primary{background:#f5f5f2;color:#0b0b0c}.ghost{background:#18181b;color:#eee;border:1px solid #34343a}.danger{background:#3c191d;color:#ffd2d7;border:1px solid #71343b}
@@ -50,4 +54,39 @@ input,select{width:100%;background:#0e0e10;border:1px solid #34343a;color:#fff;b
   .top-actions #shareBtn,.top-actions #logoutBtn{display:none}.top-logo{height:32px}.client-hero{min-height:280px;padding-top:78px}.hero-content{padding-bottom:30px}.hero-content h1{font-size:50px}.hero-content>p:not(.eyebrow){font-size:15px}
   .photo-grid{columns:2 150px;column-gap:6px;padding:8px 6px 55px}.photo-card{margin-bottom:6px;border-radius:7px}.photo-fav{width:36px;height:36px;top:7px;right:7px}.lightbox-stage{padding:8px 4px 70px}.lb-arrow{top:auto;bottom:12px;width:44px;height:44px;border-radius:999px}
   .sidebar{display:none}.admin-main{margin-left:0;padding:24px 14px 70px}.admin-head{align-items:flex-start}.admin-head h1{font-size:42px}.stats{grid-template-columns:1fr}.toolbar{grid-template-columns:1fr}.form2,.form3{grid-template-columns:1fr}.photo-manager{grid-template-columns:repeat(2,1fr)}.selection-list{grid-template-columns:1fr}.dialog{padding:20px}.actions{flex-wrap:wrap}.actions .spacer{display:none}.actions>*{flex:1}.copy{grid-template-columns:1fr}
+}
+
+/* ===== v11.1: logo sizes are locked by width ===== */
+.lock-card .raf-logo{
+  width:190px !important;
+  height:auto !important;
+  max-width:70% !important;
+}
+.client-topbar .raf-logo{
+  width:116px !important;
+  height:auto !important;
+  max-width:32vw !important;
+}
+.sidebar .raf-logo{
+  width:150px !important;
+  height:auto !important;
+}
+.client-footer .raf-logo{
+  width:140px !important;
+  height:auto !important;
+  margin:0 auto !important;
+}
+
+/* Clear login feedback */
+.login-status{
+  font-size:13px;
+  line-height:1.45;
+  margin:3px 0 0;
+}
+.login-status.error{color:#ff9b9b}
+.login-status.ok{color:#aee8ba}
+
+@media(max-width:760px){
+  .lock-card .raf-logo{width:160px !important}
+  .client-topbar .raf-logo{width:98px !important}
 }

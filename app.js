@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=11";
+import { firebaseConfig } from "./firebase-config.js?v=11.1";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -24,6 +24,38 @@ async function sha256(text) {
   const data = new TextEncoder().encode(text);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+function normalizePassword(value) {
+  return String(value ?? "").trim();
+}
+
+async function passwordMatches(entered) {
+  if (!gallery) return false;
+
+  const raw = String(entered ?? "");
+  const trimmed = normalizePassword(raw);
+
+  // v11.1 and newer
+  const trimmedHash = await sha256(trimmed);
+  if (gallery.passwordHashTrimmed && trimmedHash === gallery.passwordHashTrimmed) return true;
+
+  // Existing galleries created by older versions.
+  if (gallery.passwordHash) {
+    if (trimmedHash === gallery.passwordHash) return true;
+
+    if (raw !== trimmed) {
+      const rawHash = await sha256(raw);
+      if (rawHash === gallery.passwordHash) return true;
+    }
+  }
+
+  // Very old compatibility only if such a field exists.
+  if (typeof gallery.password === "string") {
+    return raw === gallery.password || trimmed === gallery.password.trim();
+  }
+
+  return false;
 }
 
 function selectionKey(filename) {
@@ -111,12 +143,23 @@ function applyGalleryMeta() {
 }
 
 async function openGallery() {
+  // Open immediately after password validation.
   $("#lockScreen").hidden = true;
   $("#galleryView").hidden = false;
   $("#loading").hidden = false;
 
-  await loadFavorites();
   loadManifest();
+
+  // Favorites are secondary. A permissions/network problem here
+  // must NEVER make correct password look broken.
+  loadFavorites()
+    .then(() => {
+      render();
+      updateUI();
+    })
+    .catch(error => {
+      console.error("BACKGROUND FAVORITES ERROR", error);
+    });
 }
 
 async function loadFavorites() {
@@ -131,7 +174,7 @@ async function loadFavorites() {
     }
   } catch (error) {
     console.error("LOAD FAVORITES ERROR", error);
-    toast(`Nie udało się odczytać wyborów: ${error.code || error.message}`);
+    // Gallery remains usable even if favorites cannot be read.
   }
 }
 
@@ -345,20 +388,45 @@ function closeLightbox() {
 $("#passwordForm").addEventListener("submit", async (event) => {
   event.preventDefault();
 
+  const input = $("#passwordInput");
+  const errorEl = $("#passwordError");
+  const submitButton = $("#passwordForm").querySelector('button[type="submit"]');
+
+  errorEl.hidden = true;
+  submitButton.disabled = true;
+  submitButton.textContent = "Sprawdzanie…";
+
   try {
-    const enteredHash = await sha256($("#passwordInput").value);
-    const ok = enteredHash === gallery.passwordHash;
+    if (!gallery) {
+      throw new Error("Dane galerii nie zostały jeszcze wczytane. Odśwież stronę.");
+    }
 
-    $("#passwordError").hidden = ok;
+    const entered = input.value;
 
-    if (!ok) return;
+    if (!normalizePassword(entered)) {
+      errorEl.textContent = "Wpisz hasło.";
+      errorEl.hidden = false;
+      return;
+    }
+
+    const ok = await passwordMatches(entered);
+
+    if (!ok) {
+      errorEl.textContent = "Nieprawidłowe hasło.";
+      errorEl.hidden = false;
+      input.select();
+      return;
+    }
 
     sessionStorage.setItem(`raf-access-${slug}`, "1");
     await openGallery();
   } catch (error) {
     console.error("LOGIN ERROR", error);
-    $("#passwordError").textContent = `Błąd logowania: ${error.message || error}`;
-    $("#passwordError").hidden = false;
+    errorEl.textContent = `Błąd logowania: ${error.code || error.message || error}`;
+    errorEl.hidden = false;
+  } finally {
+    submitButton.disabled = false;
+    submitButton.textContent = "Otwórz galerię";
   }
 });
 
