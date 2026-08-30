@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, onValue, push } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=16.2.2.2.2.1";
+import { firebaseConfig } from "./firebase-config.js?v=16.2.3.2.2.1";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -833,16 +833,19 @@ function renderHeroMedia() {
 
   if (layout === "none") {
     media.hidden = true;
+    hero.style.setProperty("--hero-ambient-image", "none");
     return;
   }
 
   const heroPhotos = getHeroPhotos();
   if (!heroPhotos.length) {
     media.hidden = true;
+    hero.style.setProperty("--hero-ambient-image", "none");
     return;
   }
 
   media.hidden = false;
+  hero.style.setProperty("--hero-ambient-image", `url("${heroPhotos[0].preview}")`);
 
   heroPhotos.forEach((photo, index) => {
     const tile = document.createElement("div");

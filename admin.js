@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata, getMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=16.2.2.2.2.1";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=16.2.3.2.2.1";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -2798,6 +2798,18 @@ function uiFieldValue(id, value) {
   else el.value = value ?? "";
 }
 
+function syncHeroRangesFromNumbers() {
+  document.querySelectorAll(".hero-range[data-sync-number]").forEach(range => {
+    const number = document.getElementById(range.dataset.syncNumber);
+    if (!number) return;
+    const min = Number(range.min || number.min || 0);
+    const max = Number(range.max || number.max || 100);
+    const raw = Number(number.value);
+    const value = Number.isFinite(raw) ? Math.min(max, Math.max(min, raw)) : Number(range.value);
+    range.value = String(value);
+  });
+}
+
 function fillSiteSettings(config) {
   uiFieldValue("uiHeroLayout", config.heroLayout);
   uiFieldValue("uiHeroFit", config.heroFit);
@@ -2842,6 +2854,7 @@ function fillSiteSettings(config) {
   uiFieldValue("uiLabelShare", config.labels.share);
   uiFieldValue("uiLabelExit", config.labels.exit);
   uiFieldValue("uiLabelDownloadFavorites", config.labels.downloadFavorites);
+  syncHeroRangesFromNumbers();
   updateSitePreview();
 }
 
@@ -2961,23 +2974,41 @@ function heroPreviewPhotoMap() {
 }
 
 function updateHeroDesignerPreview() {
+  const viewport = $("#heroPreviewViewport");
   const preview = $("#heroDevicePreview");
   const media = $("#heroPreviewMedia");
   const shade = $("#heroPreviewShade");
-  if (!preview || !media || !shade) return;
+  if (!viewport || !preview || !media || !shade) return;
 
   const config = readSiteSettings();
   const files = selectedHeroBackgroundFiles();
   const urls = heroPreviewPhotoMap();
   const needed = heroLayoutCount(config.heroLayout);
 
+  // The preview is rendered as a REAL virtual HERO canvas and only then scaled down.
+  // This keeps cover/contain cropping, gaps, radiuses and proportions identical.
+  const virtualWidth = heroPreviewDevice === "mobile"
+    ? Math.min(390, config.heroMaxWidth)
+    : heroPreviewDevice === "tablet"
+      ? Math.min(900, config.heroMaxWidth)
+      : config.heroMaxWidth;
+
+  const virtualHeight = heroPreviewDevice === "mobile"
+    ? config.heroHeightMobile
+    : heroPreviewDevice === "tablet"
+      ? config.heroHeightTablet
+      : config.heroHeightDesktop;
+
   preview.classList.remove("device-desktop","device-tablet","device-mobile");
   preview.classList.add(`device-${heroPreviewDevice}`);
+  preview.style.width = `${virtualWidth}px`;
+  preview.style.height = `${virtualHeight}px`;
+  preview.style.aspectRatio = "auto";
   preview.style.setProperty("--hero-preview-bg", config.heroBgColor);
-  preview.style.setProperty("--hero-preview-gap", `${Math.min(12, config.heroTileGap)}px`);
+  preview.style.setProperty("--hero-preview-gap", `${config.heroTileGap}px`);
   preview.style.setProperty("--hero-preview-radius", `${config.heroTileRadius}px`);
   preview.style.setProperty("--hero-preview-fit", config.heroFit);
-  shade.style.opacity = String(config.heroOverlay / 100);
+  preview.style.setProperty("--hero-preview-overlay", `${config.heroOverlay / 100}`);
 
   media.className = `hero-preview-media hero-preview-layout-${config.heroLayout}`;
   media.innerHTML = "";
@@ -2989,14 +3020,43 @@ function updateHeroDesignerPreview() {
       const tile = document.createElement("div");
       tile.className = `hero-preview-tile hero-preview-tile-${index + 1}`;
       tile.style.backgroundImage = `url("${url}")`;
+      if (index === 0) {
+        const pub = galleries[siteSettingsSlug]?.public || {};
+        tile.style.backgroundPosition = `${Number(pub.coverPositionX ?? 50)}% ${Number(pub.coverPositionY ?? 38)}%`;
+      }
       media.appendChild(tile);
     });
   }
 
-  $("#heroPreviewTitle").textContent = galleries[siteSettingsSlug]?.public?.title || "Nazwa galerii";
-  $("#heroPreviewSubtitle").textContent = galleries[siteSettingsSlug]?.public?.subtitle || "Opis galerii klienta";
-}
+  const title = $("#heroPreviewTitle");
+  const subtitle = $("#heroPreviewSubtitle");
+  title.textContent = galleries[siteSettingsSlug]?.public?.title || "Nazwa galerii";
+  subtitle.textContent = galleries[siteSettingsSlug]?.public?.subtitle || "Opis galerii klienta";
 
+  const copy = preview.querySelector(".hero-preview-copy");
+  if (copy) {
+    copy.style.left = `${Math.max(18, virtualWidth * 0.05)}px`;
+    copy.style.bottom = `${Math.max(22, virtualHeight * 0.12)}px`;
+    copy.style.maxWidth = `${Math.max(220, virtualWidth * 0.70)}px`;
+  }
+  title.style.fontSize = `${Math.min(82, Math.max(48, virtualWidth * 0.06))}px`;
+  subtitle.style.fontSize = `${heroPreviewDevice === "mobile" ? 15 : 18}px`;
+
+  const fitToViewport = () => {
+    const availableWidth = viewport.clientWidth || 360;
+    const maxDisplayHeight = heroPreviewDevice === "mobile" ? 430 : heroPreviewDevice === "tablet" ? 330 : 270;
+    const scale = Math.min(1, availableWidth / virtualWidth, maxDisplayHeight / virtualHeight);
+    const shownWidth = virtualWidth * scale;
+    const shownHeight = virtualHeight * scale;
+    const offsetX = Math.max(0, (availableWidth - shownWidth) / 2);
+
+    preview.style.transformOrigin = "top left";
+    preview.style.transform = `translateX(${offsetX}px) scale(${scale})`;
+    viewport.style.height = `${Math.ceil(shownHeight)}px`;
+  };
+
+  requestAnimationFrame(fitToViewport);
+}
 function updateSitePreview() {
   const config = readSiteSettings();
   const preview = $("#uiPreviewGrid");
@@ -3066,6 +3126,36 @@ const siteEditorIds = [
 siteEditorIds.forEach(id => {
   document.getElementById(id)?.addEventListener("input", updateSitePreview);
   document.getElementById(id)?.addEventListener("change", updateSitePreview);
+});
+
+
+document.querySelectorAll(".hero-range[data-sync-number]").forEach(range => {
+  const number = document.getElementById(range.dataset.syncNumber);
+  if (!number) return;
+
+  range.addEventListener("input", () => {
+    number.value = range.value;
+    updateSitePreview();
+  });
+
+  number.addEventListener("input", () => {
+    const raw = Number(number.value);
+    if (!Number.isFinite(raw)) return;
+    const min = Number(range.min || number.min || raw);
+    const max = Number(range.max || number.max || raw);
+    range.value = String(Math.min(max, Math.max(min, raw)));
+  });
+
+  number.addEventListener("change", () => {
+    const min = Number(range.min || number.min || 0);
+    const max = Number(range.max || number.max || 100);
+    let value = Number(number.value);
+    if (!Number.isFinite(value)) value = Number(range.value);
+    value = Math.min(max, Math.max(min, value));
+    number.value = String(value);
+    range.value = String(value);
+    updateSitePreview();
+  });
 });
 
 

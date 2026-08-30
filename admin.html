@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
   <title>RAF.studio — Studio Manager</title>
-  <link rel="stylesheet" href="style.css?v=16.2.2.2">
+  <link rel="stylesheet" href="style.css?v=16.2.3.2">
 </head>
 <body class="admin-body">
 
 <section id="adminLogin" class="lock-screen">
   <div class="lock-card">
-    <img class="raf-logo login-logo" src="logo-white.png?v=16.2.2.2" alt="RAF.studio">
+    <img class="raf-logo login-logo" src="logo-white.png?v=16.2.3.2" alt="RAF.studio">
     <p id="adminLoginEyebrow" class="eyebrow">STUDIO MANAGER</p>
     <h1 id="adminLoginTitle">Panel fotografa</h1>
     <p id="adminLoginSubtitle" class="muted">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
@@ -40,7 +40,7 @@
 <main id="adminPanel" hidden>
   <aside class="sidebar">
     <div>
-      <img class="raf-logo sidebar-logo" src="logo-white.png?v=16.2.2.2" alt="RAF.studio">
+      <img class="raf-logo sidebar-logo" src="logo-white.png?v=16.2.3.2" alt="RAF.studio">
       <small>Studio Manager</small>
     </div>
     <div class="side-bottom">
@@ -423,6 +423,7 @@
 
               <label>Maks. szerokość HERO (px)
                 <input id="uiHeroMaxWidth" type="number" min="800" max="2400" step="20" value="1600">
+                <input class="hero-range" type="range" min="800" max="2400" step="20" value="1600" data-sync-number="uiHeroMaxWidth" aria-label="Maksymalna szerokość HERO">
               </label>
             </div>
 
@@ -444,24 +445,30 @@
             <div class="form3">
               <label>Wysokość — komputer (px)
                 <input id="uiHeroHeightDesktop" type="number" min="200" max="700" value="360">
+                <input class="hero-range" type="range" min="200" max="700" step="1" value="360" data-sync-number="uiHeroHeightDesktop" aria-label="Wysokość komputer">
               </label>
               <label>Wysokość — tablet (px)
                 <input id="uiHeroHeightTablet" type="number" min="180" max="600" value="320">
+                <input class="hero-range" type="range" min="180" max="600" step="1" value="320" data-sync-number="uiHeroHeightTablet" aria-label="Wysokość tablet">
               </label>
               <label>Wysokość — telefon (px)
                 <input id="uiHeroHeightMobile" type="number" min="180" max="520" value="300">
+                <input class="hero-range" type="range" min="180" max="520" step="1" value="300" data-sync-number="uiHeroHeightMobile" aria-label="Wysokość telefon">
               </label>
             </div>
 
             <div class="form3">
               <label>Odstęp kafli (px)
                 <input id="uiHeroTileGap" type="number" min="0" max="24" value="6">
+                <input class="hero-range" type="range" min="0" max="24" step="1" value="6" data-sync-number="uiHeroTileGap" aria-label="Odstęp kafli">
               </label>
               <label>Zaokrąglenie kafli (px)
                 <input id="uiHeroTileRadius" type="number" min="0" max="30" value="10">
+                <input class="hero-range" type="range" min="0" max="30" step="1" value="10" data-sync-number="uiHeroTileRadius" aria-label="Zaokrąglenie kafli">
               </label>
               <label>Przyciemnienie pod tekstem (%)
                 <input id="uiHeroOverlay" type="number" min="0" max="85" value="46">
+                <input class="hero-range" type="range" min="0" max="85" step="1" value="46" data-sync-number="uiHeroOverlay" aria-label="Przyciemnienie tła">
               </label>
               <label>Kolor tła
                 <input id="uiHeroBgColor" class="color-field" type="color" value="#09090a">
@@ -476,13 +483,15 @@
               <button type="button" class="ghost" data-hero-device="mobile">▯ Telefon</button>
             </div>
 
-            <div id="heroDevicePreview" class="hero-device-preview device-desktop">
-              <div id="heroPreviewMedia" class="hero-preview-media hero-preview-layout-trio"></div>
-              <div id="heroPreviewShade" class="hero-preview-shade"></div>
-              <div class="hero-preview-copy">
+            <div id="heroPreviewViewport" class="hero-preview-viewport">
+              <div id="heroDevicePreview" class="hero-device-preview device-desktop">
+                <div id="heroPreviewMedia" class="hero-preview-media hero-preview-layout-trio"></div>
+                <div id="heroPreviewShade" class="hero-preview-shade"></div>
+                <div class="hero-preview-copy">
                 <small>RAF.STUDIO • GALERIA KLIENTA</small>
                 <strong id="heroPreviewTitle">Nazwa galerii</strong>
                 <span id="heroPreviewSubtitle">Opis galerii klienta</span>
+              </div>
               </div>
             </div>
 
@@ -803,7 +812,7 @@
       <p class="eyebrow">PODGLĄD NA ŻYWO</p>
       <div id="loginPreviewScreen" class="login-preview-screen">
         <div id="loginPreviewCard" class="login-preview-card">
-          <img id="loginPreviewLogo" src="logo-white.png?v=16.2.2.2" alt="">
+          <img id="loginPreviewLogo" src="logo-white.png?v=16.2.3.2" alt="">
           <div id="loginPreviewEyebrow" class="login-preview-eyebrow">STUDIO MANAGER</div>
           <h3 id="loginPreviewTitle">Panel fotografa</h3>
           <p id="loginPreviewSubtitle">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
@@ -942,7 +951,7 @@
       <p class="eyebrow">PODGLĄD NA ŻYWO</p>
       <div id="clientLoginPreviewScreen" class="login-preview-screen">
         <div id="clientLoginPreviewCard" class="login-preview-card">
-          <img id="clientLoginPreviewLogo" src="logo-white.png?v=16.2.2.2" alt="">
+          <img id="clientLoginPreviewLogo" src="logo-white.png?v=16.2.3.2" alt="">
           <div id="clientLoginPreviewEyebrow" class="login-preview-eyebrow">PRYWATNA GALERIA</div>
           <h3 id="clientLoginPreviewTitle">M&K2026</h3>
           <p id="clientLoginPreviewInstruction">Wpisz hasło otrzymane od fotografa.</p>
@@ -1090,6 +1099,6 @@
 <div id="toast" class="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
-<script type="module" src="admin.js?v=16.2.2.2"></script>
+<script type="module" src="admin.js?v=16.2.3.2"></script>
 </body>
 </html>
