@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=14.1";
+import { firebaseConfig } from "./firebase-config.js?v=14.2";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -321,15 +321,45 @@ async function openGallery() {
 }
 
 
+function normalizedSharedFavorites(raw) {
+  const currentByExact = new Map(photos.map(photo => [String(photo.filename), photo.filename]));
+  const currentByBase = new Map(photos.map(photo => [displayName(photo.filename).toLowerCase(), photo.filename]));
+  const normalized = new Map();
+
+  Object.values(raw || {}).forEach(item => {
+    if (!item?.filename) return;
+
+    const canonical = currentByExact.get(String(item.filename)) ||
+      currentByBase.get(displayName(item.filename).toLowerCase());
+
+    if (!canonical) return; // old/deleted photo: do not count it
+
+    const key = displayName(canonical).toLowerCase();
+    const candidate = { ...item, filename: canonical };
+    const existing = normalized.get(key);
+
+    if (!existing || Number(candidate.selectedAt || 0) < Number(existing.selectedAt || 0)) {
+      normalized.set(key, candidate);
+    }
+  });
+
+  let items = [...normalized.values()].sort((a, b) => {
+    const timeDiff = Number(a.selectedAt || 0) - Number(b.selectedAt || 0);
+    if (timeDiff) return timeDiff;
+    return displayName(a.filename).localeCompare(displayName(b.filename), undefined, { numeric: true });
+  });
+
+  const max = maxFavorites();
+  const hardLimit = max > 0 ? Math.min(max, photos.length) : photos.length;
+  items = items.slice(0, hardLimit);
+
+  return new Map(items.map(item => [item.filename, item]));
+}
+
 async function loadFavorites() {
   try {
     const snap = await get(ref(db, `favorites/${slug}/shared`));
-    favorites.clear();
-    if (snap.exists()) {
-      Object.values(snap.val() || {}).forEach(item => {
-        if (item?.filename) favorites.set(item.filename, item);
-      });
-    }
+    favorites = normalizedSharedFavorites(snap.exists() ? snap.val() : {});
   } catch (error) {
     console.error("LOAD FAVORITES ERROR", error);
   }
@@ -340,12 +370,7 @@ function watchFavorites() {
   unsubscribeFavorites = onValue(
     ref(db, `favorites/${slug}/shared`),
     (snapshot) => {
-      favorites.clear();
-      if (snapshot.exists()) {
-        Object.values(snapshot.val() || {}).forEach(item => {
-          if (item?.filename) favorites.set(item.filename, item);
-        });
-      }
+      favorites = normalizedSharedFavorites(snapshot.exists() ? snapshot.val() : {});
       if (galleryLoaded) {
         render();
         updateUI();

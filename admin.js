@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=14.1";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=14.2";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -119,29 +119,49 @@ function showNotice(element, message, type = "ok") {
 
 function mergedSelectionForSlug(slug) {
   const galleryFavorites = favoritesRoot?.[slug] || {};
-  const manifest = Object.values(galleries[slug]?.public?.photos || {});
+  const pub = galleries[slug]?.public || {};
+  const manifest = Object.values(pub.photos || {}).filter(item => item?.filename);
+  const max = Number(pub.maxFavorites || 0);
+
+  const byExact = new Map(manifest.map(item => [String(item.filename), item.filename]));
+  const byBase = new Map(manifest.map(item => [displayName(item.filename).toLowerCase(), item.filename]));
   const merged = new Map();
 
   const canonicalFilename = (filename) => {
-    const exact = manifest.find(item => item?.filename === filename);
-    if (exact?.filename) return exact.filename;
-    const base = displayName(filename).toLowerCase();
-    const byBase = manifest.find(item => displayName(item?.filename).toLowerCase() === base);
-    return byBase?.filename || filename;
+    if (!filename) return null;
+    if (byExact.has(String(filename))) return byExact.get(String(filename));
+    return byBase.get(displayName(filename).toLowerCase()) || null;
   };
 
+  // Prefer the new shared branch, but legacy branches may still exist until cleanup.
   Object.values(galleryFavorites).forEach(selection => {
     Object.values(selection || {}).forEach(item => {
       if (!item?.filename) return;
       const filename = canonicalFilename(item.filename);
+      if (!filename) return; // ignore deleted/old files that are no longer in this gallery
+
       const key = displayName(filename).toLowerCase();
-      merged.set(key, { ...item, filename });
+      const existing = merged.get(key);
+      const candidate = { ...item, filename };
+
+      // Keep the earliest real selection when duplicates exist.
+      if (!existing || Number(candidate.selectedAt || 0) < Number(existing.selectedAt || 0)) {
+        merged.set(key, candidate);
+      }
     });
   });
 
-  return [...merged.values()].sort((a, b) =>
-    displayName(a.filename).localeCompare(displayName(b.filename), undefined, { numeric: true })
-  );
+  let items = [...merged.values()].sort((a, b) => {
+    const timeDiff = Number(a.selectedAt || 0) - Number(b.selectedAt || 0);
+    if (timeDiff) return timeDiff;
+    return displayName(a.filename).localeCompare(displayName(b.filename), undefined, { numeric: true });
+  });
+
+  // A selection can never exceed the number of current photos or the gallery limit.
+  const hardLimit = max > 0 ? Math.min(max, manifest.length) : manifest.length;
+  if (hardLimit >= 0) items = items.slice(0, hardLimit);
+
+  return items;
 }
 
 function selectionCountForSlug(slug) {
@@ -1119,22 +1139,30 @@ async function getAdminPhotoDownloadUrl(slug, filename) {
 }
 
 async function migrateLegacyFavoritesToShared(slug) {
-  const merged = mergedSelectionForSlug(slug);
-  if (!merged.length) return merged;
-  const shared = favoritesRoot?.[slug]?.shared || {};
-  const sharedNames = new Set(Object.values(shared).map(item => item?.filename).filter(Boolean));
-  const missing = merged.filter(item => !sharedNames.has(item.filename));
-  if (!missing.length) return merged;
-  const updates = {};
-  for (const item of missing) {
-    updates[`favorites/${slug}/shared/${manifestKey(item.filename)}`] = {
+  const items = mergedSelectionForSlug(slug);
+  const pub = galleries[slug]?.public || {};
+
+  const cleanShared = {};
+  items.forEach(item => {
+    cleanShared[manifestKey(item.filename)] = {
       filename: item.filename,
-      selectedAt: item.selectedAt || Date.now()
+      selectedAt: Number(item.selectedAt || Date.now())
     };
+  });
+
+  try {
+    // Replace the whole favorites tree for this gallery with one clean shared selection.
+    // This removes old anonymous client IDs, deleted filenames and anything above the limit.
+    await set(ref(db, `favorites/${slug}`), { shared: cleanShared });
+    await update(ref(db, `galleries/${slug}/public`), {
+      selectionMigrationVersion: 3,
+      updatedAt: Date.now()
+    });
+  } catch (error) {
+    console.warn("FAVORITES CLEANUP ERROR", error);
   }
-  try { await update(ref(db), updates); }
-  catch (error) { console.warn("LEGACY FAVORITES MIGRATION ERROR", error); }
-  return merged;
+
+  return items;
 }
 
 async function downloadAdminSelected(slug, items, button) {
