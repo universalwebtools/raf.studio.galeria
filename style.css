@@ -802,3 +802,196 @@ input,select{width:100%;background:#0e0e10;border:1px solid #34343a;color:#fff;b
   .storage-ranking-head{flex-direction:column}
   .storage-rank-meta .storage-free{flex-basis:100%}
 }
+
+
+/* ===== v15.3: Admin Login Editor + hard-centered logo ===== */
+
+/* Admin login receives its own variables so gallery login/intro are unaffected. */
+#adminLogin.lock-screen{
+  background:
+    radial-gradient(
+      circle at 50% 10%,
+      var(--admin-login-bg-top,#29292e),
+      var(--admin-login-bg-middle,#111113) 37%,
+      var(--admin-login-bg-bottom,#09090a) 72%
+    );
+  color:var(--admin-login-text,#f4f4f2);
+}
+
+#adminLogin .lock-card{
+  width:min(var(--admin-login-card-width,460px),100%);
+  padding:var(--admin-login-card-padding,42px);
+  border:1px solid var(--admin-login-card-border,#2e2e33);
+  border-radius:var(--admin-login-card-radius,26px);
+  background:var(--admin-login-card-bg,#111113);
+  text-align:center;
+}
+
+/* THIS is the hard fix: the logo can no longer sit on the left. */
+#adminLogin .lock-card .raf-logo.login-logo{
+  display:block !important;
+  margin:0 auto 24px !important;
+  height:auto !important;
+  object-fit:contain !important;
+}
+
+#adminLogin .lock-card h1{
+  font-size:var(--admin-login-title-size,44px);
+  color:var(--admin-login-text,#f4f4f2);
+  text-align:center;
+}
+
+#adminLogin .lock-card > .eyebrow{
+  color:var(--admin-login-accent,#aaa);
+  text-align:center;
+}
+
+#adminLogin .lock-card > .muted{
+  color:var(--admin-login-muted,#929298);
+  text-align:center;
+}
+
+#adminLogin .lock-card form{
+  gap:var(--admin-login-form-gap,12px);
+}
+
+#adminLogin .lock-card input{
+  background:var(--admin-login-input-bg,#0e0e10);
+  border-color:var(--admin-login-input-border,#34343a);
+}
+
+#adminLogin .lock-card #adminLoginSubmit{
+  background:var(--admin-login-button-bg,#f5f5f2);
+  color:var(--admin-login-button-text,#0b0b0c);
+}
+
+#adminLogin .login-options{
+  color:var(--admin-login-muted,#929298);
+}
+
+.admin-head-actions{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+
+.login-editor-dialog{
+  width:min(1320px,calc(100% - 20px)) !important;
+}
+
+.login-editor-layout{
+  display:grid;
+  grid-template-columns:minmax(0,1.32fr) minmax(330px,.68fr);
+  gap:18px;
+  margin-top:16px;
+}
+
+.login-editor-controls{
+  display:grid;
+  gap:14px;
+}
+
+.login-live-preview{
+  position:sticky;
+  top:0;
+  align-self:start;
+  border:1px solid #2d2d31;
+  border-radius:20px;
+  background:#0d0d0f;
+  padding:16px;
+}
+
+.login-preview-screen{
+  min-height:610px;
+  display:grid;
+  place-items:center;
+  padding:20px;
+  border:1px solid #2b2b30;
+  border-radius:16px;
+  overflow:hidden;
+}
+
+.login-preview-card{
+  max-width:100%;
+  border:1px solid #2e2e33;
+  box-shadow:0 26px 80px rgba(0,0,0,.45);
+  text-align:center;
+}
+
+.login-preview-card img{
+  display:block;
+  height:auto;
+  max-width:80%;
+  margin:0 auto 20px;
+  object-fit:contain;
+}
+
+.login-preview-eyebrow{
+  margin-bottom:9px;
+  font-size:9px;
+  letter-spacing:.2em;
+  font-weight:800;
+}
+
+.login-preview-card h3{
+  margin:0 0 8px;
+  letter-spacing:-.05em;
+  line-height:1;
+}
+
+.login-preview-card > p{
+  margin:0 0 20px;
+  font-size:12px;
+  line-height:1.5;
+}
+
+.login-preview-form{
+  display:grid;
+  gap:12px;
+}
+
+.login-preview-input{
+  padding:12px 13px;
+  border:1px solid;
+  border-radius:10px;
+  text-align:left;
+  font-size:11px;
+}
+
+.login-preview-options{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  font-size:9px;
+  text-align:left;
+}
+
+.login-preview-button{
+  padding:12px 13px;
+  border-radius:10px;
+  font-weight:800;
+  font-size:11px;
+}
+
+.login-preview-tip{
+  margin-bottom:0;
+  font-size:10px;
+}
+
+@media(max-width:950px){
+  .login-editor-layout{grid-template-columns:1fr}
+  .login-live-preview{position:static}
+}
+
+@media(max-width:760px){
+  .admin-head-actions{
+    width:100%;
+    justify-content:stretch;
+  }
+  .admin-head-actions button{flex:1}
+  .login-preview-screen{min-height:500px;padding:12px}
+}
+

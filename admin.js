@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata, getMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=15.2";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=15.3";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -25,6 +25,50 @@ let storageMonitorData = null;
 let storageScanInProgress = false;
 let storageAutoScanStarted = false;
 const STORAGE_LIMIT_KEY = "raf-storage-monitor-limit-gb";
+
+const ADMIN_LOGIN_CONFIG_PATH = "galleries/__system__/public/adminLoginConfig";
+
+const DEFAULT_ADMIN_LOGIN_CONFIG = {
+  eyebrow: "STUDIO MANAGER",
+  title: "Panel fotografa",
+  subtitle: "Zarządzaj galeriami, zdjęciami i wyborami klientów.",
+  buttonLabel: "Zaloguj",
+  emailPlaceholder: "E-mail",
+  passwordPlaceholder: "Hasło",
+  rememberLabel: "Zapamiętaj dane na tym urządzeniu",
+  showPasswordLabel: "Pokaż hasło",
+  hidePasswordLabel: "Ukryj hasło",
+
+  logoWidth: 190,
+  cardWidth: 460,
+  cardRadius: 26,
+  cardPadding: 42,
+  titleSize: 44,
+  formGap: 12,
+
+  bgTop: "#29292e",
+  bgMiddle: "#111113",
+  bgBottom: "#09090a",
+  cardBg: "#111113",
+  cardBorder: "#2e2e33",
+  textColor: "#f4f4f2",
+  mutedColor: "#929298",
+  buttonBg: "#f5f5f2",
+  buttonText: "#0b0b0c",
+  inputBg: "#0e0e10",
+  inputBorder: "#34343a",
+  accentColor: "#aaaaaa",
+
+  showLogo: true,
+  showEyebrow: true,
+  showSubtitle: true,
+  showRemember: true,
+  showPasswordToggle: true
+};
+
+let adminLoginConfig = { ...DEFAULT_ADMIN_LOGIN_CONFIG };
+let adminLoginConfigLoaded = false;
+
 
 
 
@@ -136,6 +180,326 @@ function clampValue(value, min, max, fallback) {
   return Math.min(max, Math.max(min, number));
 }
 
+
+
+
+function isSystemGallerySlug(slug) {
+  return String(slug || "").startsWith("__system__");
+}
+
+function normalizeAdminLoginConfig(raw) {
+  const stored = raw || {};
+  return {
+    ...DEFAULT_ADMIN_LOGIN_CONFIG,
+    ...stored,
+
+    logoWidth: clampValue(stored.logoWidth, 90, 360, DEFAULT_ADMIN_LOGIN_CONFIG.logoWidth),
+    cardWidth: clampValue(stored.cardWidth, 300, 720, DEFAULT_ADMIN_LOGIN_CONFIG.cardWidth),
+    cardRadius: clampValue(stored.cardRadius, 0, 60, DEFAULT_ADMIN_LOGIN_CONFIG.cardRadius),
+    cardPadding: clampValue(stored.cardPadding, 18, 80, DEFAULT_ADMIN_LOGIN_CONFIG.cardPadding),
+    titleSize: clampValue(stored.titleSize, 28, 72, DEFAULT_ADMIN_LOGIN_CONFIG.titleSize),
+    formGap: clampValue(stored.formGap, 6, 28, DEFAULT_ADMIN_LOGIN_CONFIG.formGap),
+
+    showLogo: stored.showLogo !== false,
+    showEyebrow: stored.showEyebrow !== false,
+    showSubtitle: stored.showSubtitle !== false,
+    showRemember: stored.showRemember !== false,
+    showPasswordToggle: stored.showPasswordToggle !== false
+  };
+}
+
+function applyAdminLoginConfig(config = adminLoginConfig) {
+  adminLoginConfig = normalizeAdminLoginConfig(config);
+
+  const screen = $("#adminLogin");
+  const card = $("#adminLogin .lock-card");
+  const logo = $("#adminLogin .login-logo");
+  const eyebrow = $("#adminLoginEyebrow");
+  const title = $("#adminLoginTitle");
+  const subtitle = $("#adminLoginSubtitle");
+  const email = $("#adminEmail");
+  const password = $("#adminPassword");
+  const remember = $("#rememberAdminLogin")?.closest(".remember-login");
+  const rememberText = $("#rememberAdminLoginText");
+  const toggle = $("#toggleAdminPassword");
+  const submit = $("#adminLoginSubmit");
+
+  if (screen) {
+    screen.style.setProperty("--admin-login-bg-top", adminLoginConfig.bgTop);
+    screen.style.setProperty("--admin-login-bg-middle", adminLoginConfig.bgMiddle);
+    screen.style.setProperty("--admin-login-bg-bottom", adminLoginConfig.bgBottom);
+    screen.style.setProperty("--admin-login-text", adminLoginConfig.textColor);
+    screen.style.setProperty("--admin-login-muted", adminLoginConfig.mutedColor);
+    screen.style.setProperty("--admin-login-accent", adminLoginConfig.accentColor);
+  }
+
+  if (card) {
+    card.style.setProperty("--admin-login-card-width", `${adminLoginConfig.cardWidth}px`);
+    card.style.setProperty("--admin-login-card-radius", `${adminLoginConfig.cardRadius}px`);
+    card.style.setProperty("--admin-login-card-padding", `${adminLoginConfig.cardPadding}px`);
+    card.style.setProperty("--admin-login-card-bg", adminLoginConfig.cardBg);
+    card.style.setProperty("--admin-login-card-border", adminLoginConfig.cardBorder);
+    card.style.setProperty("--admin-login-title-size", `${adminLoginConfig.titleSize}px`);
+    card.style.setProperty("--admin-login-form-gap", `${adminLoginConfig.formGap}px`);
+    card.style.setProperty("--admin-login-button-bg", adminLoginConfig.buttonBg);
+    card.style.setProperty("--admin-login-button-text", adminLoginConfig.buttonText);
+    card.style.setProperty("--admin-login-input-bg", adminLoginConfig.inputBg);
+    card.style.setProperty("--admin-login-input-border", adminLoginConfig.inputBorder);
+  }
+
+  if (logo) {
+    logo.style.width = `${adminLoginConfig.logoWidth}px`;
+    logo.style.maxWidth = "82%";
+    logo.hidden = !adminLoginConfig.showLogo;
+  }
+
+  if (eyebrow) {
+    eyebrow.textContent = adminLoginConfig.eyebrow || "";
+    eyebrow.hidden = !adminLoginConfig.showEyebrow;
+  }
+
+  if (title) title.textContent = adminLoginConfig.title || "Panel fotografa";
+
+  if (subtitle) {
+    subtitle.textContent = adminLoginConfig.subtitle || "";
+    subtitle.hidden = !adminLoginConfig.showSubtitle;
+  }
+
+  if (email) email.placeholder = adminLoginConfig.emailPlaceholder || "E-mail";
+  if (password) password.placeholder = adminLoginConfig.passwordPlaceholder || "Hasło";
+
+  if (rememberText) rememberText.textContent = adminLoginConfig.rememberLabel || "Zapamiętaj dane na tym urządzeniu";
+  if (remember) remember.hidden = !adminLoginConfig.showRemember;
+
+  if (toggle) {
+    const isVisible = adminLoginConfig.showPasswordToggle;
+    toggle.hidden = !isVisible;
+    if (isVisible) {
+      toggle.textContent = password?.type === "text"
+        ? (adminLoginConfig.hidePasswordLabel || "Ukryj hasło")
+        : (adminLoginConfig.showPasswordLabel || "Pokaż hasło");
+    }
+  }
+
+  if (submit) {
+    submit.textContent = adminLoginConfig.buttonLabel || "Zaloguj";
+  }
+}
+
+async function ensureAnonymousForLoginConfig() {
+  if (auth.currentUser) return auth.currentUser;
+
+  try {
+    const credential = await signInAnonymously(auth);
+    return credential.user;
+  } catch (error) {
+    console.warn("ANONYMOUS LOGIN CONFIG AUTH ERROR", error);
+    return null;
+  }
+}
+
+async function loadAdminLoginConfig() {
+  // Najpierw pokazujemy poprawny domyślny layout, żeby logo nigdy nie "skakało" w lewo.
+  applyAdminLoginConfig(DEFAULT_ADMIN_LOGIN_CONFIG);
+
+  try {
+    const currentUser = await ensureAnonymousForLoginConfig();
+    if (!currentUser) return;
+
+    const snap = await get(ref(db, ADMIN_LOGIN_CONFIG_PATH));
+    adminLoginConfig = snap.exists()
+      ? normalizeAdminLoginConfig(snap.val())
+      : { ...DEFAULT_ADMIN_LOGIN_CONFIG };
+
+    adminLoginConfigLoaded = true;
+    applyAdminLoginConfig(adminLoginConfig);
+  } catch (error) {
+    console.warn("LOAD ADMIN LOGIN CONFIG ERROR", error);
+    adminLoginConfig = { ...DEFAULT_ADMIN_LOGIN_CONFIG };
+    applyAdminLoginConfig(adminLoginConfig);
+  }
+}
+
+function fillLoginEditor(config = adminLoginConfig) {
+  const cfg = normalizeAdminLoginConfig(config);
+
+  $("#loginCfgEyebrow").value = cfg.eyebrow;
+  $("#loginCfgTitle").value = cfg.title;
+  $("#loginCfgSubtitle").value = cfg.subtitle;
+  $("#loginCfgButtonLabel").value = cfg.buttonLabel;
+  $("#loginCfgEmailPlaceholder").value = cfg.emailPlaceholder;
+  $("#loginCfgPasswordPlaceholder").value = cfg.passwordPlaceholder;
+  $("#loginCfgRememberLabel").value = cfg.rememberLabel;
+  $("#loginCfgShowPasswordLabel").value = cfg.showPasswordLabel;
+  $("#loginCfgHidePasswordLabel").value = cfg.hidePasswordLabel;
+
+  $("#loginCfgLogoWidth").value = cfg.logoWidth;
+  $("#loginCfgCardWidth").value = cfg.cardWidth;
+  $("#loginCfgCardRadius").value = cfg.cardRadius;
+  $("#loginCfgCardPadding").value = cfg.cardPadding;
+  $("#loginCfgTitleSize").value = cfg.titleSize;
+  $("#loginCfgFormGap").value = cfg.formGap;
+
+  $("#loginCfgBgTop").value = cfg.bgTop;
+  $("#loginCfgBgMiddle").value = cfg.bgMiddle;
+  $("#loginCfgBgBottom").value = cfg.bgBottom;
+  $("#loginCfgCardBg").value = cfg.cardBg;
+  $("#loginCfgCardBorder").value = cfg.cardBorder;
+  $("#loginCfgTextColor").value = cfg.textColor;
+  $("#loginCfgMutedColor").value = cfg.mutedColor;
+  $("#loginCfgButtonBg").value = cfg.buttonBg;
+  $("#loginCfgButtonText").value = cfg.buttonText;
+  $("#loginCfgInputBg").value = cfg.inputBg;
+  $("#loginCfgInputBorder").value = cfg.inputBorder;
+  $("#loginCfgAccentColor").value = cfg.accentColor;
+
+  $("#loginCfgShowLogo").checked = cfg.showLogo;
+  $("#loginCfgShowEyebrow").checked = cfg.showEyebrow;
+  $("#loginCfgShowSubtitle").checked = cfg.showSubtitle;
+  $("#loginCfgShowRemember").checked = cfg.showRemember;
+  $("#loginCfgShowPasswordToggle").checked = cfg.showPasswordToggle;
+
+  updateLoginEditorPreview();
+}
+
+function readLoginEditorConfig() {
+  return normalizeAdminLoginConfig({
+    eyebrow: $("#loginCfgEyebrow").value.trim(),
+    title: $("#loginCfgTitle").value.trim(),
+    subtitle: $("#loginCfgSubtitle").value.trim(),
+    buttonLabel: $("#loginCfgButtonLabel").value.trim(),
+    emailPlaceholder: $("#loginCfgEmailPlaceholder").value.trim(),
+    passwordPlaceholder: $("#loginCfgPasswordPlaceholder").value.trim(),
+    rememberLabel: $("#loginCfgRememberLabel").value.trim(),
+    showPasswordLabel: $("#loginCfgShowPasswordLabel").value.trim(),
+    hidePasswordLabel: $("#loginCfgHidePasswordLabel").value.trim(),
+
+    logoWidth: Number($("#loginCfgLogoWidth").value),
+    cardWidth: Number($("#loginCfgCardWidth").value),
+    cardRadius: Number($("#loginCfgCardRadius").value),
+    cardPadding: Number($("#loginCfgCardPadding").value),
+    titleSize: Number($("#loginCfgTitleSize").value),
+    formGap: Number($("#loginCfgFormGap").value),
+
+    bgTop: $("#loginCfgBgTop").value,
+    bgMiddle: $("#loginCfgBgMiddle").value,
+    bgBottom: $("#loginCfgBgBottom").value,
+    cardBg: $("#loginCfgCardBg").value,
+    cardBorder: $("#loginCfgCardBorder").value,
+    textColor: $("#loginCfgTextColor").value,
+    mutedColor: $("#loginCfgMutedColor").value,
+    buttonBg: $("#loginCfgButtonBg").value,
+    buttonText: $("#loginCfgButtonText").value,
+    inputBg: $("#loginCfgInputBg").value,
+    inputBorder: $("#loginCfgInputBorder").value,
+    accentColor: $("#loginCfgAccentColor").value,
+
+    showLogo: $("#loginCfgShowLogo").checked,
+    showEyebrow: $("#loginCfgShowEyebrow").checked,
+    showSubtitle: $("#loginCfgShowSubtitle").checked,
+    showRemember: $("#loginCfgShowRemember").checked,
+    showPasswordToggle: $("#loginCfgShowPasswordToggle").checked
+  });
+}
+
+function updateLoginEditorPreview() {
+  if (!$("#loginPreviewCard")) return;
+
+  const cfg = readLoginEditorConfig();
+  const screen = $("#loginPreviewScreen");
+  const card = $("#loginPreviewCard");
+  const logo = $("#loginPreviewLogo");
+  const eyebrow = $("#loginPreviewEyebrow");
+  const title = $("#loginPreviewTitle");
+  const subtitle = $("#loginPreviewSubtitle");
+  const email = $("#loginPreviewEmail");
+  const password = $("#loginPreviewPassword");
+  const remember = $("#loginPreviewRemember");
+  const toggle = $("#loginPreviewToggle");
+  const button = $("#loginPreviewButton");
+
+  screen.style.background = `radial-gradient(circle at 50% 10%, ${cfg.bgTop}, ${cfg.bgMiddle} 37%, ${cfg.bgBottom} 72%)`;
+  screen.style.color = cfg.textColor;
+
+  card.style.width = `min(${cfg.cardWidth}px,100%)`;
+  card.style.padding = `${Math.max(18, cfg.cardPadding * 0.65)}px`;
+  card.style.borderRadius = `${cfg.cardRadius}px`;
+  card.style.background = cfg.cardBg;
+  card.style.borderColor = cfg.cardBorder;
+
+  logo.style.width = `${Math.min(cfg.logoWidth, 240)}px`;
+  logo.hidden = !cfg.showLogo;
+
+  eyebrow.textContent = cfg.eyebrow;
+  eyebrow.style.color = cfg.accentColor;
+  eyebrow.hidden = !cfg.showEyebrow;
+
+  title.textContent = cfg.title;
+  title.style.fontSize = `${Math.min(cfg.titleSize, 52)}px`;
+  title.style.color = cfg.textColor;
+
+  subtitle.textContent = cfg.subtitle;
+  subtitle.style.color = cfg.mutedColor;
+  subtitle.hidden = !cfg.showSubtitle;
+
+  email.textContent = cfg.emailPlaceholder || "E-mail";
+  password.textContent = cfg.passwordPlaceholder || "Hasło";
+
+  [email, password].forEach(input => {
+    input.style.background = cfg.inputBg;
+    input.style.borderColor = cfg.inputBorder;
+    input.style.color = cfg.mutedColor;
+  });
+
+  remember.textContent = `☑ ${cfg.rememberLabel}`;
+  remember.style.color = cfg.mutedColor;
+  remember.hidden = !cfg.showRemember;
+
+  toggle.textContent = cfg.showPasswordLabel;
+  toggle.style.color = cfg.mutedColor;
+  toggle.hidden = !cfg.showPasswordToggle;
+
+  button.textContent = cfg.buttonLabel;
+  button.style.background = cfg.buttonBg;
+  button.style.color = cfg.buttonText;
+
+  $(".login-preview-form").style.gap = `${cfg.formGap}px`;
+}
+
+function openLoginEditor() {
+  fillLoginEditor(adminLoginConfig);
+  $("#loginEditorStatus").hidden = true;
+  $("#loginEditorDialog").showModal();
+}
+
+async function saveLoginEditor() {
+  const button = $("#saveLoginEditorBtn");
+  const originalLabel = button.textContent;
+  button.disabled = true;
+  button.textContent = "Zapisywanie…";
+  $("#loginEditorStatus").hidden = true;
+
+  try {
+    const config = readLoginEditorConfig();
+
+    if (!auth.currentUser || auth.currentUser.uid !== ADMIN_UID) {
+      throw new Error("Musisz być zalogowany jako administrator.");
+    }
+
+    await set(ref(db, ADMIN_LOGIN_CONFIG_PATH), config);
+
+    adminLoginConfig = config;
+    applyAdminLoginConfig(config);
+    showNotice($("#loginEditorStatus"), "Ustawienia logowania zapisane globalnie w Firebase.", "ok");
+    toast("Wygląd logowania zapisany");
+  } catch (error) {
+    console.error("SAVE ADMIN LOGIN CONFIG ERROR", error);
+    showNotice($("#loginEditorStatus"), `Nie udało się zapisać: ${error.code || error.message || error}`, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalLabel;
+  }
+}
 
 
 function formatBytes(bytes, decimals = 1) {
@@ -560,6 +924,9 @@ function saveAdminLoginIfRequested() {
 
 restoreSavedAdminLogin();
 
+applyAdminLoginConfig(DEFAULT_ADMIN_LOGIN_CONFIG);
+loadAdminLoginConfig();
+
 onAuthStateChanged(auth, (user) => {
   if (user && user.uid === ADMIN_UID) {
     $("#adminLogin").hidden = true;
@@ -612,7 +979,11 @@ onAuthStateChanged(auth, (user) => {
     $("#adminLogin").hidden = false;
     $("#adminPanel").hidden = true;
 
-    if (user && user.uid !== ADMIN_UID) signOut(auth);
+    // Anonymous auth is intentionally kept alive so the public login
+    // appearance config can be read before administrator sign-in.
+    if (user && !user.isAnonymous && user.uid !== ADMIN_UID) {
+      signOut(auth);
+    }
   }
 });
 
@@ -653,7 +1024,9 @@ if (togglePasswordButton) {
 
     const willShow = input.type === "password";
     input.type = willShow ? "text" : "password";
-    togglePasswordButton.textContent = willShow ? "Ukryj hasło" : "Pokaż hasło";
+    togglePasswordButton.textContent = willShow
+      ? (adminLoginConfig.hidePasswordLabel || "Ukryj hasło")
+      : (adminLoginConfig.showPasswordLabel || "Pokaż hasło");
   });
 }
 
@@ -661,7 +1034,7 @@ $("#adminLogoutBtn").addEventListener("click", () => signOut(auth));
 
 
 function renderAll() {
-  const entries = Object.entries(galleries);
+  const entries = Object.entries(galleries).filter(([slug]) => !isSystemGallerySlug(slug));
   $("#statGalleries").textContent = entries.length;
   $("#statPhotos").textContent = entries.reduce((sum, [, g]) => {
     const pub = g?.public || {};
@@ -678,6 +1051,7 @@ function filteredEntries() {
 
   return Object.entries(galleries)
     .filter(([slug, gallery]) => {
+      if (isSystemGallerySlug(slug)) return false;
       const pub = gallery?.public || {};
       const matchesQuery = !query ||
         (pub.title || "").toLowerCase().includes(query) ||
@@ -798,6 +1172,23 @@ function loadCover(element, coverFile, manifest, coverX = 50, coverY = 38) {
     element.style.backgroundPosition = `${coverX}% ${coverY}%`;
   }
 }
+
+
+$("#loginEditorBtn")?.addEventListener("click", openLoginEditor);
+$("#closeLoginEditorDialog")?.addEventListener("click", () => $("#loginEditorDialog").close());
+$("#cancelLoginEditorBtn")?.addEventListener("click", () => $("#loginEditorDialog").close());
+$("#saveLoginEditorBtn")?.addEventListener("click", saveLoginEditor);
+
+$("#resetLoginEditorBtn")?.addEventListener("click", () => {
+  fillLoginEditor(DEFAULT_ADMIN_LOGIN_CONFIG);
+  updateLoginEditorPreview();
+  toast("Wczytano ustawienia domyślne — kliknij Zapisz, aby je zastosować.");
+});
+
+document.querySelectorAll("#loginEditorDialog input").forEach(input => {
+  input.addEventListener("input", updateLoginEditorPreview);
+  input.addEventListener("change", updateLoginEditorPreview);
+});
 
 $("#gallerySearch").addEventListener("input", renderCards);
 $("#galleryStatusFilter").addEventListener("change", renderCards);

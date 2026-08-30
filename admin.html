@@ -5,16 +5,16 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
   <title>RAF.studio — Studio Manager</title>
-  <link rel="stylesheet" href="style.css?v=15.2">
+  <link rel="stylesheet" href="style.css?v=15.3">
 </head>
 <body class="admin-body">
 
 <section id="adminLogin" class="lock-screen">
   <div class="lock-card">
-    <img class="raf-logo login-logo" src="logo-white.png?v=15.2" alt="RAF.studio">
-    <p class="eyebrow">STUDIO MANAGER</p>
-    <h1>Panel fotografa</h1>
-    <p class="muted">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
+    <img class="raf-logo login-logo" src="logo-white.png?v=15.3" alt="RAF.studio">
+    <p id="adminLoginEyebrow" class="eyebrow">STUDIO MANAGER</p>
+    <h1 id="adminLoginTitle">Panel fotografa</h1>
+    <p id="adminLoginSubtitle" class="muted">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
     <form id="adminLoginForm" autocomplete="on" action="javascript:void(0)">
       <input id="adminEmail" type="email" placeholder="E-mail" autocomplete="username" autocapitalize="none" spellcheck="false" required>
 
@@ -23,7 +23,7 @@
       <div class="login-options">
         <label class="remember-login">
           <input id="rememberAdminLogin" type="checkbox">
-          <span>Zapamiętaj dane na tym urządzeniu</span>
+          <span id="rememberAdminLoginText">Zapamiętaj dane na tym urządzeniu</span>
         </label>
 
         <button id="toggleAdminPassword" class="show-password-under" type="button">
@@ -31,7 +31,7 @@
         </button>
       </div>
 
-      <button class="primary" type="submit">Zaloguj</button>
+      <button id="adminLoginSubmit" class="primary" type="submit">Zaloguj</button>
       <p id="adminLoginError" class="error" hidden></p>
     </form>
   </div>
@@ -40,7 +40,7 @@
 <main id="adminPanel" hidden>
   <aside class="sidebar">
     <div>
-      <img class="raf-logo sidebar-logo" src="logo-white.png?v=15.2" alt="RAF.studio">
+      <img class="raf-logo sidebar-logo" src="logo-white.png?v=15.3" alt="RAF.studio">
       <small>Studio Manager</small>
     </div>
     <div class="side-bottom">
@@ -56,7 +56,10 @@
         <h1>Galerie klientów</h1>
         <p class="muted">Twórz galerie, wysyłaj zdjęcia i sprawdzaj zaznaczenia.</p>
       </div>
-      <button id="newGalleryBtn" type="button" class="primary">+ Nowa galeria</button>
+      <div class="admin-head-actions">
+        <button id="loginEditorBtn" type="button" class="ghost">🔐 Ustawienia logowania</button>
+        <button id="newGalleryBtn" type="button" class="primary">+ Nowa galeria</button>
+      </div>
     </header>
 
     <section class="stats">
@@ -535,9 +538,167 @@
   </div>
 </dialog>
 
+
+<dialog id="loginEditorDialog" class="dialog xl login-editor-dialog">
+  <div class="dialog-head">
+    <div>
+      <p class="eyebrow">PANEL ADMINISTRATORA</p>
+      <h2>Ustawienia logowania</h2>
+      <p class="muted">Pełna konfiguracja ekranu logowania administratora. Logo pozostaje zawsze idealnie wyśrodkowane.</p>
+    </div>
+    <button id="closeLoginEditorDialog" type="button" class="ghost close-btn">×</button>
+  </div>
+
+  <div class="login-editor-layout">
+    <section class="login-editor-controls">
+
+      <div class="site-settings-section">
+        <h3>Treść</h3>
+        <div class="form2">
+          <label>Mały napis nad tytułem
+            <input id="loginCfgEyebrow" value="STUDIO MANAGER">
+          </label>
+          <label>Tytuł
+            <input id="loginCfgTitle" value="Panel fotografa">
+          </label>
+          <label>Opis
+            <input id="loginCfgSubtitle" value="Zarządzaj galeriami, zdjęciami i wyborami klientów.">
+          </label>
+          <label>Przycisk logowania
+            <input id="loginCfgButtonLabel" value="Zaloguj">
+          </label>
+          <label>Placeholder e-mail
+            <input id="loginCfgEmailPlaceholder" value="E-mail">
+          </label>
+          <label>Placeholder hasła
+            <input id="loginCfgPasswordPlaceholder" value="Hasło">
+          </label>
+          <label>Tekst zapamiętywania
+            <input id="loginCfgRememberLabel" value="Zapamiętaj dane na tym urządzeniu">
+          </label>
+          <label>„Pokaż hasło”
+            <input id="loginCfgShowPasswordLabel" value="Pokaż hasło">
+          </label>
+          <label>„Ukryj hasło”
+            <input id="loginCfgHidePasswordLabel" value="Ukryj hasło">
+          </label>
+        </div>
+      </div>
+
+      <div class="site-settings-section">
+        <h3>Układ</h3>
+        <div class="form3">
+          <label>Rozmiar logo (px)
+            <input id="loginCfgLogoWidth" type="number" min="90" max="360" value="190">
+          </label>
+          <label>Szerokość karty (px)
+            <input id="loginCfgCardWidth" type="number" min="300" max="720" value="460">
+          </label>
+          <label>Zaokrąglenie karty (px)
+            <input id="loginCfgCardRadius" type="number" min="0" max="60" value="26">
+          </label>
+          <label>Padding karty (px)
+            <input id="loginCfgCardPadding" type="number" min="18" max="80" value="42">
+          </label>
+          <label>Rozmiar tytułu (px)
+            <input id="loginCfgTitleSize" type="number" min="28" max="72" value="44">
+          </label>
+          <label>Odstęp elementów formularza (px)
+            <input id="loginCfgFormGap" type="number" min="6" max="28" value="12">
+          </label>
+        </div>
+      </div>
+
+      <div class="site-settings-section">
+        <h3>Kolory</h3>
+        <div class="form3">
+          <label>Tło — góra
+            <input id="loginCfgBgTop" class="color-field" type="color" value="#29292e">
+          </label>
+          <label>Tło — środek
+            <input id="loginCfgBgMiddle" class="color-field" type="color" value="#111113">
+          </label>
+          <label>Tło — dół
+            <input id="loginCfgBgBottom" class="color-field" type="color" value="#09090a">
+          </label>
+          <label>Tło karty
+            <input id="loginCfgCardBg" class="color-field" type="color" value="#111113">
+          </label>
+          <label>Obramowanie karty
+            <input id="loginCfgCardBorder" class="color-field" type="color" value="#2e2e33">
+          </label>
+          <label>Główny tekst
+            <input id="loginCfgTextColor" class="color-field" type="color" value="#f4f4f2">
+          </label>
+          <label>Tekst dodatkowy
+            <input id="loginCfgMutedColor" class="color-field" type="color" value="#929298">
+          </label>
+          <label>Przycisk — tło
+            <input id="loginCfgButtonBg" class="color-field" type="color" value="#f5f5f2">
+          </label>
+          <label>Przycisk — tekst
+            <input id="loginCfgButtonText" class="color-field" type="color" value="#0b0b0c">
+          </label>
+          <label>Pola — tło
+            <input id="loginCfgInputBg" class="color-field" type="color" value="#0e0e10">
+          </label>
+          <label>Pola — obramowanie
+            <input id="loginCfgInputBorder" class="color-field" type="color" value="#34343a">
+          </label>
+          <label>Akcent / mały napis
+            <input id="loginCfgAccentColor" class="color-field" type="color" value="#aaaaaa">
+          </label>
+        </div>
+      </div>
+
+      <div class="site-settings-section">
+        <h3>Widoczność elementów</h3>
+        <div class="permission-grid compact">
+          <label class="check"><input id="loginCfgShowLogo" type="checkbox" checked><span>Logo RAF.studio</span></label>
+          <label class="check"><input id="loginCfgShowEyebrow" type="checkbox" checked><span>Mały napis</span></label>
+          <label class="check"><input id="loginCfgShowSubtitle" type="checkbox" checked><span>Opis</span></label>
+          <label class="check"><input id="loginCfgShowRemember" type="checkbox" checked><span>Zapamiętaj dane</span></label>
+          <label class="check"><input id="loginCfgShowPasswordToggle" type="checkbox" checked><span>Pokaż / ukryj hasło</span></label>
+        </div>
+      </div>
+
+      <div id="loginEditorStatus" class="notice" hidden></div>
+
+      <div class="actions">
+        <button id="resetLoginEditorBtn" type="button" class="ghost">Przywróć domyślne</button>
+        <span class="spacer"></span>
+        <button id="cancelLoginEditorBtn" type="button" class="ghost">Anuluj</button>
+        <button id="saveLoginEditorBtn" type="button" class="primary">Zapisz wygląd logowania</button>
+      </div>
+    </section>
+
+    <aside class="login-live-preview">
+      <p class="eyebrow">PODGLĄD NA ŻYWO</p>
+      <div id="loginPreviewScreen" class="login-preview-screen">
+        <div id="loginPreviewCard" class="login-preview-card">
+          <img id="loginPreviewLogo" src="logo-white.png?v=15.3" alt="">
+          <div id="loginPreviewEyebrow" class="login-preview-eyebrow">STUDIO MANAGER</div>
+          <h3 id="loginPreviewTitle">Panel fotografa</h3>
+          <p id="loginPreviewSubtitle">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
+          <div class="login-preview-form">
+            <div id="loginPreviewEmail" class="login-preview-input">E-mail</div>
+            <div id="loginPreviewPassword" class="login-preview-input">Hasło</div>
+            <div class="login-preview-options">
+              <span id="loginPreviewRemember">☑ Zapamiętaj dane na tym urządzeniu</span>
+              <span id="loginPreviewToggle">Pokaż hasło</span>
+            </div>
+            <div id="loginPreviewButton" class="login-preview-button">Zaloguj</div>
+          </div>
+        </div>
+      </div>
+      <p class="muted login-preview-tip">Zmiany w tym podglądzie są tylko wizualne. Kliknij „Zapisz wygląd logowania”, aby zastosować je globalnie.</p>
+    </aside>
+  </div>
+</dialog>
+
 <div id="toast" class="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
-<script type="module" src="admin.js?v=15.2"></script>
+<script type="module" src="admin.js?v=15.3"></script>
 </body>
 </html>
