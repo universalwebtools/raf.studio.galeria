@@ -1638,3 +1638,50 @@ input,select{width:100%;background:#0e0e10;border:1px solid #34343a;color:#fff;b
   .hero-device-preview.device-mobile{width:62%}
 }
 
+
+
+/* ===== v16.2.2: HERO LAYOUT FIX ===== */
+.client-topbar{
+  position:relative !important;
+  top:auto !important;
+  left:auto !important;
+  right:auto !important;
+  z-index:30 !important;
+  width:100% !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:14px !important;
+  padding:14px clamp(14px,4vw,52px) !important;
+  background:#09090a !important;
+  border-bottom:1px solid #202024 !important;
+}
+.top-actions{flex-wrap:wrap;justify-content:flex-end}
+.client-hero{
+  position:relative !important;
+  padding-top:0 !important;
+  min-height:var(--hero-height-desktop,360px) !important;
+  display:flex !important;
+  align-items:flex-end !important;
+}
+.hero-media{
+  inset:0 !important;
+  width:100% !important;
+  height:100% !important;
+  transform:none !important;
+  max-width:none !important;
+}
+.hero-content{
+  width:min(1450px,100%) !important;
+  margin:0 auto !important;
+  padding:0 clamp(18px,5vw,72px) 42px !important;
+}
+@media(max-width:760px){
+  .client-topbar{
+    padding:12px 10px !important;
+    align-items:flex-start !important;
+  }
+  .top-actions{gap:6px !important}
+  .top-actions .ghost{padding:9px 10px;font-size:12px}
+  .client-hero{min-height:var(--hero-height-mobile,300px) !important}
+}
