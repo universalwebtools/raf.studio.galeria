@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=14.0";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=14.1";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -45,6 +45,10 @@ function normalizePassword(value) {
   return String(value ?? "").trim();
 }
 
+function displayName(filename) {
+  return String(filename || "").replace(/\.(jpe?g|png|webp)$/i, "");
+}
+
 function manifestKey(filename) {
   const bytes = new TextEncoder().encode(filename);
   let binary = "";
@@ -53,7 +57,12 @@ function manifestKey(filename) {
 }
 
 function galleryUrl(slug) {
-  return `${location.href.replace(/admin\.html.*$/,"")}?g=${encodeURIComponent(slug)}`;
+  const url = new URL(location.href);
+  url.pathname = url.pathname.replace(/\/admin(?:\.html)?\/?$/i, "/");
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("g", slug);
+  return url.toString();
 }
 
 
@@ -108,11 +117,39 @@ function showNotice(element, message, type = "ok") {
   element.hidden = false;
 }
 
-function selectionCountForSlug(slug) {
+function mergedSelectionForSlug(slug) {
   const galleryFavorites = favoritesRoot?.[slug] || {};
-  return Object.values(galleryFavorites).filter(clientSelection =>
-    Object.values(clientSelection || {}).some(item => item?.filename)
-  ).length;
+  const manifest = Object.values(galleries[slug]?.public?.photos || {});
+  const merged = new Map();
+
+  const canonicalFilename = (filename) => {
+    const exact = manifest.find(item => item?.filename === filename);
+    if (exact?.filename) return exact.filename;
+    const base = displayName(filename).toLowerCase();
+    const byBase = manifest.find(item => displayName(item?.filename).toLowerCase() === base);
+    return byBase?.filename || filename;
+  };
+
+  Object.values(galleryFavorites).forEach(selection => {
+    Object.values(selection || {}).forEach(item => {
+      if (!item?.filename) return;
+      const filename = canonicalFilename(item.filename);
+      const key = displayName(filename).toLowerCase();
+      merged.set(key, { ...item, filename });
+    });
+  });
+
+  return [...merged.values()].sort((a, b) =>
+    displayName(a.filename).localeCompare(displayName(b.filename), undefined, { numeric: true })
+  );
+}
+
+function selectionCountForSlug(slug) {
+  return mergedSelectionForSlug(slug).length;
+}
+
+function galleryHasSelection(slug) {
+  return selectionCountForSlug(slug) > 0;
 }
 
 function restoreSavedAdminLogin() {
@@ -238,10 +275,14 @@ $("#adminLogoutBtn").addEventListener("click", () => signOut(auth));
 
 
 function renderAll() {
-  const entries = Object.values(galleries);
+  const entries = Object.entries(galleries);
   $("#statGalleries").textContent = entries.length;
-  $("#statPhotos").textContent = entries.reduce((sum, g) => sum + Number(g?.public?.photoCount || 0), 0);
-  $("#statSelections").textContent = Object.keys(galleries).reduce((sum, slug) => sum + selectionCountForSlug(slug), 0);
+  $("#statPhotos").textContent = entries.reduce((sum, [, g]) => {
+    const pub = g?.public || {};
+    const manifestCount = Object.keys(pub.photos || {}).length;
+    return sum + (manifestCount || Number(pub.photoCount || 0));
+  }, 0);
+  $("#statSelections").textContent = entries.filter(([slug]) => galleryHasSelection(slug)).length;
   renderCards();
 }
 
@@ -279,7 +320,8 @@ function renderCards() {
 
   entries.forEach(([slug, gallery]) => {
     const pub = gallery?.public || {};
-    const selectedClients = selectionCountForSlug(slug);
+    const selectedCount = selectionCountForSlug(slug);
+    const photoCount = Object.keys(pub.photos || {}).length || Number(pub.photoCount || 0);
 
     const card = document.createElement("article");
     card.className = "gallery-card";
@@ -295,8 +337,8 @@ function renderCards() {
         <h3>${escapeHtml(pub.title || slug)}</h3>
 
         <div class="gallery-meta">
-          <span>${Number(pub.photoCount || 0)} zdjęć</span>
-          <span>${selectedClients} klientów z wyborem</span>
+          <span>${photoCount} zdjęć</span>
+          <span>♥ ${selectedCount} wybranych zdjęć</span>
           <span>${pub.maxFavorites ? `limit ${pub.maxFavorites}` : "bez limitu"}</span>
           <span>${escapeHtml(expiryBadgeText(pub))}</span>
           ${pub.eventDate ? `<span>${escapeHtml(formatDate(pub.eventDate))}</span>` : ""}
@@ -373,6 +415,7 @@ function resetForm() {
   $("#gallerySlugInput").disabled = false;
   $("#galleryPasswordInput").value = "";
   $("#gallerySubtitleInput").value = "";
+  $("#introMessageInput").value = "";
   $("#eventDateInput").value = "";
   $("#outroMessageInput").value = "";
   $("#instagramInput").value = "";
@@ -403,6 +446,7 @@ function openEdit(slug) {
   $("#gallerySlugInput").value = slug;
   $("#gallerySlugInput").disabled = true;
   $("#gallerySubtitleInput").value = pub.subtitle || "";
+  $("#introMessageInput").value = pub.introMessage || "";
   $("#eventDateInput").value = pub.eventDate || "";
   $("#outroMessageInput").value = pub.outroMessage || "";
   $("#instagramInput").value = pub.instagram || "";
@@ -460,6 +504,7 @@ $("#galleryForm").addEventListener("submit", async (event) => {
       ...old,
       title: $("#galleryTitleInput").value.trim() || slug,
       subtitle: $("#gallerySubtitleInput").value.trim(),
+      introMessage: $("#introMessageInput").value.trim(),
       eventDate: $("#eventDateInput").value || "",
       outroMessage: $("#outroMessageInput").value.trim(),
       instagram: $("#instagramInput").value.trim(),
@@ -961,7 +1006,7 @@ async function openPhotos(slug) {
       item.innerHTML = `
         <div class="pm-thumb" style="background-image:url('${previewUrl}')"></div>
         <div class="pm-info">
-          <div class="pm-name" title="${escapeHtml(originalName)}">${escapeHtml(originalName)}</div>
+          <div class="pm-name" title="${escapeHtml(displayName(originalName))}">${escapeHtml(displayName(originalName))}</div>
           <div class="pm-actions">
             <button type="button" class="ghost cover">Okładka</button>
             <button type="button" class="danger delete">Usuń</button>
@@ -1050,6 +1095,66 @@ $("#downloadQrBtn")?.addEventListener("click", () => {
   link.click();
 });
 
+function startAdminAttachmentDownload(url, filename) {
+  const frame = document.createElement("iframe");
+  frame.className = "raf-download-frame";
+  frame.title = `Pobieranie ${filename}`;
+  frame.src = url;
+  document.body.appendChild(frame);
+  setTimeout(() => frame.remove(), 90000);
+}
+
+async function getAdminPhotoDownloadUrl(slug, filename) {
+  const pub = galleries[slug]?.public || {};
+  const manifestItems = Object.values(pub.photos || {});
+  const manifestItem = manifestItems.find(item => item?.filename === filename) ||
+    manifestItems.find(item => displayName(item?.filename).toLowerCase() === displayName(filename).toLowerCase());
+  const canonicalFilename = manifestItem?.filename || filename;
+  const candidates = [manifestItem?.originalPath, `galleries/${slug}/originals/${canonicalFilename}`].filter(Boolean);
+  for (const path of [...new Set(candidates)]) {
+    try { return await getDownloadURL(sRef(storage, path)); } catch (_) {}
+  }
+  if (manifestItem?.previewUrl) return manifestItem.previewUrl;
+  return null;
+}
+
+async function migrateLegacyFavoritesToShared(slug) {
+  const merged = mergedSelectionForSlug(slug);
+  if (!merged.length) return merged;
+  const shared = favoritesRoot?.[slug]?.shared || {};
+  const sharedNames = new Set(Object.values(shared).map(item => item?.filename).filter(Boolean));
+  const missing = merged.filter(item => !sharedNames.has(item.filename));
+  if (!missing.length) return merged;
+  const updates = {};
+  for (const item of missing) {
+    updates[`favorites/${slug}/shared/${manifestKey(item.filename)}`] = {
+      filename: item.filename,
+      selectedAt: item.selectedAt || Date.now()
+    };
+  }
+  try { await update(ref(db), updates); }
+  catch (error) { console.warn("LEGACY FAVORITES MIGRATION ERROR", error); }
+  return merged;
+}
+
+async function downloadAdminSelected(slug, items, button) {
+  if (!items.length) return;
+  const originalLabel = button?.textContent || "♥ Pobierz wybrane";
+  if (button) button.disabled = true;
+  try {
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (button) button.textContent = `Pobieram ${i + 1}/${items.length}…`;
+      const url = await getAdminPhotoDownloadUrl(slug, item.filename);
+      if (url) startAdminAttachmentDownload(url, item.filename);
+      await new Promise(resolve => setTimeout(resolve, 1100));
+    }
+    toast(`Uruchomiono pobieranie ${items.length} zdjęć.`);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = originalLabel; }
+  }
+}
+
 function downloadText(filename, content, type = "text/plain") {
   const blob = new Blob([content], { type });
   const link = document.createElement("a");
@@ -1059,57 +1164,59 @@ function downloadText(filename, content, type = "text/plain") {
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
-function openSelections(slug) {
+async function openSelections(slug) {
   const gallery = galleries[slug] || {};
-  const selections = favoritesRoot?.[slug] || {};
   const container = $("#selectionContent");
+  $("#selectionTitle").textContent = `${gallery.public?.title || slug} — wybrane zdjęcia klienta`;
+  container.innerHTML = '<div class="loading">Ładowanie wyboru…</div>';
+  $("#selectionDialog").showModal();
 
-  $("#selectionTitle").textContent = `${gallery.public?.title || slug} — wybrane`;
+  const items = await migrateLegacyFavoritesToShared(slug);
   container.innerHTML = "";
-
-  const clients = Object.entries(selections);
-
-  if (!clients.length) {
-    container.innerHTML = '<div class="notice">Nikt nie zaznaczył jeszcze zdjęć.</div>';
+  if (!items.length) {
+    container.innerHTML = '<div class="notice">Klient nie zaznaczył jeszcze żadnego zdjęcia.</div>';
+    return;
   }
 
-  clients.forEach(([clientUid, selection]) => {
-    const items = Object.values(selection || {})
-      .filter(item => item?.filename)
-      .sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true }));
-
-    if (!items.length) return;
-
-    const block = document.createElement("section");
-    block.className = "selection-client";
-
-    block.innerHTML = `
-      <h3>Klient ${escapeHtml(clientUid.slice(0, 8))}…</h3>
-      <div class="gallery-meta"><span>${items.length} zdjęć</span></div>
-      <div class="selection-list">
-        ${items.map(item => `<div class="selection-item">${escapeHtml(item.filename)}</div>`).join("")}
+  const block = document.createElement("section");
+  block.className = "selection-client selection-single";
+  block.innerHTML = `
+    <div class="selection-single-head">
+      <div>
+        <h3>♥ Wybrane zdjęcia klienta</h3>
+        <div class="gallery-meta"><span>${items.length} zdjęć</span></div>
       </div>
-      <div class="selection-tools">
-        <button type="button" class="ghost txt">Pobierz TXT</button>
-        <button type="button" class="ghost csv">Pobierz CSV</button>
+      <button type="button" class="primary download-all">♥ Pobierz wybrane (${items.length})</button>
+    </div>
+    <div class="selection-photo-grid"></div>
+  `;
+
+  const grid = block.querySelector(".selection-photo-grid");
+  for (const item of items) {
+    const manifestItems = Object.values(gallery.public?.photos || {});
+    const manifestItem = manifestItems.find(photo => photo?.filename === item.filename) ||
+      manifestItems.find(photo => displayName(photo?.filename).toLowerCase() === displayName(item.filename).toLowerCase());
+    const card = document.createElement("article");
+    card.className = "selection-photo-card";
+    card.innerHTML = `
+      <div class="selection-photo-thumb" ${manifestItem?.previewUrl ? `style="background-image:url('${manifestItem.previewUrl}')"` : ""}></div>
+      <div class="selection-photo-info">
+        <strong>${escapeHtml(displayName(item.filename))}</strong>
+        <button type="button" class="ghost download-one">↓ Pobierz</button>
       </div>
     `;
-
-    block.querySelector(".txt").addEventListener("click", () => {
-      downloadText(`${slug}-wybor.txt`, items.map(item => item.filename).join("\r\n"));
+    card.querySelector(".download-one").addEventListener("click", async () => {
+      const url = await getAdminPhotoDownloadUrl(slug, item.filename);
+      if (url) startAdminAttachmentDownload(url, item.filename);
+      else toast(`Nie znaleziono pliku ${displayName(item.filename)}`);
     });
+    grid.appendChild(card);
+  }
 
-    block.querySelector(".csv").addEventListener("click", () => {
-      const csv = "filename\r\n" + items
-        .map(item => `"${item.filename.replaceAll('"', '""')}"`)
-        .join("\r\n");
-      downloadText(`${slug}-wybor.csv`, csv, "text/csv");
-    });
-
-    container.appendChild(block);
-  });
-
-  $("#selectionDialog").showModal();
+  block.querySelector(".download-all").addEventListener("click", (event) =>
+    downloadAdminSelected(slug, items, event.currentTarget)
+  );
+  container.appendChild(block);
 }
 
 $("#closeSelectionDialog").addEventListener("click", () => $("#selectionDialog").close());

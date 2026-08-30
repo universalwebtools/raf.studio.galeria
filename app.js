@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-import { getDatabase, ref, get, set, remove } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+import { getDatabase, ref, get, set, remove, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=14.0";
+import { firebaseConfig } from "./firebase-config.js?v=14.1";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -25,6 +25,7 @@ let slideshowActive = false;
 let galleryLoaded = false;
 let rejected = new Set();
 let compareSelection = [];
+let unsubscribeFavorites = null;
 
 async function sha256(text) {
   const data = new TextEncoder().encode(text);
@@ -34,6 +35,10 @@ async function sha256(text) {
 
 function normalizePassword(value) {
   return String(value ?? "").trim();
+}
+
+function displayName(filename) {
+  return String(filename || "").replace(/\.(jpe?g|png|webp)$/i, "");
 }
 
 async function passwordMatches(entered) {
@@ -225,7 +230,7 @@ function applyGalleryMeta() {
   $("#heroTitle").textContent = title;
   $("#heroSubtitle").textContent = subtitle;
   $("#introTitle").textContent = title;
-  $("#introSubtitle").textContent = subtitle || "Twoje zdjęcia są gotowe do obejrzenia.";
+  $("#introSubtitle").textContent = gallery.introMessage || subtitle || "Twoje zdjęcia są gotowe do obejrzenia.";
   $("#introPhotoCount").textContent = `${photoCount} zdjęć`;
 
   if (gallery.eventDate) {
@@ -304,6 +309,7 @@ async function openGallery() {
       .then(() => {
         render();
         updateUI();
+        watchFavorites();
       })
       .catch(error => {
         console.error("BACKGROUND FAVORITES ERROR", error);
@@ -317,10 +323,8 @@ async function openGallery() {
 
 async function loadFavorites() {
   try {
-    const currentUid = await getCurrentClientUid();
-    const snap = await get(ref(db, `favorites/${slug}/${currentUid}`));
+    const snap = await get(ref(db, `favorites/${slug}/shared`));
     favorites.clear();
-
     if (snap.exists()) {
       Object.values(snap.val() || {}).forEach(item => {
         if (item?.filename) favorites.set(item.filename, item);
@@ -328,8 +332,27 @@ async function loadFavorites() {
     }
   } catch (error) {
     console.error("LOAD FAVORITES ERROR", error);
-    // Gallery remains usable even if favorites cannot be read.
   }
+}
+
+function watchFavorites() {
+  if (unsubscribeFavorites) unsubscribeFavorites();
+  unsubscribeFavorites = onValue(
+    ref(db, `favorites/${slug}/shared`),
+    (snapshot) => {
+      favorites.clear();
+      if (snapshot.exists()) {
+        Object.values(snapshot.val() || {}).forEach(item => {
+          if (item?.filename) favorites.set(item.filename, item);
+        });
+      }
+      if (galleryLoaded) {
+        render();
+        updateUI();
+      }
+    },
+    (error) => console.error("FAVORITES WATCH ERROR", error)
+  );
 }
 
 function loadManifest() {
@@ -439,7 +462,7 @@ function render() {
 
     const filename = document.createElement("div");
     filename.className = "photo-filename";
-    filename.textContent = photo.filename;
+    filename.textContent = displayName(photo.filename);
 
     img.addEventListener("load", () => {
       img.classList.add("loaded");
@@ -507,8 +530,7 @@ async function toggleFavorite(filename) {
   render();
 
   try {
-    const currentUid = await getCurrentClientUid();
-    const target = ref(db, `favorites/${slug}/${currentUid}/${selectionKey(filename)}`);
+    const target = ref(db, `favorites/${slug}/shared/${selectionKey(filename)}`);
 
     if (wasSelected) {
       await remove(target);
@@ -576,8 +598,8 @@ async function openCompareDialog() {
   const photoB = photos[indexB];
   if (!photoA || !photoB) return;
 
-  $("#compareCaptionA").textContent = photoA.filename;
-  $("#compareCaptionB").textContent = photoB.filename;
+  $("#compareCaptionA").textContent = displayName(photoA.filename);
+  $("#compareCaptionB").textContent = displayName(photoB.filename);
   $("#compareImageA").src = photoA.preview;
   $("#compareImageB").src = photoB.preview;
   $("#compareDialog").hidden = false;
@@ -609,7 +631,7 @@ function updateCompareUI() {
   if (!bar) return;
 
   $("#compareSelectedCount").textContent = count;
-  $("#compareSelectedNames").textContent = count ? compareSelection.join("  •  ") : "Wybierz dwa zdjęcia do porównania obok siebie";
+  $("#compareSelectedNames").textContent = count ? compareSelection.map(displayName).join("  •  ") : "Wybierz dwa zdjęcia do porównania obok siebie";
   bar.hidden = count === 0;
   $("#openCompareBtn").disabled = count !== 2;
 }
@@ -633,6 +655,12 @@ function updateUI() {
     const percent = Math.min(100, (count / maxFavorites()) * 100);
     $("#selectProgress").style.width = `${percent}%`;
     $("#progressText").textContent = `Wybrano ${count} z ${maxFavorites()} zdjęć`;
+  }
+
+  const inlineHeartDownload = $("#downloadFavoritesInlineBtn");
+  if (inlineHeartDownload) {
+    inlineHeartDownload.hidden = count === 0;
+    inlineHeartDownload.textContent = `♥ Pobierz wybrane (${count})`;
   }
 
   updateDownloadUI();
@@ -739,6 +767,46 @@ async function downloadSinglePhoto(index) {
   }
 }
 
+async function downloadFavoriteFiles() {
+  if (gallery.downloadsEnabled === false) {
+    toast("Pobieranie zdjęć jest wyłączone dla tej galerii.");
+    return;
+  }
+  const selected = photos.filter(photo => favorites.has(photo.filename));
+  if (!selected.length) {
+    toast("Najpierw zaznacz zdjęcia serduszkiem ♥.");
+    return;
+  }
+  const button = $("#downloadFavoritesBtn");
+  const inlineButton = $("#downloadFavoritesInlineBtn");
+  if (button) button.disabled = true;
+  if (inlineButton) inlineButton.disabled = true;
+  try {
+    for (let i = 0; i < selected.length; i++) {
+      const photo = selected[i];
+      const index = photos.findIndex(p => p.filename === photo.filename);
+      if (button) button.textContent = `♥↓ ${i + 1}/${selected.length}`;
+      if (inlineButton) inlineButton.textContent = `Pobieram ${i + 1}/${selected.length}…`;
+      const url = await getOriginalUrl(index);
+      if (url) startAttachmentDownload(url, photo.filename);
+      await new Promise(resolve => setTimeout(resolve, 1100));
+    }
+    toast(`Uruchomiono pobieranie ${selected.length} wybranych zdjęć.`);
+  } catch (error) {
+    console.error("FAVORITES DOWNLOAD ERROR", error);
+    toast(`Błąd pobierania: ${error.message || error}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "♥↓ Pobierz wybrane";
+    }
+    if (inlineButton) {
+      inlineButton.disabled = false;
+      inlineButton.textContent = `♥ Pobierz wybrane (${favorites.size})`;
+    }
+  }
+}
+
 async function downloadSelectedFiles() {
   if (gallery.downloadsEnabled === false) {
     toast("Pobieranie zdjęć jest wyłączone dla tej galerii.");
@@ -841,7 +909,7 @@ function updateLightboxUI() {
 
   const selected = favorites.has(photo.filename);
 
-  $("#lightboxCaption").textContent = `${currentIndex + 1} / ${photos.length} · ${photo.filename}`;
+  $("#lightboxCaption").textContent = `${currentIndex + 1} / ${photos.length} · ${displayName(photo.filename)}`;
   $("#lightboxFav").textContent = selected ? "♥" : "♡";
   $("#lightboxFav").classList.toggle("active", selected);
   $("#lightboxReject").classList.toggle("active", rejected.has(photo.filename));
@@ -926,6 +994,8 @@ $("#landscapeFilter").addEventListener("click", () => setFilter("landscape"));
 $("#hiddenFilter").addEventListener("click", () => setFilter("hidden"));
 
 $("#favoritesToggle").addEventListener("click", () => setFilter("favorites"));
+$("#downloadFavoritesBtn")?.addEventListener("click", downloadFavoriteFiles);
+$("#downloadFavoritesInlineBtn")?.addEventListener("click", downloadFavoriteFiles);
 $("#startGalleryBtn").addEventListener("click", openGallery);
 
 $("#slideshowBtn")?.addEventListener("click", () => {
