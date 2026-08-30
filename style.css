@@ -1811,3 +1811,66 @@ input,select{width:100%;background:#0e0e10;border:1px solid #34343a;color:#fff;b
   background:#f3f3f0;
   border:2px solid #111114;
 }
+
+
+/* ===== v16.2.4: STICKY WORKFLOW ===== */
+/* Main action bar follows the client while scrolling. It remains in normal
+   document flow, so it never overlaps the HERO. */
+.client-topbar{
+  position:sticky !important;
+  top:0 !important;
+  z-index:90 !important;
+  background:rgba(9,9,10,.97) !important;
+  backdrop-filter:blur(16px) !important;
+  -webkit-backdrop-filter:blur(16px) !important;
+  box-shadow:0 8px 24px rgba(0,0,0,.22) !important;
+}
+
+/* Filters form the second level of the sticky stack. */
+.client-controls{
+  position:sticky !important;
+  top:var(--client-topbar-height,64px) !important;
+  z-index:80 !important;
+  background:rgba(11,11,13,.96) !important;
+  box-shadow:0 7px 20px rgba(0,0,0,.18) !important;
+}
+
+/* Approval/reset bar follows immediately below topbar + filters. */
+.selection-workflow:not([hidden]){
+  position:sticky !important;
+  top:calc(var(--client-topbar-height,64px) + var(--client-controls-height,58px) + 8px) !important;
+  z-index:70 !important;
+  background:rgba(17,17,20,.97) !important;
+  backdrop-filter:blur(16px) !important;
+  -webkit-backdrop-filter:blur(16px) !important;
+  box-shadow:0 12px 30px rgba(0,0,0,.32) !important;
+}
+
+/* Keep sticky bars readable and prevent buttons from shrinking into each other. */
+.client-topbar .top-actions > *,
+.selection-workflow-actions > *{
+  flex-shrink:0;
+}
+
+@media(max-width:760px){
+  .client-topbar{
+    position:sticky !important;
+    top:0 !important;
+  }
+  .client-controls{
+    top:var(--client-topbar-height,58px) !important;
+  }
+  .selection-workflow:not([hidden]){
+    top:calc(var(--client-topbar-height,58px) + var(--client-controls-height,70px) + 6px) !important;
+    width:calc(100% - 12px) !important;
+    margin-left:auto !important;
+    margin-right:auto !important;
+    padding:10px 11px !important;
+  }
+  .selection-workflow-actions{
+    width:100%;
+  }
+  .selection-workflow-actions > *{
+    flex:1 1 150px !important;
+  }
+}

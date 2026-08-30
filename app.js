@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, onValue, push } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=16.2.3.2.2.1";
+import { firebaseConfig } from "./firebase-config.js?v=16.2.4.2.1";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -610,6 +610,7 @@ async function openGallery() {
   $("#lockScreen").hidden = true;
   $("#introScreen").hidden = true;
   $("#galleryView").hidden = false;
+  scheduleStickyWorkflowSync();
 
   if (!galleryLoaded) {
     galleryLoaded = true;
@@ -1199,6 +1200,7 @@ function updateUI() {
 
   updateDownloadUI();
   updateCompareUI();
+  scheduleStickyWorkflowSync();
 }
 
 
@@ -1619,5 +1621,45 @@ document.addEventListener("dragstart", (event) => {
     event.preventDefault();
   }
 });
+
+
+// ===== v16.2.4: dynamic sticky workflow offsets =====
+function syncStickyWorkflowOffsets() {
+  const topbar = document.querySelector('.client-topbar');
+  const controls = document.querySelector('.client-controls');
+  const workflow = document.querySelector('.selection-workflow');
+
+  const topbarHeight = topbar && !topbar.hidden
+    ? Math.ceil(topbar.getBoundingClientRect().height)
+    : 0;
+  const controlsHeight = controls && !controls.hidden
+    ? Math.ceil(controls.getBoundingClientRect().height)
+    : 0;
+  const workflowHeight = workflow && !workflow.hidden
+    ? Math.ceil(workflow.getBoundingClientRect().height)
+    : 0;
+
+  document.documentElement.style.setProperty('--client-topbar-height', `${topbarHeight}px`);
+  document.documentElement.style.setProperty('--client-controls-height', `${controlsHeight}px`);
+  document.documentElement.style.setProperty('--selection-workflow-height', `${workflowHeight}px`);
+}
+
+function scheduleStickyWorkflowSync() {
+  requestAnimationFrame(() => {
+    syncStickyWorkflowOffsets();
+    requestAnimationFrame(syncStickyWorkflowOffsets);
+  });
+}
+
+window.addEventListener('resize', scheduleStickyWorkflowSync, { passive: true });
+window.addEventListener('orientationchange', scheduleStickyWorkflowSync, { passive: true });
+
+if ('ResizeObserver' in window) {
+  const stickyWorkflowObserver = new ResizeObserver(scheduleStickyWorkflowSync);
+  ['.client-topbar', '.client-controls', '.selection-workflow'].forEach(selector => {
+    const element = document.querySelector(selector);
+    if (element) stickyWorkflowObserver.observe(element);
+  });
+}
 
 init();
