@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=15.0";
+import { firebaseConfig } from "./firebase-config.js?v=15.2";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -43,6 +43,15 @@ const DEFAULT_UI_CONFIG = {
   filterBg: "#f3f3f0",
   filterText: "#111111",
   showFilenames: true,
+  showHeartButton: true,
+  showRejectButton: true,
+  showCompareButton: true,
+  showSingleDownloadButton: true,
+  showDownloadSelectButton: true,
+  allowSingleDownload: true,
+  allowSelectedDownloads: true,
+  allowFavoriteDownloads: true,
+  blockSaveImage: true,
   labels: {
     all: "Wszystkie",
     favorites: "Wybrane",
@@ -79,8 +88,48 @@ function getUiConfig() {
     cardRadius: clampNumber(stored.cardRadius, 0, 30, DEFAULT_UI_CONFIG.cardRadius),
     buttonSize: clampNumber(stored.buttonSize, 26, 64, DEFAULT_UI_CONFIG.buttonSize),
     buttonGap: clampNumber(stored.buttonGap, 0, 20, DEFAULT_UI_CONFIG.buttonGap),
-    showFilenames: stored.showFilenames !== false
+    showFilenames: stored.showFilenames !== false,
+    showHeartButton: stored.showHeartButton !== false,
+    showRejectButton: stored.showRejectButton !== false,
+    showCompareButton: stored.showCompareButton !== false,
+    showSingleDownloadButton: stored.showSingleDownloadButton !== false,
+    showDownloadSelectButton: stored.showDownloadSelectButton !== false,
+    allowSingleDownload: stored.allowSingleDownload !== false,
+    allowSelectedDownloads: stored.allowSelectedDownloads !== false,
+    allowFavoriteDownloads: stored.allowFavoriteDownloads !== false,
+    blockSaveImage: stored.blockSaveImage !== false
   };
+}
+
+function masterDownloadsEnabled() { return gallery?.downloadsEnabled !== false; }
+function canDownloadSingle() { return masterDownloadsEnabled() && currentUiConfig.allowSingleDownload !== false; }
+function canDownloadSelected() { return masterDownloadsEnabled() && currentUiConfig.allowSelectedDownloads !== false; }
+function canDownloadFavorites() { return masterDownloadsEnabled() && currentUiConfig.allowFavoriteDownloads !== false; }
+
+function applyFeatureVisibility() {
+  const hearts = currentUiConfig.showHeartButton !== false;
+  const reject = currentUiConfig.showRejectButton !== false;
+  const compare = currentUiConfig.showCompareButton !== false;
+
+  const favoritesToggle = $("#favoritesToggle");
+  const favFilter = $("#favFilter");
+  const selectionCount = document.querySelector(".selection-count");
+  if (favoritesToggle) favoritesToggle.hidden = !hearts;
+  if (favFilter) favFilter.hidden = !hearts;
+  if (selectionCount) selectionCount.hidden = !hearts;
+  if ($("#hiddenFilter")) $("#hiddenFilter").hidden = !reject;
+
+  const downloadFavoritesBtn = $("#downloadFavoritesBtn");
+  if (downloadFavoritesBtn) downloadFavoritesBtn.hidden = !hearts || !canDownloadFavorites();
+
+  if (!compare) {
+    compareSelection = [];
+    if ($("#compareBar")) $("#compareBar").hidden = true;
+    document.body.classList.remove("compare-bar-visible");
+  }
+
+  if (!hearts && filter === "favorites") filter = "all";
+  if (!reject && filter === "hidden") filter = "all";
 }
 
 function applyUiConfig() {
@@ -117,6 +166,7 @@ function applyUiConfig() {
     const el = document.getElementById(id);
     if (el && value) el.textContent = value;
   });
+  applyFeatureVisibility();
 }
 
 async function sha256(text) {
@@ -543,6 +593,7 @@ function render() {
     const img = document.createElement("img");
     img.loading = "lazy";
     img.alt = photo.filename;
+    img.draggable = false;
     img.src = photo.preview;
 
     const tools = document.createElement("div");
@@ -625,7 +676,18 @@ function render() {
       toggleDownloadSelection(photo.filename);
     });
 
-    tools.append(heart, rejectBtn, compareBtn, downloadOne, selectDownload);
+    const toolButtons = [];
+    if (currentUiConfig.showHeartButton !== false) toolButtons.push(heart);
+    if (currentUiConfig.showRejectButton !== false) toolButtons.push(rejectBtn);
+    if (currentUiConfig.showCompareButton !== false) toolButtons.push(compareBtn);
+    if (currentUiConfig.showSingleDownloadButton !== false && canDownloadSingle()) toolButtons.push(downloadOne);
+    if (currentUiConfig.showDownloadSelectButton !== false) {
+      selectDownload.disabled = !canDownloadSelected();
+      if (!canDownloadSelected()) selectDownload.title = "Pobieranie zaznaczonych jest wyłączone";
+      toolButtons.push(selectDownload);
+    }
+    tools.append(...toolButtons);
+    tools.hidden = toolButtons.length === 0;
     card.append(skeleton, img, tools, filename);
     grid.appendChild(card);
   });
@@ -634,6 +696,7 @@ function render() {
 }
 
 async function toggleFavorite(filename) {
+  if (currentUiConfig.showHeartButton === false) return;
   const wasSelected = favorites.has(filename);
 
   if (!wasSelected && maxFavorites() > 0 && favorites.size >= maxFavorites()) {
@@ -688,6 +751,7 @@ function toggleRejected(filename) {
 }
 
 function toggleCompareSelection(filename) {
+  if (currentUiConfig.showCompareButton === false) return;
   if (compareSelection.includes(filename)) {
     compareSelection = compareSelection.filter(name => name !== filename);
   } else if (compareSelection.length >= 2) {
@@ -724,11 +788,8 @@ async function openCompareDialog() {
   $("#compareDialog").hidden = false;
   document.body.style.overflow = "hidden";
 
-  try {
-    const [urlA, urlB] = await Promise.all([getOriginalUrl(indexA), getOriginalUrl(indexB)]);
-    if (urlA) $("#compareImageA").src = urlA;
-    if (urlB) $("#compareImageB").src = urlB;
-  } catch (_) {}
+  $("#compareImageA").draggable = false;
+  $("#compareImageB").draggable = false;
 }
 
 function closeCompareDialog() {
@@ -751,8 +812,9 @@ function updateCompareUI() {
 
   $("#compareSelectedCount").textContent = count;
   $("#compareSelectedNames").textContent = count ? compareSelection.map(displayName).join("  •  ") : "Wybierz dwa zdjęcia do porównania obok siebie";
-  bar.hidden = count === 0;
-  document.body.classList.toggle("compare-bar-visible", count > 0);
+  const showBar = currentUiConfig.showCompareButton !== false && count > 0;
+  bar.hidden = !showBar;
+  document.body.classList.toggle("compare-bar-visible", showBar);
   const openButton = $("#openCompareBtn");
   openButton.disabled = count !== 2;
   openButton.textContent = count === 2 ? `↔ Porównaj (${currentUiConfig.labels.compare || "A/B"})` : `↔ ${currentUiConfig.labels.compare || "A/B"}`;
@@ -781,9 +843,11 @@ function updateUI() {
 
   const inlineHeartDownload = $("#downloadFavoritesInlineBtn");
   if (inlineHeartDownload) {
-    inlineHeartDownload.hidden = count === 0;
-    inlineHeartDownload.textContent = `♥ Pobierz wybrane (${count})`;
+    inlineHeartDownload.hidden = currentUiConfig.showHeartButton === false || !canDownloadFavorites() || count === 0;
+    inlineHeartDownload.textContent = `♥ ${currentUiConfig.labels.downloadFavorites || "Pobierz wybrane"} (${count})`;
   }
+  const progressWrap = $("#progressWrap");
+  if (progressWrap && currentUiConfig.showHeartButton === false) progressWrap.hidden = true;
 
   updateDownloadUI();
   updateCompareUI();
@@ -805,7 +869,7 @@ function updateDownloadUI() {
   if (!bar) return;
 
   $("#downloadSelectedCount").textContent = count;
-  bar.hidden = count === 0;
+  bar.hidden = currentUiConfig.showDownloadSelectButton === false || !canDownloadSelected() || count === 0;
 
   const button = $("#downloadSelectedBtn");
   if (button) {
@@ -865,8 +929,8 @@ function startAttachmentDownload(url, filename) {
 }
 
 async function downloadSinglePhoto(index) {
-  if (gallery.downloadsEnabled === false) {
-    toast("Pobieranie zdjęć jest wyłączone dla tej galerii.");
+  if (!canDownloadSingle()) {
+    toast("Pobieranie pojedynczych zdjęć jest wyłączone dla tej galerii.");
     return;
   }
 
@@ -890,8 +954,8 @@ async function downloadSinglePhoto(index) {
 }
 
 async function downloadFavoriteFiles() {
-  if (gallery.downloadsEnabled === false) {
-    toast("Pobieranie zdjęć jest wyłączone dla tej galerii.");
+  if (!canDownloadFavorites()) {
+    toast("Pobieranie zdjęć wybranych serduszkiem jest wyłączone.");
     return;
   }
   const selected = photos.filter(photo => favorites.has(photo.filename));
@@ -930,8 +994,8 @@ async function downloadFavoriteFiles() {
 }
 
 async function downloadSelectedFiles() {
-  if (gallery.downloadsEnabled === false) {
-    toast("Pobieranie zdjęć jest wyłączone dla tej galerii.");
+  if (!canDownloadSelected()) {
+    toast("Pobieranie zaznaczonych zdjęć jest wyłączone.");
     return;
   }
 
@@ -1014,15 +1078,10 @@ async function openLightbox(index) {
   $("#lightbox").hidden = false;
   document.body.style.overflow = "hidden";
   $("#lightboxImage").src = photo.preview;
+  $("#lightboxImage").draggable = false;
 
   updateLightboxUI();
   updateSlideshowButtons();
-
-  const original = await getOriginalUrl(index);
-  if (currentIndex === index && original) {
-    $("#lightboxImage").src = original;
-    $("#lightboxDownload").href = original;
-  }
 }
 
 function updateLightboxUI() {
@@ -1034,11 +1093,11 @@ function updateLightboxUI() {
   $("#lightboxCaption").textContent = `${currentIndex + 1} / ${photos.length} · ${displayName(photo.filename)}`;
   $("#lightboxFav").textContent = selected ? "♥" : "♡";
   $("#lightboxFav").classList.toggle("active", selected);
+  $("#lightboxFav").hidden = currentUiConfig.showHeartButton === false;
   $("#lightboxReject").classList.toggle("active", rejected.has(photo.filename));
-  $("#lightboxDownload").hidden = gallery.downloadsEnabled === false;
+  $("#lightboxReject").hidden = currentUiConfig.showRejectButton === false;
+  $("#lightboxDownload").hidden = currentUiConfig.showSingleDownloadButton === false || !canDownloadSingle();
   updateSlideshowButtons();
-
-  if (photo.originalUrl) $("#lightboxDownload").href = photo.originalUrl;
 }
 
 async function changeLightbox(delta) {
@@ -1047,12 +1106,6 @@ async function changeLightbox(delta) {
 
   $("#lightboxImage").src = photo.preview;
   updateLightboxUI();
-
-  const original = await getOriginalUrl(currentIndex);
-  if (original) {
-    $("#lightboxImage").src = original;
-    $("#lightboxDownload").href = original;
-  }
 }
 
 function closeLightbox() {
@@ -1199,6 +1252,21 @@ $("#closeCompareDialog")?.addEventListener("click", closeCompareDialog);
 $("#swapCompareBtn")?.addEventListener("click", swapCompareSelection);
 $("#compareDialog")?.addEventListener("click", (event) => {
   if (event.target.id === "compareDialog") closeCompareDialog();
+});
+
+// Basic browser deterrence. This blocks normal Save image as / dragging / long-press menu.
+// It cannot prevent screenshots or an advanced user from inspecting network requests.
+document.addEventListener("contextmenu", (event) => {
+  if (currentUiConfig.blockSaveImage === false) return;
+  if (event.target.closest(".photo-card, .lightbox-stage, .compare-pane, .client-hero, .intro-screen")) {
+    event.preventDefault();
+  }
+});
+document.addEventListener("dragstart", (event) => {
+  if (currentUiConfig.blockSaveImage === false) return;
+  if (event.target instanceof HTMLImageElement || event.target.closest?.(".client-hero, .intro-backdrop")) {
+    event.preventDefault();
+  }
 });
 
 init();

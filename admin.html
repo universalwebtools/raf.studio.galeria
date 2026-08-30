@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
   <title>RAF.studio — Studio Manager</title>
-  <link rel="stylesheet" href="style.css?v=15.0">
+  <link rel="stylesheet" href="style.css?v=15.2">
 </head>
 <body class="admin-body">
 
 <section id="adminLogin" class="lock-screen">
   <div class="lock-card">
-    <img class="raf-logo login-logo" src="logo-white.png?v=15.0" alt="RAF.studio">
+    <img class="raf-logo login-logo" src="logo-white.png?v=15.2" alt="RAF.studio">
     <p class="eyebrow">STUDIO MANAGER</p>
     <h1>Panel fotografa</h1>
     <p class="muted">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
@@ -40,7 +40,7 @@
 <main id="adminPanel" hidden>
   <aside class="sidebar">
     <div>
-      <img class="raf-logo sidebar-logo" src="logo-white.png?v=15.0" alt="RAF.studio">
+      <img class="raf-logo sidebar-logo" src="logo-white.png?v=15.2" alt="RAF.studio">
       <small>Studio Manager</small>
     </div>
     <div class="side-bottom">
@@ -63,6 +63,75 @@
       <article><span>Galerie</span><strong id="statGalleries">0</strong></article>
       <article><span>Zdjęcia</span><strong id="statPhotos">0</strong></article>
       <article><span>Galerie z wyborem</span><strong id="statSelections">0</strong></article>
+    </section>
+
+    <section id="storageMonitor" class="storage-monitor">
+      <div class="storage-monitor-head">
+        <div>
+          <p class="eyebrow">FIREBASE STORAGE</p>
+          <h2>Storage Monitor</h2>
+          <p class="muted">Szacunkowe zajęcie aktywnych plików galerii w Firebase Storage.</p>
+        </div>
+        <button id="refreshStorageBtn" type="button" class="ghost">↻ Przelicz teraz</button>
+      </div>
+
+      <div class="storage-main">
+        <div class="storage-usage">
+          <div class="storage-usage-line">
+            <div>
+              <span>Zajęte miejsce</span>
+              <strong id="storageUsedText">—</strong>
+            </div>
+            <div class="storage-limit">
+              <span>Próg monitorowania</span>
+              <div class="storage-limit-edit">
+                <input id="storageLimitGbInput" type="number" min="0.1" step="0.1" value="5" aria-label="Próg monitorowania GB">
+                <b>GB</b>
+              </div>
+            </div>
+          </div>
+
+          <div class="storage-meter">
+            <div id="storageMeterBar" class="storage-meter-bar"></div>
+          </div>
+
+          <div class="storage-meter-meta">
+            <span id="storagePercentText">Kliknij „Przelicz teraz”</span>
+            <span id="storageRemainingText"></span>
+          </div>
+        </div>
+
+        <div class="storage-stats">
+          <article>
+            <span>Oryginały</span>
+            <strong id="storageOriginalsText">—</strong>
+          </article>
+          <article>
+            <span>Preview</span>
+            <strong id="storagePreviewsText">—</strong>
+          </article>
+          <article>
+            <span>Pliki</span>
+            <strong id="storageFilesText">—</strong>
+          </article>
+        </div>
+      </div>
+
+      <div id="storageScanStatus" class="storage-scan-status">Monitor nie był jeszcze przeliczany.</div>
+
+      <div class="storage-ranking-head">
+        <strong>Galerie zajmujące najwięcej miejsca</strong>
+        <span id="storageScanTime"></span>
+      </div>
+      <div id="storageRanking" class="storage-ranking">
+        <div class="storage-empty">Po przeliczeniu zobaczysz tutaj rozmiar każdej galerii.</div>
+      </div>
+
+      <p class="storage-footnote">
+        To licznik aktywnych plików <b>oryginałów + preview</b> w Twoich galeriach, a nie oficjalny licznik rachunku Google.
+        Nie obejmuje transferu/pobrań. Po usunięciu galerii Firebase/Google może jeszcze przez okres Soft Delete przechowywać
+        kopię usuniętych danych, więc rozliczeniowe zużycie może przez pewien czas być większe.
+      </p>
     </section>
 
     <div class="toolbar">
@@ -347,6 +416,44 @@
         </div>
       </div>
 
+      <div class="site-settings-section permissions-section">
+        <h3>Funkcje, pobieranie i ochrona</h3>
+        <p class="muted">Każdą funkcję możesz włączać i wyłączać osobno dla tej galerii.</p>
+
+        <div class="permission-grid">
+          <label class="check permission-master">
+            <input id="uiMasterDownloadsEnabled" type="checkbox" checked>
+            <span><b>Główne pobieranie</b><small>Wyłącza wszystkie rodzaje pobierania jednym kliknięciem.</small></span>
+          </label>
+          <label class="check">
+            <input id="uiAllowSingleDownload" type="checkbox" checked>
+            <span><b>Pobieranie pojedynczego zdjęcia</b><small>Dotyczy strzałki ↓ przy zdjęciu i w lightboxie.</small></span>
+          </label>
+          <label class="check">
+            <input id="uiAllowSelectedDownloads" type="checkbox" checked>
+            <span><b>Pobieranie zaznaczonych ○/✓</b><small>Włącza pobieranie osobnego zestawu zaznaczonego kółkiem.</small></span>
+          </label>
+          <label class="check">
+            <input id="uiAllowFavoriteDownloads" type="checkbox" checked>
+            <span><b>Pobieranie wybranych ♥</b><small>Klient może pobrać zdjęcia zaznaczone serduszkiem.</small></span>
+          </label>
+        </div>
+
+        <h4>Widoczność przycisków na zdjęciu</h4>
+        <div class="permission-grid compact">
+          <label class="check"><input id="uiShowHeartButton" type="checkbox" checked><span>♥ Serduszko</span></label>
+          <label class="check"><input id="uiShowRejectButton" type="checkbox" checked><span>× Ukryj zdjęcie</span></label>
+          <label class="check"><input id="uiShowCompareButton" type="checkbox" checked><span>A/B Porównanie</span></label>
+          <label class="check"><input id="uiShowSingleDownloadButton" type="checkbox" checked><span>↓ Pobierz jedno</span></label>
+          <label class="check"><input id="uiShowDownloadSelectButton" type="checkbox" checked><span>○/✓ Zaznacz do pobrania</span></label>
+        </div>
+
+        <label class="check protection-toggle">
+          <input id="uiBlockSaveImage" type="checkbox" checked>
+          <span><b>Ochrona zdjęć w przeglądarce</b><small>Blokuje prawy przycisk „Zapisz obraz jako…”, przeciąganie zdjęcia i menu długiego przytrzymania na telefonie. Oryginały nie są ładowane do podglądu.</small></span>
+        </label>
+      </div>
+
       <div class="site-settings-section">
         <h3>Filtry i główne przyciski</h3>
         <div class="form2">
@@ -431,6 +538,6 @@
 <div id="toast" class="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
-<script type="module" src="admin.js?v=15.0"></script>
+<script type="module" src="admin.js?v=15.2"></script>
 </body>
 </html>

@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=15.0";
+import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata, getMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=15.2";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -21,6 +21,11 @@ let currentPhotosSlug = null;
 let qrGallerySlug = null;
 let qrInstance = null;
 let siteSettingsSlug = null;
+let storageMonitorData = null;
+let storageScanInProgress = false;
+let storageAutoScanStarted = false;
+const STORAGE_LIMIT_KEY = "raf-storage-monitor-limit-gb";
+
 
 
 function escapeHtml(value) {
@@ -83,6 +88,15 @@ const DEFAULT_UI_CONFIG = {
   filterBg: "#f3f3f0",
   filterText: "#111111",
   showFilenames: true,
+  showHeartButton: true,
+  showRejectButton: true,
+  showCompareButton: true,
+  showSingleDownloadButton: true,
+  showDownloadSelectButton: true,
+  allowSingleDownload: true,
+  allowSelectedDownloads: true,
+  allowFavoriteDownloads: true,
+  blockSaveImage: true,
   labels: {
     all: "Wszystkie",
     favorites: "Wybrane",
@@ -103,7 +117,16 @@ function normalizedUiConfig(pub) {
     ...DEFAULT_UI_CONFIG,
     ...stored,
     labels: { ...DEFAULT_UI_CONFIG.labels, ...(stored.labels || {}) },
-    showFilenames: stored.showFilenames !== false
+    showFilenames: stored.showFilenames !== false,
+    showHeartButton: stored.showHeartButton !== false,
+    showRejectButton: stored.showRejectButton !== false,
+    showCompareButton: stored.showCompareButton !== false,
+    showSingleDownloadButton: stored.showSingleDownloadButton !== false,
+    showDownloadSelectButton: stored.showDownloadSelectButton !== false,
+    allowSingleDownload: stored.allowSingleDownload !== false,
+    allowSelectedDownloads: stored.allowSelectedDownloads !== false,
+    allowFavoriteDownloads: stored.allowFavoriteDownloads !== false,
+    blockSaveImage: stored.blockSaveImage !== false
   };
 }
 
@@ -111,6 +134,287 @@ function clampValue(value, min, max, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number)) return fallback;
   return Math.min(max, Math.max(min, number));
+}
+
+
+
+function formatBytes(bytes, decimals = 1) {
+  const value = Number(bytes || 0);
+  if (!value) return "0 MB";
+
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const index = Math.min(units.length - 1, Math.floor(Math.log(value) / Math.log(1024)));
+  const size = value / Math.pow(1024, index);
+  const digits = index <= 1 ? 0 : decimals;
+  return `${size.toFixed(digits)} ${units[index]}`;
+}
+
+function getStorageLimitGb() {
+  const saved = Number(localStorage.getItem(STORAGE_LIMIT_KEY));
+  return Number.isFinite(saved) && saved > 0 ? saved : 5;
+}
+
+function getStorageLimitBytes() {
+  return getStorageLimitGb() * 1024 * 1024 * 1024;
+}
+
+function storageStatsForSlug(slug) {
+  return storageMonitorData?.galleries?.[slug] || null;
+}
+
+function updateGalleryStorageBadges() {
+  document.querySelectorAll("[data-storage-slug]").forEach(element => {
+    const data = storageStatsForSlug(element.dataset.storageSlug);
+    element.textContent = data ? `Storage ${formatBytes(data.total)}` : "Storage —";
+    element.title = data
+      ? `Oryginały: ${formatBytes(data.originals)} • Preview: ${formatBytes(data.previews)}`
+      : "Kliknij „Przelicz teraz” w Storage Monitor.";
+  });
+}
+
+function renderStorageMonitor() {
+  const limitGb = getStorageLimitGb();
+  const limitBytes = getStorageLimitBytes();
+
+  if ($("#storageLimitGbInput")) {
+    $("#storageLimitGbInput").value = String(limitGb);
+  }
+
+  if (!storageMonitorData) {
+    $("#storageUsedText").textContent = "—";
+    $("#storageOriginalsText").textContent = "—";
+    $("#storagePreviewsText").textContent = "—";
+    $("#storageFilesText").textContent = "—";
+    $("#storagePercentText").textContent = "Kliknij „Przelicz teraz”";
+    $("#storageRemainingText").textContent = "";
+    $("#storageMeterBar").style.width = "0%";
+    $("#storageMeterBar").className = "storage-meter-bar";
+    updateGalleryStorageBadges();
+    return;
+  }
+
+  const { total, originals, previews, files, galleries: gallerySizes, scannedAt } = storageMonitorData;
+  const percent = limitBytes > 0 ? (total / limitBytes) * 100 : 0;
+  const remaining = Math.max(0, limitBytes - total);
+
+  $("#storageUsedText").textContent = `${formatBytes(total)} / ${limitGb.toFixed(limitGb % 1 ? 1 : 0)} GB`;
+  $("#storageOriginalsText").textContent = formatBytes(originals);
+  $("#storagePreviewsText").textContent = formatBytes(previews);
+  $("#storageFilesText").textContent = String(files);
+  $("#storagePercentText").textContent = `${percent.toFixed(1)}% progu`;
+  $("#storageRemainingText").textContent = total < limitBytes
+    ? `zostało ok. ${formatBytes(remaining)}`
+    : `próg przekroczony o ${formatBytes(total - limitBytes)}`;
+
+  const bar = $("#storageMeterBar");
+  bar.style.width = `${Math.min(100, Math.max(0, percent))}%`;
+  bar.className = "storage-meter-bar";
+  if (percent >= 100) bar.classList.add("critical");
+  else if (percent >= 90) bar.classList.add("danger");
+  else if (percent >= 80) bar.classList.add("warning");
+
+  const ranking = Object.entries(gallerySizes || {})
+    .sort((a, b) => b[1].total - a[1].total);
+
+  const container = $("#storageRanking");
+  if (!ranking.length) {
+    container.innerHTML = '<div class="storage-empty">Brak plików w Firebase Storage.</div>';
+  } else {
+    const maxSize = Math.max(...ranking.map(([, item]) => item.total), 1);
+
+    container.innerHTML = ranking.map(([slug, item], index) => {
+      const title = galleries[slug]?.public?.title || `${slug}${galleries[slug] ? "" : " • poza listą galerii"}`;
+      const width = Math.max(3, (item.total / maxSize) * 100);
+
+      return `
+        <article class="storage-ranking-row">
+          <div class="storage-rank-number">${index + 1}</div>
+          <div class="storage-rank-main">
+            <div class="storage-rank-top">
+              <strong>${escapeHtml(title)}</strong>
+              <b>${formatBytes(item.total)}</b>
+            </div>
+            <div class="storage-rank-bar"><span style="width:${width}%"></span></div>
+            <div class="storage-rank-meta">
+              <span>oryginały ${formatBytes(item.originals)}</span>
+              <span>preview ${formatBytes(item.previews)}</span>
+              <span>${item.files} plików</span>
+              <span class="storage-free">po usunięciu aktywnych plików zwolnisz ~${formatBytes(item.total)}</span>
+            </div>
+          </div>
+        </article>
+      `;
+    }).join("");
+  }
+
+  $("#storageScanTime").textContent = scannedAt
+    ? `Ostatnio: ${new Date(scannedAt).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" })}`
+    : "";
+
+  updateGalleryStorageBadges();
+}
+
+async function collectStorageFiles(folderRef, files = []) {
+  const result = await listAll(folderRef);
+  files.push(...result.items);
+
+  for (const prefix of result.prefixes) {
+    await collectStorageFiles(prefix, files);
+  }
+
+  return files;
+}
+
+async function mapWithConcurrency(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function run() {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await worker(items[index], index);
+    }
+  }
+
+  const runners = Array.from(
+    { length: Math.min(concurrency, Math.max(1, items.length)) },
+    () => run()
+  );
+
+  await Promise.all(runners);
+  return results;
+}
+
+async function refreshStorageMonitor(force = false) {
+  if (storageScanInProgress) return;
+
+  storageScanInProgress = true;
+
+  const button = $("#refreshStorageBtn");
+  const status = $("#storageScanStatus");
+  const previousLabel = button?.textContent || "↻ Przelicz teraz";
+
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Liczenie…";
+  }
+
+  if (status) {
+    status.className = "storage-scan-status scanning";
+    status.textContent = "Szukam plików w Firebase Storage…";
+  }
+
+  try {
+    const root = sRef(storage, "galleries");
+    const files = await collectStorageFiles(root, []);
+
+    if (status) {
+      status.textContent = files.length
+        ? `Znaleziono ${files.length} plików. Odczytuję ich rozmiary…`
+        : "Nie znaleziono plików galerii.";
+    }
+
+    let completed = 0;
+    const metadataRows = await mapWithConcurrency(files, 8, async fileRef => {
+      try {
+        const metadata = await getMetadata(fileRef);
+        return {
+          fullPath: fileRef.fullPath,
+          size: Number(metadata.size || 0)
+        };
+      } catch (error) {
+        console.warn("STORAGE METADATA ERROR", fileRef.fullPath, error);
+        return {
+          fullPath: fileRef.fullPath,
+          size: 0,
+          error: true
+        };
+      } finally {
+        completed++;
+        if (status && files.length) {
+          status.textContent = `Analizuję Storage: ${completed}/${files.length} plików…`;
+        }
+      }
+    });
+
+    const data = {
+      total: 0,
+      originals: 0,
+      previews: 0,
+      files: metadataRows.length,
+      galleries: {},
+      scannedAt: Date.now()
+    };
+
+    for (const row of metadataRows) {
+      const parts = String(row.fullPath || "").split("/");
+      // galleries/{slug}/{originals|previews}/{file}
+      const slug = parts[1] || "(inne)";
+      const category = parts[2] || "other";
+      const size = Number(row.size || 0);
+
+      if (!data.galleries[slug]) {
+        data.galleries[slug] = {
+          total: 0,
+          originals: 0,
+          previews: 0,
+          other: 0,
+          files: 0
+        };
+      }
+
+      const gallery = data.galleries[slug];
+      gallery.total += size;
+      gallery.files += 1;
+      data.total += size;
+
+      if (category === "originals") {
+        gallery.originals += size;
+        data.originals += size;
+      } else if (category === "previews") {
+        gallery.previews += size;
+        data.previews += size;
+      } else {
+        gallery.other += size;
+      }
+    }
+
+    storageMonitorData = data;
+    renderStorageMonitor();
+    renderCards();
+
+    if (status) {
+      status.className = "storage-scan-status ok";
+      status.textContent = `Gotowe — policzono ${data.files} plików. Aktywne galerie zajmują około ${formatBytes(data.total)}.`;
+    }
+  } catch (error) {
+    console.error("STORAGE MONITOR ERROR", error);
+    if (status) {
+      status.className = "storage-scan-status error";
+      status.textContent = `Nie udało się policzyć Storage: ${error.code || error.message || error}`;
+    }
+  } finally {
+    storageScanInProgress = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = previousLabel;
+    }
+  }
+}
+
+function startStorageMonitorOnce() {
+  renderStorageMonitor();
+
+  if (storageAutoScanStarted) return;
+  storageAutoScanStarted = true;
+
+  // Krótka zwłoka, żeby najpierw szybko wyrenderować panel.
+  setTimeout(() => {
+    if (auth.currentUser?.uid === ADMIN_UID) {
+      refreshStorageMonitor().catch(error => console.warn("AUTO STORAGE MONITOR ERROR", error));
+    }
+  }, 800);
 }
 
 
@@ -261,6 +565,7 @@ onAuthStateChanged(auth, (user) => {
     $("#adminLogin").hidden = true;
     $("#adminPanel").hidden = false;
     $("#adminEmailLabel").textContent = user.email || "Administrator";
+    startStorageMonitorOnce();
 
     if (unsubscribeGalleries) unsubscribeGalleries();
 
@@ -423,6 +728,7 @@ function renderCards() {
           <span>${pub.maxFavorites ? `limit ${pub.maxFavorites}` : "bez limitu"}</span>
           <span>${escapeHtml(expiryBadgeText(pub))}</span>
           ${pub.eventDate ? `<span>${escapeHtml(formatDate(pub.eventDate))}</span>` : ""}
+          <span class="gallery-storage-badge" data-storage-slug="${slug}">Storage ${storageStatsForSlug(slug) ? formatBytes(storageStatsForSlug(slug).total) : "—"}</span>
         </div>
 
         <div class="gallery-link">
@@ -480,6 +786,8 @@ function renderCards() {
   list.querySelectorAll("[data-edit]").forEach(button =>
     button.addEventListener("click", () => openEdit(button.dataset.edit))
   );
+
+  updateGalleryStorageBadges();
 }
 
 function loadCover(element, coverFile, manifest, coverX = 50, coverY = 38) {
@@ -493,6 +801,14 @@ function loadCover(element, coverFile, manifest, coverX = 50, coverY = 38) {
 
 $("#gallerySearch").addEventListener("input", renderCards);
 $("#galleryStatusFilter").addEventListener("change", renderCards);
+
+$("#refreshStorageBtn")?.addEventListener("click", () => refreshStorageMonitor(true));
+
+$("#storageLimitGbInput")?.addEventListener("change", () => {
+  const value = Math.max(0.1, Number($("#storageLimitGbInput").value || 5));
+  localStorage.setItem(STORAGE_LIMIT_KEY, String(value));
+  renderStorageMonitor();
+});
 
 function resetForm() {
   $("#editingSlug").value = "";
@@ -653,7 +969,12 @@ $("#deleteGalleryBtn").addEventListener("click", async () => {
 
   const title = galleries[slug]?.public?.title || slug;
 
-  if (!confirm(`Usunąć galerię „${title}” razem ze zdjęciami i wyborami klientów?`)) return;
+  const storageSize = storageStatsForSlug(slug)?.total || 0;
+  const storageHint = storageSize
+    ? `\n\nAktywne pliki tej galerii zajmują około ${formatBytes(storageSize)}.`
+    : "";
+
+  if (!confirm(`Usunąć galerię „${title}” razem ze zdjęciami i wyborami klientów?${storageHint}`)) return;
 
   const button = $("#deleteGalleryBtn");
   button.disabled = true;
@@ -668,6 +989,9 @@ $("#deleteGalleryBtn").addEventListener("click", async () => {
 
     $("#galleryDialog").close();
     toast("Galeria została usunięta");
+    storageMonitorData = null;
+    renderStorageMonitor();
+    refreshStorageMonitor(true).catch(error => console.warn("STORAGE RESCAN AFTER DELETE ERROR", error));
   } catch (error) {
     console.error("DELETE GALLERY ERROR", error);
     showNotice($("#saveStatus"), `Nie udało się usunąć: ${error.code || error.message || error}`, "error");
@@ -950,6 +1274,9 @@ $("#startUploadBtn").addEventListener("click", async () => {
 
     $("#uploadProgress").style.width = "100%";
     showNotice($("#uploadStatus"), `Gotowe — wysłano ${files.length} zdjęć.`, "ok");
+    storageMonitorData = null;
+    renderStorageMonitor();
+    refreshStorageMonitor(true).catch(error => console.warn("STORAGE RESCAN AFTER UPLOAD ERROR", error));
   } catch (error) {
     console.error("UPLOAD ERROR", error);
     showNotice($("#uploadStatus"), `Błąd wysyłania: ${error.code || error.message || error}`, "error");
@@ -1269,6 +1596,15 @@ function fillSiteSettings(config) {
   uiFieldValue("uiFilterBg", config.filterBg);
   uiFieldValue("uiFilterText", config.filterText);
   uiFieldValue("uiShowFilenames", config.showFilenames !== false);
+  uiFieldValue("uiShowHeartButton", config.showHeartButton !== false);
+  uiFieldValue("uiShowRejectButton", config.showRejectButton !== false);
+  uiFieldValue("uiShowCompareButton", config.showCompareButton !== false);
+  uiFieldValue("uiShowSingleDownloadButton", config.showSingleDownloadButton !== false);
+  uiFieldValue("uiShowDownloadSelectButton", config.showDownloadSelectButton !== false);
+  uiFieldValue("uiAllowSingleDownload", config.allowSingleDownload !== false);
+  uiFieldValue("uiAllowSelectedDownloads", config.allowSelectedDownloads !== false);
+  uiFieldValue("uiAllowFavoriteDownloads", config.allowFavoriteDownloads !== false);
+  uiFieldValue("uiBlockSaveImage", config.blockSaveImage !== false);
   uiFieldValue("uiLabelAll", config.labels.all);
   uiFieldValue("uiLabelFavorites", config.labels.favorites);
   uiFieldValue("uiLabelPortrait", config.labels.portrait);
@@ -1298,6 +1634,15 @@ function readSiteSettings() {
     filterBg: $("#uiFilterBg").value || DEFAULT_UI_CONFIG.filterBg,
     filterText: $("#uiFilterText").value || DEFAULT_UI_CONFIG.filterText,
     showFilenames: $("#uiShowFilenames").checked,
+    showHeartButton: $("#uiShowHeartButton").checked,
+    showRejectButton: $("#uiShowRejectButton").checked,
+    showCompareButton: $("#uiShowCompareButton").checked,
+    showSingleDownloadButton: $("#uiShowSingleDownloadButton").checked,
+    showDownloadSelectButton: $("#uiShowDownloadSelectButton").checked,
+    allowSingleDownload: $("#uiAllowSingleDownload").checked,
+    allowSelectedDownloads: $("#uiAllowSelectedDownloads").checked,
+    allowFavoriteDownloads: $("#uiAllowFavoriteDownloads").checked,
+    blockSaveImage: $("#uiBlockSaveImage").checked,
     labels: {
       all: $("#uiLabelAll").value.trim() || DEFAULT_UI_CONFIG.labels.all,
       favorites: $("#uiLabelFavorites").value.trim() || DEFAULT_UI_CONFIG.labels.favorites,
@@ -1336,6 +1681,12 @@ function updateSitePreview() {
   filters.style.setProperty("--preview-filter-text", config.filterText);
   const compare = tools.querySelector(".preview-compare");
   if (compare) compare.textContent = config.labels.compare;
+  const previewButtons = [...tools.querySelectorAll("button")];
+  if (previewButtons[0]) previewButtons[0].hidden = config.showHeartButton === false;
+  if (previewButtons[1]) previewButtons[1].hidden = config.showRejectButton === false;
+  if (previewButtons[2]) previewButtons[2].hidden = config.showCompareButton === false;
+  if (previewButtons[3]) previewButtons[3].hidden = config.showSingleDownloadButton === false || !$("#uiMasterDownloadsEnabled")?.checked || config.allowSingleDownload === false;
+  if (previewButtons[4]) previewButtons[4].hidden = config.showDownloadSelectButton === false;
 }
 
 function openSiteSettings(slug) {
@@ -1345,12 +1696,16 @@ function openSiteSettings(slug) {
   $("#siteSettingsTitle").textContent = `Ustawienia strony — ${pub.title || slug}`;
   $("#siteSettingsStatus").hidden = true;
   fillSiteSettings(normalizedUiConfig(pub));
+  uiFieldValue("uiMasterDownloadsEnabled", pub.downloadsEnabled !== false);
+  updateSitePreview();
   $("#siteSettingsDialog").showModal();
 }
 
 const siteEditorIds = [
   "uiDesktopColumns","uiTabletColumns","uiMobileColumns","uiGridGap","uiCardRadius","uiButtonSize","uiButtonGap",
   "uiButtonBg","uiHeartColor","uiCompareColor","uiDownloadColor","uiFilterBg","uiFilterText","uiShowFilenames",
+  "uiMasterDownloadsEnabled","uiShowHeartButton","uiShowRejectButton","uiShowCompareButton","uiShowSingleDownloadButton","uiShowDownloadSelectButton",
+  "uiAllowSingleDownload","uiAllowSelectedDownloads","uiAllowFavoriteDownloads","uiBlockSaveImage",
   "uiLabelAll","uiLabelFavorites","uiLabelPortrait","uiLabelLandscape","uiLabelHidden","uiLabelCompare",
   "uiLabelSlideshow","uiLabelShare","uiLabelExit","uiLabelDownloadFavorites"
 ];
@@ -1359,7 +1714,11 @@ siteEditorIds.forEach(id => {
   document.getElementById(id)?.addEventListener("change", updateSitePreview);
 });
 
-$("#resetSiteSettingsBtn")?.addEventListener("click", () => fillSiteSettings(structuredClone(DEFAULT_UI_CONFIG)));
+$("#resetSiteSettingsBtn")?.addEventListener("click", () => {
+  fillSiteSettings(structuredClone(DEFAULT_UI_CONFIG));
+  uiFieldValue("uiMasterDownloadsEnabled", true);
+  updateSitePreview();
+});
 $("#closeSiteSettingsDialog")?.addEventListener("click", () => $("#siteSettingsDialog").close());
 $("#cancelSiteSettingsBtn")?.addEventListener("click", () => $("#siteSettingsDialog").close());
 $("#saveSiteSettingsBtn")?.addEventListener("click", async () => {
@@ -1370,7 +1729,8 @@ $("#saveSiteSettingsBtn")?.addEventListener("click", async () => {
   button.textContent = "Zapisywanie…";
   try {
     const uiConfig = readSiteSettings();
-    await update(ref(db, `galleries/${siteSettingsSlug}/public`), { uiConfig, updatedAt: Date.now() });
+    const downloadsEnabled = $("#uiMasterDownloadsEnabled").checked;
+    await update(ref(db, `galleries/${siteSettingsSlug}/public`), { uiConfig, downloadsEnabled, updatedAt: Date.now() });
     showNotice($("#siteSettingsStatus"), "Wygląd galerii zapisany. Klient zobaczy zmianę po odświeżeniu strony.", "ok");
     toast("Ustawienia strony zapisane");
   } catch (error) {
