@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata, getMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=16.2";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=16.2.1.1";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -2858,7 +2858,7 @@ function readSiteSettings() {
     heroTileRadius: clampValue($("#uiHeroTileRadius").value, 0, 30, DEFAULT_UI_CONFIG.heroTileRadius),
     heroOverlay: clampValue($("#uiHeroOverlay").value, 0, 85, DEFAULT_UI_CONFIG.heroOverlay),
     heroImageWidth: 1500,
-    heroBgColor: $("#uiHeroBgColor").value || DEFAULT_UI_CONFIG.heroBgColor,r,
+    heroBgColor: $("#uiHeroBgColor").value || DEFAULT_UI_CONFIG.heroBgColor,
     desktopColumns: clampValue($("#uiDesktopColumns").value, 2, 6, 4),
     tabletColumns: clampValue($("#uiTabletColumns").value, 2, 5, 3),
     mobileColumns: clampValue($("#uiMobileColumns").value, 1, 4, 2),
@@ -3031,16 +3031,25 @@ function updateSitePreview() {
 }
 
 function openSiteSettings(slug) {
-  siteSettingsSlug = slug;
-  const pub = galleries[slug]?.public || {};
-  $("#siteSettingsSlug").value = slug;
-  $("#siteSettingsTitle").textContent = `Ustawienia strony — ${pub.title || slug}`;
-  $("#siteSettingsStatus").hidden = true;
-  fillSiteSettings(normalizedUiConfig(pub));
-  populateHeroPhotoSelectors(slug);
-  uiFieldValue("uiMasterDownloadsEnabled", pub.downloadsEnabled !== false);
-  updateSitePreview();
-  $("#siteSettingsDialog").showModal();
+  try {
+    siteSettingsSlug = slug;
+    const pub = galleries[slug]?.public || {};
+
+    $("#siteSettingsSlug").value = slug;
+    $("#siteSettingsTitle").textContent = `Ustawienia strony — ${pub.title || slug}`;
+    $("#siteSettingsStatus").hidden = true;
+
+    fillSiteSettings(normalizedUiConfig(pub));
+    populateHeroPhotoSelectors(slug);
+    uiFieldValue("uiMasterDownloadsEnabled", pub.downloadsEnabled !== false);
+    updateSitePreview();
+
+    const dialog = $("#siteSettingsDialog");
+    if (!dialog.open) dialog.showModal();
+  } catch (error) {
+    console.error("OPEN SITE SETTINGS ERROR", error);
+    toast(`Nie udało się otworzyć Ustawień strony: ${error.message || error}`);
+  }
 }
 
 const siteEditorIds = [
