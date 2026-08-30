@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=15.3";
+import { firebaseConfig } from "./firebase-config.js?v=15.4";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -25,6 +25,120 @@ let slideshowActive = false;
 let galleryLoaded = false;
 let rejected = new Set();
 let compareSelection = [];
+
+const CLIENT_LOGIN_CONFIG_PATH = "galleries/__system__/public/clientLoginConfig";
+
+const DEFAULT_CLIENT_LOGIN_CONFIG = {
+  eyebrow: "PRYWATNA GALERIA",
+  instruction: "Wpisz hasło otrzymane od fotografa.",
+  passwordPlaceholder: "Hasło do galerii",
+  buttonLabel: "Otwórz galerię",
+
+  logoWidth: 190,
+  cardWidth: 460,
+  cardRadius: 26,
+  cardPadding: 42,
+  titleSize: 44,
+  formGap: 12,
+
+  bgTop: "#29292e",
+  bgMiddle: "#111113",
+  bgBottom: "#09090a",
+  cardBg: "#111113",
+  cardBorder: "#2e2e33",
+  textColor: "#f4f4f2",
+  mutedColor: "#929298",
+  buttonBg: "#f5f5f2",
+  buttonText: "#0b0b0c",
+  inputBg: "#0e0e10",
+  inputBorder: "#34343a",
+  accentColor: "#aaaaaa",
+
+  showLogo: true,
+  showEyebrow: true,
+  showInstruction: true
+};
+
+let clientLoginConfig = { ...DEFAULT_CLIENT_LOGIN_CONFIG };
+
+function clampClientValue(value, min, max, fallback) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
+}
+
+function normalizeClientLoginConfig(raw) {
+  const stored = raw || {};
+  return {
+    ...DEFAULT_CLIENT_LOGIN_CONFIG,
+    ...stored,
+    logoWidth: clampClientValue(stored.logoWidth, 80, 360, DEFAULT_CLIENT_LOGIN_CONFIG.logoWidth),
+    cardWidth: clampClientValue(stored.cardWidth, 300, 720, DEFAULT_CLIENT_LOGIN_CONFIG.cardWidth),
+    cardRadius: clampClientValue(stored.cardRadius, 0, 60, DEFAULT_CLIENT_LOGIN_CONFIG.cardRadius),
+    cardPadding: clampClientValue(stored.cardPadding, 18, 80, DEFAULT_CLIENT_LOGIN_CONFIG.cardPadding),
+    titleSize: clampClientValue(stored.titleSize, 28, 72, DEFAULT_CLIENT_LOGIN_CONFIG.titleSize),
+    formGap: clampClientValue(stored.formGap, 6, 28, DEFAULT_CLIENT_LOGIN_CONFIG.formGap),
+    showLogo: stored.showLogo !== false,
+    showEyebrow: stored.showEyebrow !== false,
+    showInstruction: stored.showInstruction !== false
+  };
+}
+
+function applyClientLoginConfig(config = clientLoginConfig) {
+  clientLoginConfig = normalizeClientLoginConfig(config);
+
+  const screen = $("#lockScreen");
+  const card = $("#lockScreen .lock-card");
+  const logo = $("#clientLoginLogo");
+  const eyebrow = $("#clientLoginEyebrow");
+  const instruction = $("#clientLoginInstruction");
+  const password = $("#passwordInput");
+  const submit = $("#clientLoginSubmit");
+
+  if (screen) {
+    screen.style.setProperty("--client-login-bg-top", clientLoginConfig.bgTop);
+    screen.style.setProperty("--client-login-bg-middle", clientLoginConfig.bgMiddle);
+    screen.style.setProperty("--client-login-bg-bottom", clientLoginConfig.bgBottom);
+    screen.style.setProperty("--client-login-text", clientLoginConfig.textColor);
+    screen.style.setProperty("--client-login-muted", clientLoginConfig.mutedColor);
+    screen.style.setProperty("--client-login-accent", clientLoginConfig.accentColor);
+    screen.style.setProperty("--client-login-logo-width", `${clientLoginConfig.logoWidth}px`);
+  }
+
+  if (card) {
+    card.style.setProperty("--client-login-card-width", `${clientLoginConfig.cardWidth}px`);
+    card.style.setProperty("--client-login-card-radius", `${clientLoginConfig.cardRadius}px`);
+    card.style.setProperty("--client-login-card-padding", `${clientLoginConfig.cardPadding}px`);
+    card.style.setProperty("--client-login-card-bg", clientLoginConfig.cardBg);
+    card.style.setProperty("--client-login-card-border", clientLoginConfig.cardBorder);
+    card.style.setProperty("--client-login-title-size", `${clientLoginConfig.titleSize}px`);
+    card.style.setProperty("--client-login-form-gap", `${clientLoginConfig.formGap}px`);
+    card.style.setProperty("--client-login-button-bg", clientLoginConfig.buttonBg);
+    card.style.setProperty("--client-login-button-text", clientLoginConfig.buttonText);
+    card.style.setProperty("--client-login-input-bg", clientLoginConfig.inputBg);
+    card.style.setProperty("--client-login-input-border", clientLoginConfig.inputBorder);
+  }
+
+  if (logo) {
+    logo.style.width = `${clientLoginConfig.logoWidth}px`;
+    logo.style.maxWidth = "82%";
+    logo.hidden = !clientLoginConfig.showLogo;
+  }
+
+  if (eyebrow) {
+    eyebrow.textContent = clientLoginConfig.eyebrow || "";
+    eyebrow.hidden = !clientLoginConfig.showEyebrow;
+  }
+
+  if (instruction) {
+    instruction.textContent = clientLoginConfig.instruction || "";
+    instruction.hidden = !clientLoginConfig.showInstruction;
+  }
+
+  if (password) password.placeholder = clientLoginConfig.passwordPlaceholder || "Hasło do galerii";
+  if (submit) submit.textContent = clientLoginConfig.buttonLabel || "Otwórz galerię";
+}
+
 let unsubscribeFavorites = null;
 
 
@@ -323,6 +437,7 @@ function showFatal(message) {
 }
 
 async function init() {
+  applyClientLoginConfig(DEFAULT_CLIENT_LOGIN_CONFIG);
   if (!slug) {
     showFatal("Brak identyfikatora galerii w linku.");
     return;
@@ -332,7 +447,16 @@ async function init() {
     const credential = await signInAnonymously(auth);
     uid = credential.user.uid;
 
-    const publicSnap = await get(ref(db, `galleries/${slug}/public`));
+    const [clientLoginConfigSnap, publicSnap] = await Promise.all([
+      get(ref(db, CLIENT_LOGIN_CONFIG_PATH)).catch(() => null),
+      get(ref(db, `galleries/${slug}/public`))
+    ]);
+
+    if (clientLoginConfigSnap?.exists?.()) {
+      clientLoginConfig = normalizeClientLoginConfig(clientLoginConfigSnap.val());
+      applyClientLoginConfig(clientLoginConfig);
+    }
+
     if (!publicSnap.exists()) {
       showFatal("Galeria nie istnieje.");
       return;
@@ -1158,7 +1282,7 @@ $("#passwordForm").addEventListener("submit", async (event) => {
     errorEl.hidden = false;
   } finally {
     submitButton.disabled = false;
-    submitButton.textContent = "Otwórz galerię";
+    submitButton.textContent = clientLoginConfig.buttonLabel || "Otwórz galerię";
   }
 });
 

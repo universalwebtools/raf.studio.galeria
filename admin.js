@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata, getMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=15.3";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=15.4";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -68,6 +68,59 @@ const DEFAULT_ADMIN_LOGIN_CONFIG = {
 
 let adminLoginConfig = { ...DEFAULT_ADMIN_LOGIN_CONFIG };
 let adminLoginConfigLoaded = false;
+
+
+const CLIENT_LOGIN_CONFIG_PATH = "galleries/__system__/public/clientLoginConfig";
+const ADMIN_PANEL_CONFIG_PATH = "galleries/__system__/public/adminPanelConfig";
+
+const DEFAULT_CLIENT_LOGIN_CONFIG = {
+  eyebrow: "PRYWATNA GALERIA",
+  instruction: "Wpisz hasło otrzymane od fotografa.",
+  passwordPlaceholder: "Hasło do galerii",
+  buttonLabel: "Otwórz galerię",
+  logoWidth: 190,
+  cardWidth: 460,
+  cardRadius: 26,
+  cardPadding: 42,
+  titleSize: 44,
+  formGap: 12,
+  bgTop: "#29292e",
+  bgMiddle: "#111113",
+  bgBottom: "#09090a",
+  cardBg: "#111113",
+  cardBorder: "#2e2e33",
+  textColor: "#f4f4f2",
+  mutedColor: "#929298",
+  buttonBg: "#f5f5f2",
+  buttonText: "#0b0b0c",
+  inputBg: "#0e0e10",
+  inputBorder: "#34343a",
+  accentColor: "#aaaaaa",
+  showLogo: true,
+  showEyebrow: true,
+  showInstruction: true
+};
+
+const DEFAULT_ADMIN_PANEL_CONFIG = {
+  contentWidth: 1320,
+  paddingX: 28,
+  sectionGap: 14,
+  radius: 15,
+  cardPadding: 16,
+  galleryColumns: 2,
+  compactStorage: true,
+  compactStats: true,
+  pageBg: "#09090a",
+  cardBg: "#121214",
+  border: "#29292e",
+  primaryBg: "#f5f5f2",
+  primaryText: "#0b0b0c",
+  muted: "#929298"
+};
+
+let clientLoginConfig = { ...DEFAULT_CLIENT_LOGIN_CONFIG };
+let adminPanelConfig = { ...DEFAULT_ADMIN_PANEL_CONFIG };
+
 
 
 
@@ -231,6 +284,7 @@ function applyAdminLoginConfig(config = adminLoginConfig) {
     screen.style.setProperty("--admin-login-text", adminLoginConfig.textColor);
     screen.style.setProperty("--admin-login-muted", adminLoginConfig.mutedColor);
     screen.style.setProperty("--admin-login-accent", adminLoginConfig.accentColor);
+    screen.style.setProperty("--admin-login-logo-width", `${adminLoginConfig.logoWidth}px`);
   }
 
   if (card) {
@@ -502,6 +556,368 @@ async function saveLoginEditor() {
 }
 
 
+
+function normalizeClientLoginConfig(raw) {
+  const stored = raw || {};
+  return {
+    ...DEFAULT_CLIENT_LOGIN_CONFIG,
+    ...stored,
+    logoWidth: clampValue(stored.logoWidth, 80, 360, DEFAULT_CLIENT_LOGIN_CONFIG.logoWidth),
+    cardWidth: clampValue(stored.cardWidth, 300, 720, DEFAULT_CLIENT_LOGIN_CONFIG.cardWidth),
+    cardRadius: clampValue(stored.cardRadius, 0, 60, DEFAULT_CLIENT_LOGIN_CONFIG.cardRadius),
+    cardPadding: clampValue(stored.cardPadding, 18, 80, DEFAULT_CLIENT_LOGIN_CONFIG.cardPadding),
+    titleSize: clampValue(stored.titleSize, 28, 72, DEFAULT_CLIENT_LOGIN_CONFIG.titleSize),
+    formGap: clampValue(stored.formGap, 6, 28, DEFAULT_CLIENT_LOGIN_CONFIG.formGap),
+    showLogo: stored.showLogo !== false,
+    showEyebrow: stored.showEyebrow !== false,
+    showInstruction: stored.showInstruction !== false
+  };
+}
+
+function normalizeAdminPanelConfig(raw) {
+  const stored = raw || {};
+  return {
+    ...DEFAULT_ADMIN_PANEL_CONFIG,
+    ...stored,
+    contentWidth: clampValue(stored.contentWidth, 900, 1800, DEFAULT_ADMIN_PANEL_CONFIG.contentWidth),
+    paddingX: clampValue(stored.paddingX, 10, 70, DEFAULT_ADMIN_PANEL_CONFIG.paddingX),
+    sectionGap: clampValue(stored.sectionGap, 6, 36, DEFAULT_ADMIN_PANEL_CONFIG.sectionGap),
+    radius: clampValue(stored.radius, 6, 32, DEFAULT_ADMIN_PANEL_CONFIG.radius),
+    cardPadding: clampValue(stored.cardPadding, 10, 28, DEFAULT_ADMIN_PANEL_CONFIG.cardPadding),
+    galleryColumns: Math.round(clampValue(stored.galleryColumns, 1, 3, DEFAULT_ADMIN_PANEL_CONFIG.galleryColumns)),
+    compactStorage: stored.compactStorage !== false,
+    compactStats: stored.compactStats !== false
+  };
+}
+
+async function loadGlobalEditorConfigs() {
+  try {
+    const [clientSnap, panelSnap] = await Promise.all([
+      get(ref(db, CLIENT_LOGIN_CONFIG_PATH)),
+      get(ref(db, ADMIN_PANEL_CONFIG_PATH))
+    ]);
+
+    clientLoginConfig = clientSnap.exists()
+      ? normalizeClientLoginConfig(clientSnap.val())
+      : { ...DEFAULT_CLIENT_LOGIN_CONFIG };
+
+    adminPanelConfig = panelSnap.exists()
+      ? normalizeAdminPanelConfig(panelSnap.val())
+      : { ...DEFAULT_ADMIN_PANEL_CONFIG };
+
+    applyAdminPanelConfig(adminPanelConfig);
+  } catch (error) {
+    console.warn("LOAD GLOBAL EDITOR CONFIG ERROR", error);
+    clientLoginConfig = { ...DEFAULT_CLIENT_LOGIN_CONFIG };
+    adminPanelConfig = { ...DEFAULT_ADMIN_PANEL_CONFIG };
+    applyAdminPanelConfig(adminPanelConfig);
+  }
+}
+
+function fillClientLoginEditor(config = clientLoginConfig) {
+  const cfg = normalizeClientLoginConfig(config);
+
+  $("#clientLoginCfgEyebrow").value = cfg.eyebrow;
+  $("#clientLoginCfgInstruction").value = cfg.instruction;
+  $("#clientLoginCfgPasswordPlaceholder").value = cfg.passwordPlaceholder;
+  $("#clientLoginCfgButtonLabel").value = cfg.buttonLabel;
+
+  $("#clientLoginCfgLogoWidth").value = cfg.logoWidth;
+  $("#clientLoginCfgCardWidth").value = cfg.cardWidth;
+  $("#clientLoginCfgCardRadius").value = cfg.cardRadius;
+  $("#clientLoginCfgCardPadding").value = cfg.cardPadding;
+  $("#clientLoginCfgTitleSize").value = cfg.titleSize;
+  $("#clientLoginCfgFormGap").value = cfg.formGap;
+
+  $("#clientLoginCfgBgTop").value = cfg.bgTop;
+  $("#clientLoginCfgBgMiddle").value = cfg.bgMiddle;
+  $("#clientLoginCfgBgBottom").value = cfg.bgBottom;
+  $("#clientLoginCfgCardBg").value = cfg.cardBg;
+  $("#clientLoginCfgCardBorder").value = cfg.cardBorder;
+  $("#clientLoginCfgTextColor").value = cfg.textColor;
+  $("#clientLoginCfgMutedColor").value = cfg.mutedColor;
+  $("#clientLoginCfgButtonBg").value = cfg.buttonBg;
+  $("#clientLoginCfgButtonText").value = cfg.buttonText;
+  $("#clientLoginCfgInputBg").value = cfg.inputBg;
+  $("#clientLoginCfgInputBorder").value = cfg.inputBorder;
+  $("#clientLoginCfgAccentColor").value = cfg.accentColor;
+
+  $("#clientLoginCfgShowLogo").checked = cfg.showLogo;
+  $("#clientLoginCfgShowEyebrow").checked = cfg.showEyebrow;
+  $("#clientLoginCfgShowInstruction").checked = cfg.showInstruction;
+
+  updateClientLoginPreview();
+}
+
+function readClientLoginEditor() {
+  return normalizeClientLoginConfig({
+    eyebrow: $("#clientLoginCfgEyebrow").value.trim(),
+    instruction: $("#clientLoginCfgInstruction").value.trim(),
+    passwordPlaceholder: $("#clientLoginCfgPasswordPlaceholder").value.trim(),
+    buttonLabel: $("#clientLoginCfgButtonLabel").value.trim(),
+
+    logoWidth: Number($("#clientLoginCfgLogoWidth").value),
+    cardWidth: Number($("#clientLoginCfgCardWidth").value),
+    cardRadius: Number($("#clientLoginCfgCardRadius").value),
+    cardPadding: Number($("#clientLoginCfgCardPadding").value),
+    titleSize: Number($("#clientLoginCfgTitleSize").value),
+    formGap: Number($("#clientLoginCfgFormGap").value),
+
+    bgTop: $("#clientLoginCfgBgTop").value,
+    bgMiddle: $("#clientLoginCfgBgMiddle").value,
+    bgBottom: $("#clientLoginCfgBgBottom").value,
+    cardBg: $("#clientLoginCfgCardBg").value,
+    cardBorder: $("#clientLoginCfgCardBorder").value,
+    textColor: $("#clientLoginCfgTextColor").value,
+    mutedColor: $("#clientLoginCfgMutedColor").value,
+    buttonBg: $("#clientLoginCfgButtonBg").value,
+    buttonText: $("#clientLoginCfgButtonText").value,
+    inputBg: $("#clientLoginCfgInputBg").value,
+    inputBorder: $("#clientLoginCfgInputBorder").value,
+    accentColor: $("#clientLoginCfgAccentColor").value,
+
+    showLogo: $("#clientLoginCfgShowLogo").checked,
+    showEyebrow: $("#clientLoginCfgShowEyebrow").checked,
+    showInstruction: $("#clientLoginCfgShowInstruction").checked
+  });
+}
+
+function updateClientLoginPreview() {
+  if (!$("#clientLoginPreviewCard")) return;
+
+  const cfg = readClientLoginEditor();
+  const screen = $("#clientLoginPreviewScreen");
+  const card = $("#clientLoginPreviewCard");
+  const logo = $("#clientLoginPreviewLogo");
+  const eyebrow = $("#clientLoginPreviewEyebrow");
+  const title = $("#clientLoginPreviewTitle");
+  const instruction = $("#clientLoginPreviewInstruction");
+  const password = $("#clientLoginPreviewPassword");
+  const button = $("#clientLoginPreviewButton");
+
+  screen.style.background = `radial-gradient(circle at 50% 10%, ${cfg.bgTop}, ${cfg.bgMiddle} 37%, ${cfg.bgBottom} 72%)`;
+  screen.style.color = cfg.textColor;
+
+  card.style.width = `min(${cfg.cardWidth}px,100%)`;
+  card.style.padding = `${Math.max(18, cfg.cardPadding * .65)}px`;
+  card.style.borderRadius = `${cfg.cardRadius}px`;
+  card.style.background = cfg.cardBg;
+  card.style.borderColor = cfg.cardBorder;
+
+  logo.style.width = `${Math.min(cfg.logoWidth, 240)}px`;
+  logo.hidden = !cfg.showLogo;
+
+  eyebrow.textContent = cfg.eyebrow;
+  eyebrow.style.color = cfg.accentColor;
+  eyebrow.hidden = !cfg.showEyebrow;
+
+  title.style.fontSize = `${Math.min(cfg.titleSize, 52)}px`;
+  title.style.color = cfg.textColor;
+
+  instruction.textContent = cfg.instruction;
+  instruction.style.color = cfg.mutedColor;
+  instruction.hidden = !cfg.showInstruction;
+
+  password.textContent = cfg.passwordPlaceholder || "Hasło do galerii";
+  password.style.background = cfg.inputBg;
+  password.style.borderColor = cfg.inputBorder;
+  password.style.color = cfg.mutedColor;
+
+  button.textContent = cfg.buttonLabel || "Otwórz galerię";
+  button.style.background = cfg.buttonBg;
+  button.style.color = cfg.buttonText;
+
+  const previewForm = $("#clientLoginPreviewCard .login-preview-form");
+  if (previewForm) previewForm.style.gap = `${cfg.formGap}px`;
+}
+
+function openClientLoginEditor() {
+  fillClientLoginEditor(clientLoginConfig);
+  $("#clientLoginEditorStatus").hidden = true;
+  $("#clientLoginEditorDialog").showModal();
+}
+
+async function saveClientLoginEditor() {
+  const button = $("#saveClientLoginEditorBtn");
+  const old = button.textContent;
+  button.disabled = true;
+  button.textContent = "Zapisywanie…";
+
+  try {
+    if (!auth.currentUser || auth.currentUser.uid !== ADMIN_UID) {
+      throw new Error("Musisz być zalogowany jako administrator.");
+    }
+
+    const cfg = readClientLoginEditor();
+    await set(ref(db, CLIENT_LOGIN_CONFIG_PATH), cfg);
+    clientLoginConfig = cfg;
+    showNotice($("#clientLoginEditorStatus"), "Logowanie klienta zapisane globalnie.", "ok");
+    toast("Logowanie klienta zapisane");
+  } catch (error) {
+    console.error("SAVE CLIENT LOGIN CONFIG ERROR", error);
+    showNotice($("#clientLoginEditorStatus"), `Błąd zapisu: ${error.code || error.message || error}`, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = old;
+  }
+}
+
+function applyAdminPanelConfig(config = adminPanelConfig) {
+  adminPanelConfig = normalizeAdminPanelConfig(config);
+
+  const panel = $("#adminPanel");
+  if (!panel) return;
+
+  panel.style.setProperty("--admin-content-width", `${adminPanelConfig.contentWidth}px`);
+  panel.style.setProperty("--admin-panel-padding-x", `${adminPanelConfig.paddingX}px`);
+  panel.style.setProperty("--admin-section-gap", `${adminPanelConfig.sectionGap}px`);
+  panel.style.setProperty("--admin-radius", `${adminPanelConfig.radius}px`);
+  panel.style.setProperty("--admin-card-padding", `${adminPanelConfig.cardPadding}px`);
+  panel.style.setProperty("--admin-gallery-columns", String(adminPanelConfig.galleryColumns));
+  panel.style.setProperty("--admin-page-bg", adminPanelConfig.pageBg);
+  panel.style.setProperty("--admin-card-bg", adminPanelConfig.cardBg);
+  panel.style.setProperty("--admin-border", adminPanelConfig.border);
+  panel.style.setProperty("--admin-primary-bg", adminPanelConfig.primaryBg);
+  panel.style.setProperty("--admin-primary-text", adminPanelConfig.primaryText);
+  panel.style.setProperty("--admin-muted", adminPanelConfig.muted);
+
+  panel.classList.toggle("compact-storage", adminPanelConfig.compactStorage);
+  panel.classList.toggle("compact-stats", adminPanelConfig.compactStats);
+}
+
+function fillAdminPanelEditor(config = adminPanelConfig) {
+  const cfg = normalizeAdminPanelConfig(config);
+
+  $("#panelCfgContentWidth").value = cfg.contentWidth;
+  $("#panelCfgPaddingX").value = cfg.paddingX;
+  $("#panelCfgSectionGap").value = cfg.sectionGap;
+  $("#panelCfgRadius").value = cfg.radius;
+  $("#panelCfgCardPadding").value = cfg.cardPadding;
+  $("#panelCfgGalleryColumns").value = String(cfg.galleryColumns);
+  $("#panelCfgCompactStorage").checked = cfg.compactStorage;
+  $("#panelCfgCompactStats").checked = cfg.compactStats;
+
+  $("#panelCfgPageBg").value = cfg.pageBg;
+  $("#panelCfgCardBg").value = cfg.cardBg;
+  $("#panelCfgBorder").value = cfg.border;
+  $("#panelCfgPrimaryBg").value = cfg.primaryBg;
+  $("#panelCfgPrimaryText").value = cfg.primaryText;
+  $("#panelCfgMuted").value = cfg.muted;
+
+  updateAdminPanelPreview();
+}
+
+function readAdminPanelEditor() {
+  return normalizeAdminPanelConfig({
+    contentWidth: Number($("#panelCfgContentWidth").value),
+    paddingX: Number($("#panelCfgPaddingX").value),
+    sectionGap: Number($("#panelCfgSectionGap").value),
+    radius: Number($("#panelCfgRadius").value),
+    cardPadding: Number($("#panelCfgCardPadding").value),
+    galleryColumns: Number($("#panelCfgGalleryColumns").value),
+    compactStorage: $("#panelCfgCompactStorage").checked,
+    compactStats: $("#panelCfgCompactStats").checked,
+    pageBg: $("#panelCfgPageBg").value,
+    cardBg: $("#panelCfgCardBg").value,
+    border: $("#panelCfgBorder").value,
+    primaryBg: $("#panelCfgPrimaryBg").value,
+    primaryText: $("#panelCfgPrimaryText").value,
+    muted: $("#panelCfgMuted").value
+  });
+}
+
+function updateAdminPanelPreview() {
+  if (!$("#adminPanelPreview")) return;
+  const cfg = readAdminPanelEditor();
+  const preview = $("#adminPanelPreview");
+  const grid = $("#panelPreviewGalleryGrid");
+
+  preview.style.background = cfg.pageBg;
+  preview.style.borderColor = cfg.border;
+  preview.style.padding = `${Math.max(10, cfg.cardPadding)}px`;
+  preview.style.borderRadius = `${cfg.radius}px`;
+  preview.style.maxWidth = `${Math.min(720, cfg.contentWidth * .48)}px`;
+
+  grid.style.gridTemplateColumns = `repeat(${cfg.galleryColumns},1fr)`;
+
+  document.querySelectorAll("#adminPanelPreview .panel-preview-stats i, #adminPanelPreview .panel-preview-storage, #adminPanelPreview .panel-preview-galleries i")
+    .forEach(el => {
+      el.style.background = cfg.cardBg;
+      el.style.borderColor = cfg.border;
+      el.style.borderRadius = `${cfg.radius}px`;
+    });
+
+  const button = $("#adminPanelPreview .panel-preview-head span");
+  button.style.background = cfg.primaryBg;
+  button.style.color = cfg.primaryText;
+}
+
+function openAdminPanelEditor() {
+  fillAdminPanelEditor(adminPanelConfig);
+  $("#adminPanelEditorStatus").hidden = true;
+  $("#adminPanelEditorDialog").showModal();
+}
+
+async function saveAdminPanelEditor() {
+  const button = $("#saveAdminPanelEditorBtn");
+  const old = button.textContent;
+  button.disabled = true;
+  button.textContent = "Zapisywanie…";
+
+  try {
+    if (!auth.currentUser || auth.currentUser.uid !== ADMIN_UID) {
+      throw new Error("Musisz być zalogowany jako administrator.");
+    }
+
+    const cfg = readAdminPanelEditor();
+    await set(ref(db, ADMIN_PANEL_CONFIG_PATH), cfg);
+    adminPanelConfig = cfg;
+    applyAdminPanelConfig(cfg);
+    showNotice($("#adminPanelEditorStatus"), "Wygląd głównego panelu zapisany.", "ok");
+    toast("Wygląd panelu zapisany");
+  } catch (error) {
+    console.error("SAVE ADMIN PANEL CONFIG ERROR", error);
+    showNotice($("#adminPanelEditorStatus"), `Błąd zapisu: ${error.code || error.message || error}`, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = old;
+  }
+}
+
+async function deleteOrphanStorageGallery(slug, button) {
+  if (!slug || isSystemGallerySlug(slug)) return;
+
+  const item = storageStatsForSlug(slug);
+  const sizeText = item ? formatBytes(item.total) : "nieznany rozmiar";
+
+  if (!confirm(`Usunąć osierocone dane „${slug}” z Firebase Storage?\n\nRozmiar: ${sizeText}\n\nTego nie będzie już na liście Storage Monitor.`)) {
+    return;
+  }
+
+  const old = button?.textContent || "Usuń";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Usuwanie…";
+  }
+
+  try {
+    await deleteFolder(`galleries/${slug}`);
+    toast(`Usunięto ${slug} ze Storage`);
+    storageMonitorData = null;
+    renderStorageMonitor();
+    await refreshStorageMonitor(true);
+  } catch (error) {
+    console.error("DELETE ORPHAN STORAGE ERROR", error);
+    toast(`Nie udało się usunąć: ${error.code || error.message || error}`);
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = old;
+    }
+  }
+}
+
+
 function formatBytes(bytes, decimals = 1) {
   const value = Number(bytes || 0);
   if (!value) return "0 MB";
@@ -578,6 +994,7 @@ function renderStorageMonitor() {
   else if (percent >= 80) bar.classList.add("warning");
 
   const ranking = Object.entries(gallerySizes || {})
+    .filter(([slug]) => !isSystemGallerySlug(slug))
     .sort((a, b) => b[1].total - a[1].total);
 
   const container = $("#storageRanking");
@@ -587,16 +1004,20 @@ function renderStorageMonitor() {
     const maxSize = Math.max(...ranking.map(([, item]) => item.total), 1);
 
     container.innerHTML = ranking.map(([slug, item], index) => {
-      const title = galleries[slug]?.public?.title || `${slug}${galleries[slug] ? "" : " • poza listą galerii"}`;
+      const existsAsGallery = Boolean(galleries[slug]?.public);
+      const title = existsAsGallery ? (galleries[slug]?.public?.title || slug) : `${slug} • poza listą galerii`;
       const width = Math.max(3, (item.total / maxSize) * 100);
 
       return `
-        <article class="storage-ranking-row">
+        <article class="storage-ranking-row${existsAsGallery ? "" : " storage-orphan-row"}">
           <div class="storage-rank-number">${index + 1}</div>
           <div class="storage-rank-main">
             <div class="storage-rank-top">
               <strong>${escapeHtml(title)}</strong>
-              <b>${formatBytes(item.total)}</b>
+              <div class="storage-rank-top-actions">
+                <b>${formatBytes(item.total)}</b>
+                ${existsAsGallery ? "" : `<button type="button" class="danger storage-orphan-delete" data-delete-orphan="${escapeHtml(slug)}">Usuń ze Storage</button>`}
+              </div>
             </div>
             <div class="storage-rank-bar"><span style="width:${width}%"></span></div>
             <div class="storage-rank-meta">
@@ -614,6 +1035,10 @@ function renderStorageMonitor() {
   $("#storageScanTime").textContent = scannedAt
     ? `Ostatnio: ${new Date(scannedAt).toLocaleString("pl-PL", { dateStyle: "short", timeStyle: "short" })}`
     : "";
+
+  document.querySelectorAll("[data-delete-orphan]").forEach(button => {
+    button.addEventListener("click", () => deleteOrphanStorageGallery(button.dataset.deleteOrphan, button));
+  });
 
   updateGalleryStorageBadges();
 }
@@ -932,6 +1357,7 @@ onAuthStateChanged(auth, (user) => {
     $("#adminLogin").hidden = true;
     $("#adminPanel").hidden = false;
     $("#adminEmailLabel").textContent = user.email || "Administrator";
+    loadGlobalEditorConfigs().catch(error => console.warn("GLOBAL CONFIG LOAD ERROR", error));
     startStorageMonitorOnce();
 
     if (unsubscribeGalleries) unsubscribeGalleries();
@@ -1175,6 +1601,35 @@ function loadCover(element, coverFile, manifest, coverX = 50, coverY = 38) {
 
 
 $("#loginEditorBtn")?.addEventListener("click", openLoginEditor);
+
+$("#clientLoginEditorBtn")?.addEventListener("click", openClientLoginEditor);
+$("#closeClientLoginEditorDialog")?.addEventListener("click", () => $("#clientLoginEditorDialog").close());
+$("#cancelClientLoginEditorBtn")?.addEventListener("click", () => $("#clientLoginEditorDialog").close());
+$("#saveClientLoginEditorBtn")?.addEventListener("click", saveClientLoginEditor);
+$("#resetClientLoginEditorBtn")?.addEventListener("click", () => {
+  fillClientLoginEditor(DEFAULT_CLIENT_LOGIN_CONFIG);
+  toast("Wczytano ustawienia domyślne — kliknij Zapisz.");
+});
+
+document.querySelectorAll("#clientLoginEditorDialog input").forEach(input => {
+  input.addEventListener("input", updateClientLoginPreview);
+  input.addEventListener("change", updateClientLoginPreview);
+});
+
+$("#adminPanelEditorBtn")?.addEventListener("click", openAdminPanelEditor);
+$("#closeAdminPanelEditorDialog")?.addEventListener("click", () => $("#adminPanelEditorDialog").close());
+$("#cancelAdminPanelEditorBtn")?.addEventListener("click", () => $("#adminPanelEditorDialog").close());
+$("#saveAdminPanelEditorBtn")?.addEventListener("click", saveAdminPanelEditor);
+$("#resetAdminPanelEditorBtn")?.addEventListener("click", () => {
+  fillAdminPanelEditor(DEFAULT_ADMIN_PANEL_CONFIG);
+  toast("Wczytano ustawienia domyślne — kliknij Zapisz.");
+});
+
+document.querySelectorAll("#adminPanelEditorDialog input, #adminPanelEditorDialog select").forEach(input => {
+  input.addEventListener("input", updateAdminPanelPreview);
+  input.addEventListener("change", updateAdminPanelPreview);
+});
+
 $("#closeLoginEditorDialog")?.addEventListener("click", () => $("#loginEditorDialog").close());
 $("#cancelLoginEditorBtn")?.addEventListener("click", () => $("#loginEditorDialog").close());
 $("#saveLoginEditorBtn")?.addEventListener("click", saveLoginEditor);

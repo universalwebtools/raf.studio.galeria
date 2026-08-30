@@ -995,3 +995,223 @@ input,select{width:100%;background:#0e0e10;border:1px solid #34343a;color:#fff;b
   .login-preview-screen{min-height:500px;padding:12px}
 }
 
+
+
+/* ===== v15.4: CLIENT LOGIN EDITOR ===== */
+#lockScreen.lock-screen{
+  background:
+    radial-gradient(
+      circle at 50% 10%,
+      var(--client-login-bg-top,#29292e),
+      var(--client-login-bg-middle,#111113) 37%,
+      var(--client-login-bg-bottom,#09090a) 72%
+    );
+  color:var(--client-login-text,#f4f4f2);
+}
+#lockScreen .lock-card{
+  width:min(var(--client-login-card-width,460px),100%);
+  padding:var(--client-login-card-padding,42px);
+  border:1px solid var(--client-login-card-border,#2e2e33);
+  border-radius:var(--client-login-card-radius,26px);
+  background:var(--client-login-card-bg,#111113);
+  text-align:center;
+}
+#lockScreen .lock-card .raf-logo.login-logo{
+  display:block !important;
+  margin:0 auto 24px !important;
+  height:auto !important;
+  object-fit:contain !important;
+}
+#lockScreen .lock-card h1{
+  font-size:var(--client-login-title-size,44px);
+  color:var(--client-login-text,#f4f4f2);
+  text-align:center;
+}
+#lockScreen .lock-card > .eyebrow{
+  color:var(--client-login-accent,#aaa);
+  text-align:center;
+}
+#lockScreen .lock-card > .muted{
+  color:var(--client-login-muted,#929298);
+  text-align:center;
+}
+#lockScreen .lock-card form{gap:var(--client-login-form-gap,12px)}
+#lockScreen .lock-card input{
+  background:var(--client-login-input-bg,#0e0e10);
+  border-color:var(--client-login-input-border,#34343a);
+}
+#lockScreen .lock-card #clientLoginSubmit{
+  background:var(--client-login-button-bg,#f5f5f2);
+  color:var(--client-login-button-text,#0b0b0c);
+}
+
+/* ===== v15.4: MORE COMPACT + CONFIGURABLE ADMIN PANEL ===== */
+#adminPanel{
+  background:var(--admin-page-bg,#09090a);
+  --admin-content-width:1320px;
+  --admin-panel-padding-x:28px;
+  --admin-section-gap:14px;
+  --admin-radius:15px;
+  --admin-card-padding:16px;
+  --admin-gallery-columns:2;
+  --admin-card-bg:#121214;
+  --admin-border:#29292e;
+  --admin-primary-bg:#f5f5f2;
+  --admin-primary-text:#0b0b0c;
+  --admin-muted:#929298;
+}
+#adminPanel .admin-main{
+  padding-left:var(--admin-panel-padding-x);
+  padding-right:var(--admin-panel-padding-x);
+}
+#adminPanel .admin-content{
+  width:100%;
+  max-width:var(--admin-content-width);
+  margin:0 auto;
+}
+#adminPanel .admin-head{margin-bottom:var(--admin-section-gap)}
+#adminPanel .stats{
+  margin:var(--admin-section-gap) 0;
+  gap:10px;
+}
+#adminPanel .stats article,
+#adminPanel .storage-monitor,
+#adminPanel .gallery-card,
+#adminPanel .toolbar input,
+#adminPanel .toolbar select{
+  border-color:var(--admin-border);
+}
+#adminPanel .stats article,
+#adminPanel .storage-monitor,
+#adminPanel .gallery-card{
+  background:var(--admin-card-bg);
+  border-radius:var(--admin-radius);
+}
+#adminPanel .stats article{padding:var(--admin-card-padding)}
+#adminPanel .storage-monitor{
+  margin-bottom:var(--admin-section-gap);
+  padding:var(--admin-card-padding);
+}
+#adminPanel .gallery-cards{
+  grid-template-columns:repeat(var(--admin-gallery-columns),minmax(0,1fr));
+  gap:var(--admin-section-gap);
+}
+#adminPanel .gallery-body{padding:var(--admin-card-padding)}
+#adminPanel .toolbar{
+  margin-bottom:var(--admin-section-gap);
+}
+#adminPanel .primary{
+  background:var(--admin-primary-bg);
+  color:var(--admin-primary-text);
+}
+#adminPanel .muted,
+#adminPanel .gallery-meta{color:var(--admin-muted)}
+
+#adminPanel.compact-stats .stats article{padding:12px 15px}
+#adminPanel.compact-stats .stats strong{font-size:26px;margin-top:3px}
+#adminPanel.compact-storage .storage-monitor-head{margin-bottom:12px}
+#adminPanel.compact-storage .storage-main{gap:9px}
+#adminPanel.compact-storage .storage-usage{padding:13px}
+#adminPanel.compact-storage .storage-stats article{padding:11px}
+#adminPanel.compact-storage .storage-scan-status{margin:9px 0}
+#adminPanel.compact-storage .storage-ranking-head{margin:13px 0 8px}
+#adminPanel.compact-storage .storage-ranking-row{padding:9px 11px}
+
+.storage-rank-top-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.storage-orphan-row{
+  border-color:#62353a !important;
+  background:linear-gradient(90deg,rgba(120,30,40,.08),transparent 38%),#0f0f11;
+}
+.storage-orphan-delete{
+  padding:7px 9px !important;
+  font-size:10px !important;
+  white-space:nowrap;
+}
+
+.admin-panel-editor-layout{
+  display:grid;
+  grid-template-columns:minmax(0,1.2fr) minmax(330px,.8fr);
+  gap:18px;
+  margin-top:16px;
+}
+.panel-live-preview{
+  position:sticky;
+  top:0;
+  align-self:start;
+  border:1px solid #2d2d31;
+  border-radius:20px;
+  padding:16px;
+  background:#0d0d0f;
+}
+.admin-panel-preview{
+  display:grid;
+  gap:10px;
+  padding:16px;
+  border:1px solid #2d2d31;
+  transition:.2s;
+}
+.panel-preview-head{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  align-items:center;
+}
+.panel-preview-head div{display:grid;gap:4px}
+.panel-preview-head small{font-size:7px;letter-spacing:.15em}
+.panel-preview-head strong{font-size:18px}
+.panel-preview-head span{
+  padding:7px 9px;
+  border-radius:8px;
+  font-size:8px;
+  font-weight:800;
+}
+.panel-preview-stats{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:7px;
+}
+.panel-preview-stats i,
+.panel-preview-storage,
+.panel-preview-galleries i{
+  display:block;
+  border:1px solid #2d2d31;
+}
+.panel-preview-stats i{height:48px}
+.panel-preview-storage{height:110px}
+.panel-preview-galleries{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:7px;
+}
+.panel-preview-galleries i{height:78px}
+
+@media(max-width:1100px){
+  #adminPanel .gallery-cards{grid-template-columns:1fr}
+}
+@media(max-width:950px){
+  .admin-panel-editor-layout{grid-template-columns:1fr}
+  .panel-live-preview{position:static}
+}
+@media(max-width:760px){
+  #adminPanel .admin-main{
+    padding-left:14px;
+    padding-right:14px;
+  }
+  #adminPanel .admin-content{max-width:none}
+}
+
+
+
+/* v15.4.1 - logo size variables override legacy !important rules */
+#lockScreen .lock-card .raf-logo.login-logo{
+  width:var(--client-login-logo-width,190px) !important;
+}
+#adminLogin .lock-card .raf-logo.login-logo{
+  width:var(--admin-login-logo-width,190px) !important;
+}

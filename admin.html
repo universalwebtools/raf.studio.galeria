@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
   <title>RAF.studio — Studio Manager</title>
-  <link rel="stylesheet" href="style.css?v=15.3">
+  <link rel="stylesheet" href="style.css?v=15.4">
 </head>
 <body class="admin-body">
 
 <section id="adminLogin" class="lock-screen">
   <div class="lock-card">
-    <img class="raf-logo login-logo" src="logo-white.png?v=15.3" alt="RAF.studio">
+    <img class="raf-logo login-logo" src="logo-white.png?v=15.4" alt="RAF.studio">
     <p id="adminLoginEyebrow" class="eyebrow">STUDIO MANAGER</p>
     <h1 id="adminLoginTitle">Panel fotografa</h1>
     <p id="adminLoginSubtitle" class="muted">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
@@ -40,7 +40,7 @@
 <main id="adminPanel" hidden>
   <aside class="sidebar">
     <div>
-      <img class="raf-logo sidebar-logo" src="logo-white.png?v=15.3" alt="RAF.studio">
+      <img class="raf-logo sidebar-logo" src="logo-white.png?v=15.4" alt="RAF.studio">
       <small>Studio Manager</small>
     </div>
     <div class="side-bottom">
@@ -50,6 +50,7 @@
   </aside>
 
   <section class="admin-main">
+    <div class="admin-content">
     <header class="admin-head">
       <div>
         <p class="eyebrow">STUDIO MANAGER</p>
@@ -57,7 +58,9 @@
         <p class="muted">Twórz galerie, wysyłaj zdjęcia i sprawdzaj zaznaczenia.</p>
       </div>
       <div class="admin-head-actions">
-        <button id="loginEditorBtn" type="button" class="ghost">🔐 Ustawienia logowania</button>
+        <button id="loginEditorBtn" type="button" class="ghost">🔐 Logowanie admina</button>
+        <button id="clientLoginEditorBtn" type="button" class="ghost">🔑 Logowanie klienta</button>
+        <button id="adminPanelEditorBtn" type="button" class="ghost">🖥 Wygląd panelu</button>
         <button id="newGalleryBtn" type="button" class="primary">+ Nowa galeria</button>
       </div>
     </header>
@@ -148,6 +151,7 @@
 
     <div id="globalMessage" class="notice" hidden></div>
     <section id="galleryList" class="gallery-cards"></section>
+    </div>
   </section>
 </main>
 
@@ -676,7 +680,7 @@
       <p class="eyebrow">PODGLĄD NA ŻYWO</p>
       <div id="loginPreviewScreen" class="login-preview-screen">
         <div id="loginPreviewCard" class="login-preview-card">
-          <img id="loginPreviewLogo" src="logo-white.png?v=15.3" alt="">
+          <img id="loginPreviewLogo" src="logo-white.png?v=15.4" alt="">
           <div id="loginPreviewEyebrow" class="login-preview-eyebrow">STUDIO MANAGER</div>
           <h3 id="loginPreviewTitle">Panel fotografa</h3>
           <p id="loginPreviewSubtitle">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
@@ -696,9 +700,245 @@
   </div>
 </dialog>
 
+
+<dialog id="clientLoginEditorDialog" class="dialog xl login-editor-dialog">
+  <div class="dialog-head">
+    <div>
+      <p class="eyebrow">GALERIA KLIENTA</p>
+      <h2>Logowanie klienta</h2>
+      <p class="muted">Globalny wygląd ekranu, na którym klient wpisuje hasło do swojej galerii.</p>
+    </div>
+    <button id="closeClientLoginEditorDialog" type="button" class="ghost close-btn">×</button>
+  </div>
+
+  <div class="login-editor-layout">
+    <section class="login-editor-controls">
+      <div class="site-settings-section">
+        <h3>Treść</h3>
+        <div class="form2">
+          <label>Mały napis
+            <input id="clientLoginCfgEyebrow" value="PRYWATNA GALERIA">
+          </label>
+          <label>Instrukcja
+            <input id="clientLoginCfgInstruction" value="Wpisz hasło otrzymane od fotografa.">
+          </label>
+          <label>Placeholder hasła
+            <input id="clientLoginCfgPasswordPlaceholder" value="Hasło do galerii">
+          </label>
+          <label>Przycisk
+            <input id="clientLoginCfgButtonLabel" value="Otwórz galerię">
+          </label>
+        </div>
+      </div>
+
+      <div class="site-settings-section">
+        <h3>Układ</h3>
+        <div class="form3">
+          <label>Rozmiar logo (px)
+            <input id="clientLoginCfgLogoWidth" type="number" min="80" max="360" value="190">
+          </label>
+          <label>Szerokość karty (px)
+            <input id="clientLoginCfgCardWidth" type="number" min="300" max="720" value="460">
+          </label>
+          <label>Zaokrąglenie karty (px)
+            <input id="clientLoginCfgCardRadius" type="number" min="0" max="60" value="26">
+          </label>
+          <label>Padding karty (px)
+            <input id="clientLoginCfgCardPadding" type="number" min="18" max="80" value="42">
+          </label>
+          <label>Rozmiar tytułu (px)
+            <input id="clientLoginCfgTitleSize" type="number" min="28" max="72" value="44">
+          </label>
+          <label>Odstęp formularza (px)
+            <input id="clientLoginCfgFormGap" type="number" min="6" max="28" value="12">
+          </label>
+        </div>
+      </div>
+
+      <div class="site-settings-section">
+        <h3>Kolory</h3>
+        <div class="form3">
+          <label>Tło — góra
+            <input id="clientLoginCfgBgTop" class="color-field" type="color" value="#29292e">
+          </label>
+          <label>Tło — środek
+            <input id="clientLoginCfgBgMiddle" class="color-field" type="color" value="#111113">
+          </label>
+          <label>Tło — dół
+            <input id="clientLoginCfgBgBottom" class="color-field" type="color" value="#09090a">
+          </label>
+          <label>Tło karty
+            <input id="clientLoginCfgCardBg" class="color-field" type="color" value="#111113">
+          </label>
+          <label>Ramka
+            <input id="clientLoginCfgCardBorder" class="color-field" type="color" value="#2e2e33">
+          </label>
+          <label>Tekst główny
+            <input id="clientLoginCfgTextColor" class="color-field" type="color" value="#f4f4f2">
+          </label>
+          <label>Tekst dodatkowy
+            <input id="clientLoginCfgMutedColor" class="color-field" type="color" value="#929298">
+          </label>
+          <label>Przycisk — tło
+            <input id="clientLoginCfgButtonBg" class="color-field" type="color" value="#f5f5f2">
+          </label>
+          <label>Przycisk — tekst
+            <input id="clientLoginCfgButtonText" class="color-field" type="color" value="#0b0b0c">
+          </label>
+          <label>Pole hasła — tło
+            <input id="clientLoginCfgInputBg" class="color-field" type="color" value="#0e0e10">
+          </label>
+          <label>Pole hasła — ramka
+            <input id="clientLoginCfgInputBorder" class="color-field" type="color" value="#34343a">
+          </label>
+          <label>Akcent / mały napis
+            <input id="clientLoginCfgAccentColor" class="color-field" type="color" value="#aaaaaa">
+          </label>
+        </div>
+      </div>
+
+      <div class="site-settings-section">
+        <h3>Widoczność</h3>
+        <div class="permission-grid compact">
+          <label class="check"><input id="clientLoginCfgShowLogo" type="checkbox" checked><span>Logo RAF.studio</span></label>
+          <label class="check"><input id="clientLoginCfgShowEyebrow" type="checkbox" checked><span>Mały napis</span></label>
+          <label class="check"><input id="clientLoginCfgShowInstruction" type="checkbox" checked><span>Instrukcja</span></label>
+        </div>
+      </div>
+
+      <div id="clientLoginEditorStatus" class="notice" hidden></div>
+      <div class="actions">
+        <button id="resetClientLoginEditorBtn" type="button" class="ghost">Przywróć domyślne</button>
+        <span class="spacer"></span>
+        <button id="cancelClientLoginEditorBtn" type="button" class="ghost">Anuluj</button>
+        <button id="saveClientLoginEditorBtn" type="button" class="primary">Zapisz logowanie klienta</button>
+      </div>
+    </section>
+
+    <aside class="login-live-preview">
+      <p class="eyebrow">PODGLĄD NA ŻYWO</p>
+      <div id="clientLoginPreviewScreen" class="login-preview-screen">
+        <div id="clientLoginPreviewCard" class="login-preview-card">
+          <img id="clientLoginPreviewLogo" src="logo-white.png?v=15.4" alt="">
+          <div id="clientLoginPreviewEyebrow" class="login-preview-eyebrow">PRYWATNA GALERIA</div>
+          <h3 id="clientLoginPreviewTitle">M&K2026</h3>
+          <p id="clientLoginPreviewInstruction">Wpisz hasło otrzymane od fotografa.</p>
+          <div class="login-preview-form">
+            <div id="clientLoginPreviewPassword" class="login-preview-input">Hasło do galerii</div>
+            <div id="clientLoginPreviewButton" class="login-preview-button">Otwórz galerię</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </div>
+</dialog>
+
+
+<dialog id="adminPanelEditorDialog" class="dialog xl admin-panel-editor-dialog">
+  <div class="dialog-head">
+    <div>
+      <p class="eyebrow">STUDIO MANAGER</p>
+      <h2>Wygląd głównego panelu</h2>
+      <p class="muted">Zmieniaj szerokość i gęstość panelu. Domyślnie v15.4 jest bardziej zwarta niż poprzednie wersje.</p>
+    </div>
+    <button id="closeAdminPanelEditorDialog" type="button" class="ghost close-btn">×</button>
+  </div>
+
+  <div class="admin-panel-editor-layout">
+    <section class="login-editor-controls">
+      <div class="site-settings-section">
+        <h3>Rozmiary i układ</h3>
+        <div class="form3">
+          <label>Maks. szerokość treści (px)
+            <input id="panelCfgContentWidth" type="number" min="900" max="1800" step="20" value="1320">
+          </label>
+          <label>Padding poziomy (px)
+            <input id="panelCfgPaddingX" type="number" min="10" max="70" value="28">
+          </label>
+          <label>Odstęp sekcji (px)
+            <input id="panelCfgSectionGap" type="number" min="6" max="36" value="14">
+          </label>
+          <label>Zaokrąglenie ramek (px)
+            <input id="panelCfgRadius" type="number" min="6" max="32" value="15">
+          </label>
+          <label>Padding kart (px)
+            <input id="panelCfgCardPadding" type="number" min="10" max="28" value="16">
+          </label>
+          <label>Kolumny galerii na dużym ekranie
+            <select id="panelCfgGalleryColumns">
+              <option value="1">1</option>
+              <option value="2" selected>2</option>
+              <option value="3">3</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="permission-grid compact">
+          <label class="check">
+            <input id="panelCfgCompactStorage" type="checkbox" checked>
+            <span>Zwarty Storage Monitor</span>
+          </label>
+          <label class="check">
+            <input id="panelCfgCompactStats" type="checkbox" checked>
+            <span>Zwarty pasek statystyk</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="site-settings-section">
+        <h3>Kolory panelu</h3>
+        <div class="form3">
+          <label>Tło strony
+            <input id="panelCfgPageBg" class="color-field" type="color" value="#09090a">
+          </label>
+          <label>Tło kart
+            <input id="panelCfgCardBg" class="color-field" type="color" value="#121214">
+          </label>
+          <label>Ramki
+            <input id="panelCfgBorder" class="color-field" type="color" value="#29292e">
+          </label>
+          <label>Główny przycisk
+            <input id="panelCfgPrimaryBg" class="color-field" type="color" value="#f5f5f2">
+          </label>
+          <label>Tekst głównego przycisku
+            <input id="panelCfgPrimaryText" class="color-field" type="color" value="#0b0b0c">
+          </label>
+          <label>Tekst dodatkowy
+            <input id="panelCfgMuted" class="color-field" type="color" value="#929298">
+          </label>
+        </div>
+      </div>
+
+      <div id="adminPanelEditorStatus" class="notice" hidden></div>
+      <div class="actions">
+        <button id="resetAdminPanelEditorBtn" type="button" class="ghost">Przywróć domyślne</button>
+        <span class="spacer"></span>
+        <button id="cancelAdminPanelEditorBtn" type="button" class="ghost">Anuluj</button>
+        <button id="saveAdminPanelEditorBtn" type="button" class="primary">Zapisz wygląd panelu</button>
+      </div>
+    </section>
+
+    <aside class="panel-live-preview">
+      <p class="eyebrow">PODGLĄD UKŁADU</p>
+      <div id="adminPanelPreview" class="admin-panel-preview">
+        <div class="panel-preview-head">
+          <div>
+            <small>STUDIO MANAGER</small>
+            <strong>Galerie klientów</strong>
+          </div>
+          <span>+ Nowa galeria</span>
+        </div>
+        <div class="panel-preview-stats"><i></i><i></i><i></i></div>
+        <div class="panel-preview-storage"></div>
+        <div id="panelPreviewGalleryGrid" class="panel-preview-galleries"><i></i><i></i></div>
+      </div>
+    </aside>
+  </div>
+</dialog>
+
 <div id="toast" class="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
-<script type="module" src="admin.js?v=15.3"></script>
+<script type="module" src="admin.js?v=15.4"></script>
 </body>
 </html>
