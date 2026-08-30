@@ -1215,3 +1215,40 @@ input,select{width:100%;background:#0e0e10;border:1px solid #34343a;color:#fff;b
 #adminLogin .lock-card .raf-logo.login-logo{
   width:var(--admin-login-logo-width,190px) !important;
 }
+
+
+/* ===== v16 WORKFLOW / FEATURED / HERO / HEALTH ===== */
+.client-hero{
+  min-height:var(--hero-height-desktop,330px) !important;
+  background-color:var(--hero-bg-color,#09090a) !important;
+  background-repeat:no-repeat !important;
+}
+.client-hero[data-hero-mode="cover"]{background-size:cover !important}
+.client-hero[data-hero-mode="contain"]{background-size:contain !important;background-position:center !important}
+.client-hero[data-hero-mode="fixed"]{background-size:var(--hero-image-width,1500px) auto !important;background-position:center !important}
+.client-hero[data-hero-mode="none"]{background-image:none !important}
+@media(max-width:760px){.client-hero{min-height:var(--hero-height-mobile,280px) !important}}
+
+.selection-workflow{
+  display:flex;justify-content:space-between;align-items:center;gap:14px;
+  width:min(1500px,calc(100% - 20px));margin:10px auto 18px;padding:13px 15px;
+  border:1px solid #2d2d31;border-radius:16px;background:#111114;
+}
+.selection-workflow-info{display:grid;gap:3px}.selection-workflow-info small{color:#8f8f96}
+.selection-workflow-actions{display:flex;gap:8px;flex-wrap:wrap}.danger-soft{border-color:#63343b!important;color:#ffb2b8!important}
+@media(max-width:720px){.selection-workflow{align-items:stretch;flex-direction:column}.selection-workflow-actions>*{flex:1}}
+
+.photo-featured-badge{
+  position:absolute;left:9px;top:9px;z-index:4;padding:6px 9px;border-radius:999px;
+  background:rgba(156,111,10,.92);color:#fff4bd;font-size:10px;font-weight:800;box-shadow:0 4px 14px #0005;
+}
+.pm-item.pm-featured{outline:1px solid #8c7425}.pm-item.pm-hidden-client{opacity:.5;outline:1px dashed #85515a}
+.pm-item.pm-hidden-client .pm-thumb::after{content:"UKRYTE PRZED KLIENTEM";display:grid;place-items:center;height:100%;background:#0008;color:#fff;font-size:10px;font-weight:900}
+.hero-file-info{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:9px 11px;border:1px solid #303036;border-radius:10px;background:#0f0f11}.hero-file-info span{color:#85858c;font-size:11px}
+
+.approval-badge{color:#b9efc4!important}
+.approval-history{display:grid;gap:10px;margin-bottom:18px}.approval-history-head{display:flex;justify-content:space-between;gap:14px;align-items:center;padding:14px;border:1px solid #2d2d31;border-radius:14px;background:#111114}.approval-history-head h3{margin:2px 0 0}
+.approval-history-list{display:grid;gap:8px}.approval-log-row{padding:12px;border:1px solid #2a2a2f;border-radius:13px;background:#0f0f11}.approval-log-row.latest{border-color:#315b3d;background:linear-gradient(90deg,#14321a55,transparent 45%),#0f0f11}.approval-log-row>div{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}.approval-log-row span{color:#8f8f96;font-size:11px}.approval-log-row details{margin-top:8px}.approval-log-row summary{cursor:pointer;color:#bbb;font-size:11px}.approval-filenames{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.approval-filenames span{padding:5px 7px;border-radius:8px;background:#1a1a1e;color:#ddd}
+
+.health-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}.health-summary article{padding:14px;border:1px solid #2d2d31;border-radius:14px;background:#101012}.health-summary span{display:block;color:#85858c;font-size:10px}.health-summary strong{display:block;margin-top:6px;font-size:20px}.health-actions{justify-content:flex-start;margin-bottom:12px}.health-results{display:grid;gap:10px;margin-top:12px}.health-gallery-block{padding:13px;border:1px solid #2d2d31;border-radius:14px;background:#0f0f11}.health-gallery-block h3{margin:0 0 9px}.health-issue{display:flex;gap:10px;padding:8px 0;border-top:1px solid #222228}.health-issue:first-of-type{border-top:0}.health-issue b{min-width:75px;font-size:9px;color:#ffb2b8}.health-issue span{font-size:11px;color:#bbb}.health-perfect{padding:25px;text-align:center;border:1px solid #315b3d;border-radius:14px;background:#11271855;color:#c4f5cf}
+@media(max-width:700px){.health-summary{grid-template-columns:1fr 1fr}}

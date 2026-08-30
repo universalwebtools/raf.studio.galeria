@@ -1,8 +1,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-import { getDatabase, ref, get, set, remove, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+import { getDatabase, ref, get, set, remove, onValue, push } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=15.4";
+import { firebaseConfig } from "./firebase-config.js?v=16.0";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -25,6 +25,7 @@ let slideshowActive = false;
 let galleryLoaded = false;
 let rejected = new Set();
 let compareSelection = [];
+let latestApproval = null;
 
 const CLIENT_LOGIN_CONFIG_PATH = "galleries/__system__/public/clientLoginConfig";
 
@@ -166,6 +167,11 @@ const DEFAULT_UI_CONFIG = {
   allowSelectedDownloads: true,
   allowFavoriteDownloads: true,
   blockSaveImage: true,
+  heroMode: "cover",
+  heroHeightDesktop: 330,
+  heroHeightMobile: 280,
+  heroImageWidth: 1500,
+  heroBgColor: "#09090a",
   labels: {
     all: "Wszystkie",
     favorites: "Wybrane",
@@ -211,7 +217,12 @@ function getUiConfig() {
     allowSingleDownload: stored.allowSingleDownload !== false,
     allowSelectedDownloads: stored.allowSelectedDownloads !== false,
     allowFavoriteDownloads: stored.allowFavoriteDownloads !== false,
-    blockSaveImage: stored.blockSaveImage !== false
+    blockSaveImage: stored.blockSaveImage !== false,
+    heroMode: ["cover","fixed","contain","none"].includes(stored.heroMode) ? stored.heroMode : DEFAULT_UI_CONFIG.heroMode,
+    heroHeightDesktop: clampNumber(stored.heroHeightDesktop, 180, 700, DEFAULT_UI_CONFIG.heroHeightDesktop),
+    heroHeightMobile: clampNumber(stored.heroHeightMobile, 160, 500, DEFAULT_UI_CONFIG.heroHeightMobile),
+    heroImageWidth: clampNumber(stored.heroImageWidth, 600, 2600, DEFAULT_UI_CONFIG.heroImageWidth),
+    heroBgColor: stored.heroBgColor || DEFAULT_UI_CONFIG.heroBgColor
   };
 }
 
@@ -262,6 +273,12 @@ function applyUiConfig() {
   root.style.setProperty("--gallery-download-color", currentUiConfig.downloadColor || DEFAULT_UI_CONFIG.downloadColor);
   root.style.setProperty("--gallery-filter-bg", currentUiConfig.filterBg || DEFAULT_UI_CONFIG.filterBg);
   root.style.setProperty("--gallery-filter-text", currentUiConfig.filterText || DEFAULT_UI_CONFIG.filterText);
+  root.style.setProperty("--hero-height-desktop", `${currentUiConfig.heroHeightDesktop}px`);
+  root.style.setProperty("--hero-height-mobile", `${currentUiConfig.heroHeightMobile}px`);
+  root.style.setProperty("--hero-image-width", `${currentUiConfig.heroImageWidth}px`);
+  root.style.setProperty("--hero-bg-color", currentUiConfig.heroBgColor || DEFAULT_UI_CONFIG.heroBgColor);
+  const hero = $("#hero");
+  if (hero) hero.dataset.heroMode = currentUiConfig.heroMode || "cover";
 
   const labels = currentUiConfig.labels;
   const labelMap = {
@@ -491,7 +508,7 @@ async function init() {
 function applyGalleryMeta() {
   const title = gallery.title || "Galeria klienta";
   const subtitle = gallery.subtitle || "Wybierz ulubione zdjęcia.";
-  const photoCount = Number(gallery.photoCount || Object.keys(gallery.photos || {}).length || 0);
+  const photoCount = Object.values(gallery.photos || {}).filter(item => item?.filename && item?.previewUrl && item.hiddenFromClient !== true).length;
 
   $("#lockTitle").textContent = title;
   $("#heroTitle").textContent = title;
@@ -547,8 +564,9 @@ function applyGalleryMeta() {
     $("#progressWrap").hidden = true;
   }
 
-  const manifest = Object.values(gallery.photos || {});
-  const coverItem = manifest.find(item => item?.filename === gallery.coverFile && item?.previewUrl) || manifest[0];
+  const manifest = Object.values(gallery.photos || {}).filter(item => item?.hiddenFromClient !== true);
+  const heroFile = gallery.heroBackgroundFile || gallery.coverFile;
+  const coverItem = manifest.find(item => item?.filename === heroFile && item?.previewUrl) || manifest[0];
   if (coverItem?.previewUrl) {
     $("#introBackdrop").style.backgroundImage = `url("${coverItem.previewUrl}")`;
     $("#introBackdrop").style.backgroundPosition = `${Number(gallery.coverPositionX ?? 50)}% ${Number(gallery.coverPositionY ?? 38)}%`;
@@ -632,6 +650,99 @@ async function loadFavorites() {
   }
 }
 
+
+async function loadLatestApproval() {
+  try {
+    const snap = await get(ref(db, `approvals/${slug}`));
+    if (!snap.exists()) {
+      latestApproval = null;
+      updateApprovalStatus();
+      return;
+    }
+    const rows = Object.values(snap.val() || {}).filter(row => row?.submittedAt).sort((a,b) => Number(b.submittedAt) - Number(a.submittedAt));
+    latestApproval = rows[0] || null;
+    updateApprovalStatus();
+  } catch (error) {
+    console.warn("LOAD APPROVAL ERROR", error);
+  }
+}
+
+function formatApprovalDate(timestamp) {
+  if (!timestamp) return "";
+  return new Date(Number(timestamp)).toLocaleString("pl-PL", {
+    weekday: "long", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit"
+  });
+}
+
+function updateApprovalStatus() {
+  const status = $("#selectionApprovalStatus");
+  if (!status) return;
+  if (!latestApproval) {
+    status.textContent = "Możesz w każdej chwili wyczyścić serduszka i zacząć od nowa.";
+    return;
+  }
+  status.textContent = `Ostatnio zatwierdzono ${latestApproval.selectedCount || 0} zdjęć • ${formatApprovalDate(latestApproval.submittedAt)}. Jeśli zmienisz wybór, zatwierdź ponownie.`;
+}
+
+async function clearAllFavorites() {
+  if (!favorites.size) {
+    toast("Nie ma serduszek do wyczyszczenia.");
+    return;
+  }
+  if (!confirm(`Wyczyścić wszystkie ${favorites.size} wybrane zdjęcia i zacząć wybór od nowa?`)) return;
+  const button = $("#clearFavoritesBtn");
+  if (button) button.disabled = true;
+  try {
+    await remove(ref(db, `selections/${slug}`));
+    favorites.clear();
+    toast("Wyczyszczono wszystkie serduszka");
+    render();
+    updateUI();
+  } catch (error) {
+    console.error("CLEAR FAVORITES ERROR", error);
+    toast(`Nie udało się wyczyścić: ${error.code || error.message || error}`);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function approveCurrentSelection() {
+  if (!favorites.size) {
+    toast("Najpierw wybierz zdjęcia serduszkiem.");
+    return;
+  }
+  const count = favorites.size;
+  if (!confirm(`Zatwierdzić ${count} zdjęć do obróbki?\n\nZapiszę datę, godzinę i pełną listę nazw zdjęć.`)) return;
+  const button = $("#approveSelectionBtn");
+  const old = button?.textContent || "✓ Zatwierdź swoje wybory do obróbki";
+  if (button) { button.disabled = true; button.textContent = "Zapisywanie…"; }
+  try {
+    const filenames = {};
+    [...favorites.values()].forEach((item, index) => {
+      filenames[selectionKey(item.filename)] = { filename: item.filename };
+    });
+    const payload = {
+      submittedAt: Date.now(),
+      selectedCount: count,
+      filenames
+    };
+    const target = push(ref(db, `approvals/${slug}`));
+    await set(target, payload);
+    latestApproval = payload;
+    updateApprovalStatus();
+    toast(`Zatwierdzono ${count} zdjęć do obróbki ✓`);
+  } catch (error) {
+    console.error("APPROVE SELECTION ERROR", error);
+    if (String(error.code||"").toUpperCase().includes("PERMISSION")) {
+      toast("Brak uprawnień do zatwierdzenia — wklej database-rules.json z v16 i kliknij Publish.");
+    } else {
+      toast(`Nie udało się zatwierdzić: ${error.code || error.message || error}`);
+    }
+  } finally {
+    if (button) { button.disabled = false; button.textContent = old; }
+  }
+}
+
 function watchFavorites() {
   if (unsubscribeFavorites) unsubscribeFavorites();
   unsubscribeFavorites = onValue(
@@ -651,7 +762,7 @@ function loadManifest() {
   const manifest = gallery.photos || {};
 
   photos = Object.values(manifest)
-    .filter(item => item?.filename && item?.previewUrl)
+    .filter(item => item?.filename && item?.previewUrl && item.hiddenFromClient !== true)
     .sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true }))
     .map(item => ({
       filename: item.filename,
@@ -660,7 +771,8 @@ function loadManifest() {
       originalUrl: null,
       width: Number(item.width || 0),
       height: Number(item.height || 0),
-      orientation: item.orientation || detectOrientation(Number(item.width || 0), Number(item.height || 0))
+      orientation: item.orientation || detectOrientation(Number(item.width || 0), Number(item.height || 0)),
+      featured: item.featured === true
     }));
 
   $("#loading").hidden = true;
@@ -673,10 +785,13 @@ function loadManifest() {
     return;
   }
 
-  const cover = photos.find(p => p.filename === gallery.coverFile) || photos[0];
-  if (cover) {
+  const heroFile = gallery.heroBackgroundFile || gallery.coverFile;
+  const cover = photos.find(p => p.filename === heroFile) || photos.find(p => p.filename === gallery.coverFile) || photos[0];
+  if (cover && currentUiConfig.heroMode !== "none") {
     $("#hero").style.backgroundImage = `url("${cover.preview}")`;
     $("#hero").style.backgroundPosition = `${Number(gallery.coverPositionX ?? 50)}% ${Number(gallery.coverPositionY ?? 38)}%`;
+  } else {
+    $("#hero").style.backgroundImage = "none";
   }
 
   photos.forEach(warmupOrientation);
@@ -753,6 +868,12 @@ function render() {
     selectDownload.textContent = downloadSelection.has(photo.filename) ? "✓" : "○";
     selectDownload.title = "Zaznacz do pobrania";
 
+    const featured = document.createElement("div");
+    featured.className = "photo-featured-badge";
+    featured.textContent = "★ Polecane";
+    featured.title = "Zdjęcie polecane przez fotografa";
+    featured.hidden = photo.featured !== true;
+
     const filename = document.createElement("div");
     filename.className = "photo-filename";
     filename.textContent = displayName(photo.filename);
@@ -812,7 +933,7 @@ function render() {
     }
     tools.append(...toolButtons);
     tools.hidden = toolButtons.length === 0;
-    card.append(skeleton, img, tools, filename);
+    card.append(skeleton, img, featured, tools, filename);
     grid.appendChild(card);
   });
 
@@ -972,6 +1093,12 @@ function updateUI() {
   }
   const progressWrap = $("#progressWrap");
   if (progressWrap && currentUiConfig.showHeartButton === false) progressWrap.hidden = true;
+
+  const workflow = $("#selectionWorkflow");
+  if (workflow) workflow.hidden = currentUiConfig.showHeartButton === false;
+  if ($("#clearFavoritesBtn")) $("#clearFavoritesBtn").disabled = count === 0;
+  if ($("#approveSelectionBtn")) $("#approveSelectionBtn").disabled = count === 0;
+  updateApprovalStatus();
 
   updateDownloadUI();
   updateCompareUI();
@@ -1377,6 +1504,9 @@ $("#swapCompareBtn")?.addEventListener("click", swapCompareSelection);
 $("#compareDialog")?.addEventListener("click", (event) => {
   if (event.target.id === "compareDialog") closeCompareDialog();
 });
+
+$("#clearFavoritesBtn")?.addEventListener("click", clearAllFavorites);
+$("#approveSelectionBtn")?.addEventListener("click", approveCurrentSelection);
 
 // Basic browser deterrence. This blocks normal Save image as / dragging / long-press menu.
 // It cannot prevent screenshots or an advanced user from inspecting network requests.

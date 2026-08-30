@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata, getMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=15.4";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=16.0";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -14,6 +14,8 @@ const $ = (selector) => document.querySelector(selector);
 let galleries = {};
 let favoritesRoot = {};
 let selectionsRoot = {};
+let approvalsRoot = {};
+let lastHealthReport = null;
 let unsubscribeGalleries = null;
 let uploadSlug = null;
 let createdSlug = null;
@@ -194,6 +196,11 @@ const DEFAULT_UI_CONFIG = {
   allowSelectedDownloads: true,
   allowFavoriteDownloads: true,
   blockSaveImage: true,
+  heroMode: "cover",
+  heroHeightDesktop: 330,
+  heroHeightMobile: 280,
+  heroImageWidth: 1500,
+  heroBgColor: "#09090a",
   labels: {
     all: "Wszystkie",
     favorites: "Wybrane",
@@ -223,7 +230,12 @@ function normalizedUiConfig(pub) {
     allowSingleDownload: stored.allowSingleDownload !== false,
     allowSelectedDownloads: stored.allowSelectedDownloads !== false,
     allowFavoriteDownloads: stored.allowFavoriteDownloads !== false,
-    blockSaveImage: stored.blockSaveImage !== false
+    blockSaveImage: stored.blockSaveImage !== false,
+    heroMode: ["cover","fixed","contain","none"].includes(stored.heroMode) ? stored.heroMode : DEFAULT_UI_CONFIG.heroMode,
+    heroHeightDesktop: clampValue(stored.heroHeightDesktop, 180, 700, DEFAULT_UI_CONFIG.heroHeightDesktop),
+    heroHeightMobile: clampValue(stored.heroHeightMobile, 160, 500, DEFAULT_UI_CONFIG.heroHeightMobile),
+    heroImageWidth: clampValue(stored.heroImageWidth, 600, 2600, DEFAULT_UI_CONFIG.heroImageWidth),
+    heroBgColor: stored.heroBgColor || DEFAULT_UI_CONFIG.heroBgColor
   };
 }
 
@@ -1396,6 +1408,15 @@ onAuthStateChanged(auth, (user) => {
         console.error("SELECTIONS READ ERROR", error);
       }
     );
+
+    onValue(
+      ref(db, "approvals"),
+      (snapshot) => {
+        approvalsRoot = snapshot.exists() ? snapshot.val() : {};
+        renderAll();
+      },
+      (error) => console.error("APPROVALS READ ERROR", error)
+    );
   } else {
     if (unsubscribeGalleries) {
       unsubscribeGalleries();
@@ -1458,6 +1479,25 @@ if (togglePasswordButton) {
 
 $("#adminLogoutBtn").addEventListener("click", () => signOut(auth));
 
+
+
+function approvalRowsForSlug(slug) {
+  return Object.entries(approvalsRoot?.[slug] || {})
+    .map(([id,row]) => ({ id, ...(row || {}) }))
+    .filter(row => row.submittedAt)
+    .sort((a,b) => Number(b.submittedAt) - Number(a.submittedAt));
+}
+
+function latestApprovalForSlug(slug) {
+  return approvalRowsForSlug(slug)[0] || null;
+}
+
+function formatDateTimePl(timestamp) {
+  if (!timestamp) return "";
+  return new Date(Number(timestamp)).toLocaleString("pl-PL", {
+    weekday:"long", year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit"
+  });
+}
 
 function renderAll() {
   const entries = Object.entries(galleries).filter(([slug]) => !isSystemGallerySlug(slug));
@@ -1529,6 +1569,7 @@ function renderCards() {
           <span>${escapeHtml(expiryBadgeText(pub))}</span>
           ${pub.eventDate ? `<span>${escapeHtml(formatDate(pub.eventDate))}</span>` : ""}
           <span class="gallery-storage-badge" data-storage-slug="${slug}">Storage ${storageStatsForSlug(slug) ? formatBytes(storageStatsForSlug(slug).total) : "—"}</span>
+          ${latestApprovalForSlug(slug) ? `<span class="approval-badge">✓ Zatwierdzono ${Number(latestApprovalForSlug(slug).selectedCount || 0)} • ${escapeHtml(formatDateTimePl(latestApprovalForSlug(slug).submittedAt))}</span>` : ""}
         </div>
 
         <div class="gallery-link">
@@ -1919,42 +1960,6 @@ function imageContentType(file) {
   return "image/jpeg";
 }
 
-function roundedRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-function drawPreviewWatermark(ctx, width, height) {
-  const pad = Math.max(14, Math.round(Math.min(width, height) * 0.02));
-  const fontSize = Math.max(16, Math.round(Math.min(width, height) * 0.035));
-  const text = "RAF.studio";
-
-  ctx.save();
-  ctx.font = `700 ${fontSize}px Arial, sans-serif`;
-  const metrics = ctx.measureText(text);
-  const textWidth = Math.ceil(metrics.width);
-  const boxW = textWidth + pad * 1.6;
-  const boxH = fontSize + pad * 0.9;
-  const x = width - boxW - pad;
-  const y = height - boxH - pad;
-
-  ctx.globalAlpha = 0.42;
-  ctx.fillStyle = "#000";
-  roundedRect(ctx, x, y, boxW, boxH, Math.max(10, Math.round(boxH * 0.28)));
-  ctx.fill();
-
-  ctx.globalAlpha = 0.85;
-  ctx.fillStyle = "#fff";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, x + pad * 0.8, y + boxH / 2 + 1);
-  ctx.restore();
-}
-
 async function makePreview(file) {
   const objectUrl = URL.createObjectURL(file);
 
@@ -1989,7 +1994,6 @@ async function makePreview(file) {
 
       const context = canvas.getContext("2d");
       context.drawImage(image, 0, 0, width, height);
-      drawPreviewWatermark(context, width, height);
 
       const blob = await new Promise((resolve, reject) => {
         canvas.toBlob(
@@ -2192,7 +2196,8 @@ function syncCoverEditor(slug) {
   const coverPreview = $("#coverPreview");
   if (!coverEditor || !coverPreview) return;
 
-  const match = Object.values(pub.photos || {}).find(item => item?.filename === pub.coverFile && item?.previewUrl);
+  const heroFile = pub.heroBackgroundFile || pub.coverFile;
+  const match = Object.values(pub.photos || {}).find(item => item?.filename === heroFile && item?.previewUrl);
   if (!match) {
     coverEditor.hidden = true;
     return;
@@ -2203,7 +2208,8 @@ function syncCoverEditor(slug) {
 
   $("#coverPositionXInput").value = x;
   $("#coverPositionYInput").value = y;
-  $("#coverEditorTitle").textContent = `Kadrowanie okładki — ${pub.coverFile}`;
+  $("#coverEditorTitle").textContent = `Pozycja tła galerii — ${displayName(heroFile)}`;
+  $("#heroBackgroundFilename").textContent = pub.heroBackgroundFile ? displayName(pub.heroBackgroundFile) : `jak okładka: ${displayName(pub.coverFile)}`;
   coverPreview.style.backgroundImage = `url("${match.previewUrl}")`;
   coverPreview.style.backgroundPosition = `${x}% ${y}%`;
   coverEditor.hidden = false;
@@ -2269,6 +2275,9 @@ async function openPhotos(slug) {
           <div class="pm-name" title="${escapeHtml(displayName(originalName))}">${escapeHtml(displayName(originalName))}</div>
           <div class="pm-actions">
             <button type="button" class="ghost cover">Okładka</button>
+            <button type="button" class="ghost hero-bg">Tło</button>
+            <button type="button" class="ghost featured">${adminManifestPhoto(slug, originalName)?.featured ? "★ Polecane" : "☆ Polecane"}</button>
+            <button type="button" class="ghost client-hide">${galleries[slug]?.privatePhotos?.[manifestKey(originalName)] ? "👁 Pokaż klientowi" : "🙈 Ukryj klientowi"}</button>
             <button type="button" class="danger delete">Usuń</button>
           </div>
         </div>
@@ -2280,13 +2289,71 @@ async function openPhotos(slug) {
         toast("Ustawiono okładkę");
       });
 
+      item.querySelector(".hero-bg").addEventListener("click", async () => {
+        const isPrivate = Boolean(galleries[slug]?.privatePhotos?.[manifestKey(originalName)]);
+        if (isPrivate) {
+          toast("Najpierw pokaż to zdjęcie klientowi — ukryte zdjęcie nie może być tłem galerii.");
+          return;
+        }
+        await update(ref(db, `galleries/${slug}/public`), { heroBackgroundFile: originalName, updatedAt: Date.now() });
+        syncCoverEditor(slug);
+        toast("Ustawiono osobne zdjęcie w tle galerii");
+      });
+
+      item.querySelector(".featured").addEventListener("click", async (event) => {
+        const key = manifestKey(originalName);
+        const privatePhoto = galleries[slug]?.privatePhotos?.[key];
+        const publicPhoto = galleries[slug]?.public?.photos?.[key];
+        const current = (privatePhoto || publicPhoto)?.featured === true;
+        const path = privatePhoto ? `galleries/${slug}/privatePhotos/${key}` : `galleries/${slug}/public/photos/${key}`;
+        await update(ref(db, path), { featured: !current });
+        event.currentTarget.textContent = !current ? "★ Polecane" : "☆ Polecane";
+        item.classList.toggle("pm-featured", !current);
+        toast(!current ? "Oznaczono jako polecane" : "Usunięto oznaczenie polecane");
+      });
+
+      item.querySelector(".client-hide").addEventListener("click", async (event) => {
+        const key = manifestKey(originalName);
+        const privatePhoto = galleries[slug]?.privatePhotos?.[key];
+        const publicPhoto = galleries[slug]?.public?.photos?.[key];
+
+        if (privatePhoto) {
+          const restored = { ...privatePhoto };
+          delete restored.hiddenAt;
+          await set(ref(db, `galleries/${slug}/public/photos/${key}`), restored);
+          await remove(ref(db, `galleries/${slug}/privatePhotos/${key}`));
+          event.currentTarget.textContent = "🙈 Ukryj klientowi";
+          item.classList.remove("pm-hidden-client");
+          toast("Zdjęcie znów widoczne dla klienta");
+        } else if (publicPhoto) {
+          await set(ref(db, `galleries/${slug}/privatePhotos/${key}`), { ...publicPhoto, hiddenAt: Date.now() });
+          await remove(ref(db, `galleries/${slug}/public/photos/${key}`));
+          const pub = galleries[slug]?.public || {};
+          const rootPatch = { updatedAt: Date.now() };
+          if (pub.coverFile === originalName) rootPatch.coverFile = "";
+          if (pub.heroBackgroundFile === originalName) rootPatch.heroBackgroundFile = "";
+          await update(ref(db, `galleries/${slug}/public`), rootPatch);
+          event.currentTarget.textContent = "👁 Pokaż klientowi";
+          item.classList.add("pm-hidden-client");
+          toast("Zdjęcie przeniesione do prywatnej części — klient nie dostaje jego URL w manifeście");
+        } else {
+          toast("Brak wpisu zdjęcia w manifeście. Uruchom Zdrowie systemu.");
+        }
+        syncCoverEditor(slug);
+      });
+
+      const manifestPhoto = adminManifestPhoto(slug, originalName) || {};
+      item.classList.toggle("pm-featured", manifestPhoto.featured === true);
+      item.classList.toggle("pm-hidden-client", Boolean(galleries[slug]?.privatePhotos?.[manifestKey(originalName)]));
+
       item.querySelector(".delete").addEventListener("click", async () => {
         if (!confirm(`Usunąć zdjęcie ${originalName}?`)) return;
 
         try {
           await deleteObject(previewRef);
           await deleteObject(sRef(storage, `galleries/${slug}/originals/${originalName}`)).catch(() => {});
-          await remove(ref(db, `galleries/${slug}/public/photos/${manifestKey(originalName)}`));
+          await remove(ref(db, `galleries/${slug}/public/photos/${manifestKey(originalName)}`)).catch(() => {});
+          await remove(ref(db, `galleries/${slug}/privatePhotos/${manifestKey(originalName)}`)).catch(() => {});
 
           item.remove();
 
@@ -2316,6 +2383,17 @@ $("#closePhotosDialog").addEventListener("click", () => $("#photosDialog").close
 
 $("#coverPositionXInput")?.addEventListener("input", previewCoverPosition);
 $("#coverPositionYInput")?.addEventListener("input", previewCoverPosition);
+$("#useCoverAsHeroBtn")?.addEventListener("click", async () => {
+  if (!currentPhotosSlug) return;
+  const pub = galleries[currentPhotosSlug]?.public || {};
+  await update(ref(db, `galleries/${currentPhotosSlug}/public`), {
+    heroBackgroundFile: pub.coverFile || "",
+    updatedAt: Date.now()
+  });
+  toast("Tło galerii ustawiono takie samo jak okładkę");
+  syncCoverEditor(currentPhotosSlug);
+});
+
 $("#saveCoverPositionBtn")?.addEventListener("click", async () => {
   if (!currentPhotosSlug) return;
   const button = $("#saveCoverPositionBtn");
@@ -2364,9 +2442,19 @@ function startAdminAttachmentDownload(url, filename) {
   setTimeout(() => frame.remove(), 90000);
 }
 
+function adminManifestPhoto(slug, filename) {
+  const gallery = galleries[slug] || {};
+  const key = manifestKey(filename);
+  return gallery.public?.photos?.[key] || gallery.privatePhotos?.[key] || null;
+}
+
+function adminAllManifestPhotos(slug) {
+  const gallery = galleries[slug] || {};
+  return { ...(gallery.public?.photos || {}), ...(gallery.privatePhotos || {}) };
+}
+
 async function getAdminPhotoDownloadUrl(slug, filename) {
-  const pub = galleries[slug]?.public || {};
-  const manifestItems = Object.values(pub.photos || {});
+  const manifestItems = Object.values(adminAllManifestPhotos(slug));
   const manifestItem = manifestItems.find(item => item?.filename === filename) ||
     manifestItems.find(item => displayName(item?.filename).toLowerCase() === displayName(filename).toLowerCase());
   const canonicalFilename = manifestItem?.filename || filename;
@@ -2428,6 +2516,11 @@ function uiFieldValue(id, value) {
 }
 
 function fillSiteSettings(config) {
+  uiFieldValue("uiHeroMode", config.heroMode);
+  uiFieldValue("uiHeroHeightDesktop", config.heroHeightDesktop);
+  uiFieldValue("uiHeroHeightMobile", config.heroHeightMobile);
+  uiFieldValue("uiHeroImageWidth", config.heroImageWidth);
+  uiFieldValue("uiHeroBgColor", config.heroBgColor);
   uiFieldValue("uiDesktopColumns", config.desktopColumns);
   uiFieldValue("uiTabletColumns", config.tabletColumns);
   uiFieldValue("uiMobileColumns", config.mobileColumns);
@@ -2466,6 +2559,11 @@ function fillSiteSettings(config) {
 
 function readSiteSettings() {
   return {
+    heroMode: $("#uiHeroMode").value || DEFAULT_UI_CONFIG.heroMode,
+    heroHeightDesktop: clampValue($("#uiHeroHeightDesktop").value, 180, 700, DEFAULT_UI_CONFIG.heroHeightDesktop),
+    heroHeightMobile: clampValue($("#uiHeroHeightMobile").value, 160, 500, DEFAULT_UI_CONFIG.heroHeightMobile),
+    heroImageWidth: clampValue($("#uiHeroImageWidth").value, 600, 2600, DEFAULT_UI_CONFIG.heroImageWidth),
+    heroBgColor: $("#uiHeroBgColor").value || DEFAULT_UI_CONFIG.heroBgColor,
     desktopColumns: clampValue($("#uiDesktopColumns").value, 2, 6, 4),
     tabletColumns: clampValue($("#uiTabletColumns").value, 2, 5, 3),
     mobileColumns: clampValue($("#uiMobileColumns").value, 1, 4, 2),
@@ -2597,17 +2695,149 @@ function downloadText(filename, content, type = "text/plain") {
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
 
+
+async function runHealthScan() {
+  const button = $("#runHealthScanBtn");
+  const repair = $("#repairHealthBtn");
+  button.disabled = true;
+  repair.disabled = true;
+  $("#healthStatus").hidden = false;
+  $("#healthStatus").className = "notice";
+  $("#healthStatus").textContent = "Skanuję Database i Firebase Storage…";
+  $("#healthResults").innerHTML = '<div class="loading">Pełny skan może potrwać chwilę…</div>';
+
+  try {
+    $("#healthAuth").textContent = auth.currentUser?.uid === ADMIN_UID ? "✅ OK" : "❌ BŁĄD";
+    $("#healthDatabase").textContent = Object.keys(galleries || {}).length ? "✅ OK" : "⚠️ PUSTO";
+
+    const storageFiles = await collectStorageFiles(sRef(storage, "galleries"), []);
+    const storagePaths = new Set(storageFiles.map(item => item.fullPath));
+    $("#healthStorage").textContent = "✅ OK";
+
+    const report = { issues: [], repairs: [], scannedAt: Date.now() };
+    const dbSlugs = Object.keys(galleries || {}).filter(slug => !isSystemGallerySlug(slug));
+    const storageSlugs = new Set(storageFiles.map(item => item.fullPath.split("/")[1]).filter(Boolean));
+
+    for (const slug of dbSlugs) {
+      const pub = galleries[slug]?.public || {};
+      const manifest = { ...(pub.photos || {}), ...(galleries[slug]?.privatePhotos || {}) };
+      const rows = Object.entries(manifest);
+      if (Number(pub.photoCount || 0) !== rows.length) {
+        report.issues.push({ type:"count", slug, text:`Licznik photoCount = ${Number(pub.photoCount||0)}, manifest = ${rows.length}.` });
+        report.repairs.push({ type:"count", slug, value:rows.length });
+      }
+
+      for (const [key,item] of rows) {
+        if (!item?.filename) {
+          report.issues.push({ type:"manifest", slug, text:`Nieprawidłowy wpis manifestu: ${key} — brak filename.` });
+          continue;
+        }
+        const previewPath = `galleries/${slug}/previews/${item.filename}.webp`;
+        const originalPath = item.originalPath || `galleries/${slug}/originals/${item.filename}`;
+        if (!item.originalPath) report.repairs.push({ type:"path", slug, key, filename:item.filename });
+        if (!storagePaths.has(previewPath)) report.issues.push({ type:"preview", slug, text:`Brak preview: ${displayName(item.filename)}` });
+        if (!storagePaths.has(originalPath)) report.issues.push({ type:"original", slug, text:`Brak oryginału: ${displayName(item.filename)}` });
+      }
+    }
+
+    for (const slug of storageSlugs) {
+      if (!dbSlugs.includes(slug)) report.issues.push({ type:"orphan", slug, text:`Folder Storage „${slug}” nie ma galerii w Database.` });
+    }
+
+    lastHealthReport = report;
+    $("#healthProblems").textContent = String(report.issues.length);
+    repair.disabled = report.repairs.length === 0;
+    $("#healthStatus").className = `notice ${report.issues.length ? "" : "ok"}`;
+    $("#healthStatus").textContent = report.issues.length
+      ? `Skan zakończony: ${report.issues.length} problemów, ${report.repairs.length} bezpiecznych napraw.`
+      : "Skan zakończony — wszystko wygląda poprawnie.";
+
+    if (!report.issues.length) {
+      $("#healthResults").innerHTML = '<div class="health-perfect">✅ Nie wykryto problemów w galerii, manifestach ani Storage.</div>';
+    } else {
+      const groups = {};
+      report.issues.forEach(issue => (groups[issue.slug] ||= []).push(issue));
+      $("#healthResults").innerHTML = Object.entries(groups).map(([slug,issues]) => `
+        <section class="health-gallery-block">
+          <h3>${escapeHtml(galleries[slug]?.public?.title || slug)}</h3>
+          ${issues.map(issue => `<div class="health-issue ${issue.type}"><b>${escapeHtml(issue.type.toUpperCase())}</b><span>${escapeHtml(issue.text)}</span></div>`).join("")}
+        </section>`).join("");
+    }
+  } catch (error) {
+    console.error("HEALTH SCAN ERROR", error);
+    $("#healthStorage").textContent = "❌ BŁĄD";
+    showNotice($("#healthStatus"), `Skan nie powiódł się: ${error.code || error.message || error}`, "error");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function repairHealthIssues() {
+  if (!lastHealthReport?.repairs?.length) return;
+  const button = $("#repairHealthBtn");
+  const old = button.textContent;
+  button.disabled = true;
+  button.textContent = "Naprawiam…";
+  try {
+    for (const repair of lastHealthReport.repairs) {
+      if (repair.type === "count") {
+        await update(ref(db, `galleries/${repair.slug}/public`), { photoCount: repair.value, updatedAt: Date.now() });
+      } else if (repair.type === "path") {
+        await update(ref(db, `galleries/${repair.slug}/public/photos/${repair.key}`), {
+          originalPath: `galleries/${repair.slug}/originals/${repair.filename}`
+        });
+      }
+    }
+    toast(`Naprawiono ${lastHealthReport.repairs.length} bezpiecznych problemów`);
+    await runHealthScan();
+  } catch (error) {
+    console.error("HEALTH REPAIR ERROR", error);
+    toast(`Nie udało się naprawić: ${error.code || error.message || error}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = old;
+  }
+}
+
 async function openSelections(slug) {
   const gallery = galleries[slug] || {};
   const container = $("#selectionContent");
-  $("#selectionTitle").textContent = `${gallery.public?.title || slug} — wybrane zdjęcia klienta`;
+  $("#selectionTitle").textContent = `${gallery.public?.title || slug} — wybór i zatwierdzenia klienta`;
   container.innerHTML = '<div class="loading">Ładowanie wyboru…</div>';
   $("#selectionDialog").showModal();
 
   const items = await migrateLegacyFavoritesToShared(slug);
+  const approvals = approvalRowsForSlug(slug);
   container.innerHTML = "";
+
+  const approvalSection = document.createElement("section");
+  approvalSection.className = "approval-history";
+  if (!approvals.length) {
+    approvalSection.innerHTML = '<div class="notice">Klient nie zatwierdził jeszcze ostatecznego wyboru do obróbki.</div>';
+  } else {
+    approvalSection.innerHTML = `
+      <div class="approval-history-head">
+        <div>
+          <p class="eyebrow">LOG ZATWIERDZEŃ</p>
+          <h3>Historia zatwierdzonych wyborów</h3>
+        </div>
+        <strong>${approvals.length} ${approvals.length === 1 ? "zatwierdzenie" : "zatwierdzeń"}</strong>
+      </div>
+      <div class="approval-history-list">
+        ${approvals.map((row,index) => `
+          <article class="approval-log-row${index === 0 ? " latest" : ""}">
+            <div><b>${index === 0 ? "NAJNOWSZE • " : ""}${Number(row.selectedCount || 0)} zdjęć</b><span>${escapeHtml(formatDateTimePl(row.submittedAt))}</span></div>
+            <details>
+              <summary>Pokaż zapisane nazwy (${Object.keys(row.filenames || {}).length})</summary>
+              <div class="approval-filenames">${Object.values(row.filenames || {}).map(item => `<span>${escapeHtml(displayName(item?.filename))}</span>`).join("")}</div>
+            </details>
+          </article>`).join("")}
+      </div>`;
+  }
+  container.appendChild(approvalSection);
+
   if (!items.length) {
-    container.innerHTML = '<div class="notice">Klient nie zaznaczył jeszcze żadnego zdjęcia.</div>';
+    container.insertAdjacentHTML("beforeend", '<div class="notice">Aktualnie klient nie ma żadnych serduszek.</div>');
     return;
   }
 
@@ -2616,7 +2846,7 @@ async function openSelections(slug) {
   block.innerHTML = `
     <div class="selection-single-head">
       <div>
-        <h3>♥ Wybrane zdjęcia klienta</h3>
+        <h3>♥ Aktualnie wybrane zdjęcia klienta</h3>
         <div class="gallery-meta"><span>${items.length} zdjęć</span></div>
       </div>
       <button type="button" class="primary download-all">♥ Pobierz wybrane (${items.length})</button>
@@ -2626,7 +2856,7 @@ async function openSelections(slug) {
 
   const grid = block.querySelector(".selection-photo-grid");
   for (const item of items) {
-    const manifestItems = Object.values(gallery.public?.photos || {});
+    const manifestItems = Object.values({ ...(gallery.public?.photos || {}), ...(gallery.privatePhotos || {}) });
     const manifestItem = manifestItems.find(photo => photo?.filename === item.filename) ||
       manifestItems.find(photo => displayName(photo?.filename).toLowerCase() === displayName(item.filename).toLowerCase());
     const card = document.createElement("article");
@@ -2636,8 +2866,7 @@ async function openSelections(slug) {
       <div class="selection-photo-info">
         <strong>${escapeHtml(displayName(item.filename))}</strong>
         <button type="button" class="ghost download-one">↓ Pobierz</button>
-      </div>
-    `;
+      </div>`;
     card.querySelector(".download-one").addEventListener("click", async () => {
       const url = await getAdminPhotoDownloadUrl(slug, item.filename);
       if (url) startAdminAttachmentDownload(url, item.filename);
@@ -2645,10 +2874,7 @@ async function openSelections(slug) {
     });
     grid.appendChild(card);
   }
-
-  block.querySelector(".download-all").addEventListener("click", (event) =>
-    downloadAdminSelected(slug, items, event.currentTarget)
-  );
+  block.querySelector(".download-all").addEventListener("click", (event) => downloadAdminSelected(slug, items, event.currentTarget));
   container.appendChild(block);
 }
 

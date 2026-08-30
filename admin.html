@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
   <title>RAF.studio — Studio Manager</title>
-  <link rel="stylesheet" href="style.css?v=15.4">
+  <link rel="stylesheet" href="style.css?v=16.0">
 </head>
 <body class="admin-body">
 
 <section id="adminLogin" class="lock-screen">
   <div class="lock-card">
-    <img class="raf-logo login-logo" src="logo-white.png?v=15.4" alt="RAF.studio">
+    <img class="raf-logo login-logo" src="logo-white.png?v=16.0" alt="RAF.studio">
     <p id="adminLoginEyebrow" class="eyebrow">STUDIO MANAGER</p>
     <h1 id="adminLoginTitle">Panel fotografa</h1>
     <p id="adminLoginSubtitle" class="muted">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
@@ -40,7 +40,7 @@
 <main id="adminPanel" hidden>
   <aside class="sidebar">
     <div>
-      <img class="raf-logo sidebar-logo" src="logo-white.png?v=15.4" alt="RAF.studio">
+      <img class="raf-logo sidebar-logo" src="logo-white.png?v=16.0" alt="RAF.studio">
       <small>Studio Manager</small>
     </div>
     <div class="side-bottom">
@@ -61,6 +61,7 @@
         <button id="loginEditorBtn" type="button" class="ghost">🔐 Logowanie admina</button>
         <button id="clientLoginEditorBtn" type="button" class="ghost">🔑 Logowanie klienta</button>
         <button id="adminPanelEditorBtn" type="button" class="ghost">🖥 Wygląd panelu</button>
+        <button id="healthPanelBtn" type="button" class="ghost">🩺 Zdrowie systemu</button>
         <button id="newGalleryBtn" type="button" class="primary">+ Nowa galeria</button>
       </div>
     </header>
@@ -273,7 +274,7 @@
     <b>＋</b>
     <strong>Przeciągnij zdjęcia tutaj</strong>
     <span>lub kliknij, aby wybrać JPG, JPEG, PNG lub WEBP</span>
-    <small>Podgląd WebP tworzy się automatycznie z delikatnym watermarkiem RAF.studio, a oryginalny JPG/PNG/WEBP zostaje bez zmian.</small>
+    <small>Podgląd WebP tworzy się automatycznie BEZ watermarku. Oryginalny JPG/PNG/WEBP zostaje bez zmian.</small>
   </label>
 
   <div class="upload-meta">
@@ -314,8 +315,14 @@
       <label>Pozycja pionowa
         <input id="coverPositionYInput" type="range" min="0" max="100" value="38">
       </label>
+      <div class="hero-file-info">
+        <span>Zdjęcie w tle galerii:</span>
+        <strong id="heroBackgroundFilename">takie samo jak okładka</strong>
+      </div>
+      <p class="muted">Przy zdjęciu poniżej możesz osobno kliknąć „Tło”, więc okładka karty galerii i szerokie zdjęcie u klienta nie muszą być tym samym kadrem.</p>
       <div class="actions right">
-        <button id="saveCoverPositionBtn" type="button" class="primary">Zapisz kadr okładki</button>
+        <button id="useCoverAsHeroBtn" type="button" class="ghost">Użyj okładki jako tła</button>
+        <button id="saveCoverPositionBtn" type="button" class="primary">Zapisz pozycję tła</button>
       </div>
     </div>
   </section>
@@ -370,6 +377,33 @@
 
   <div class="site-editor-layout">
     <section class="site-editor-controls">
+      <div class="site-settings-section hero-settings-section">
+        <h3>Duże zdjęcie w tle galerii</h3>
+        <p class="muted">Steruj szerokim zdjęciem na górze strony. Zdjęcie wybierasz w „Zarządzaj → Tło”.</p>
+        <div class="form3">
+          <label>Sposób wyświetlania
+            <select id="uiHeroMode">
+              <option value="cover">Wypełnij szerokość (crop)</option>
+              <option value="fixed">Stała szerokość zdjęcia</option>
+              <option value="contain">Pokaż całe zdjęcie</option>
+              <option value="none">Bez zdjęcia w tle</option>
+            </select>
+          </label>
+          <label>Wysokość — komputer (px)
+            <input id="uiHeroHeightDesktop" type="number" min="180" max="700" value="330">
+          </label>
+          <label>Wysokość — telefon (px)
+            <input id="uiHeroHeightMobile" type="number" min="160" max="500" value="280">
+          </label>
+          <label>Szerokość zdjęcia w trybie stałym (px)
+            <input id="uiHeroImageWidth" type="number" min="600" max="2600" value="1500">
+          </label>
+          <label>Kolor tła obok zdjęcia
+            <input id="uiHeroBgColor" class="color-field" type="color" value="#09090a">
+          </label>
+        </div>
+      </div>
+
       <div class="site-settings-section">
         <h3>Układ zdjęć</h3>
         <div class="form3">
@@ -680,7 +714,7 @@
       <p class="eyebrow">PODGLĄD NA ŻYWO</p>
       <div id="loginPreviewScreen" class="login-preview-screen">
         <div id="loginPreviewCard" class="login-preview-card">
-          <img id="loginPreviewLogo" src="logo-white.png?v=15.4" alt="">
+          <img id="loginPreviewLogo" src="logo-white.png?v=16.0" alt="">
           <div id="loginPreviewEyebrow" class="login-preview-eyebrow">STUDIO MANAGER</div>
           <h3 id="loginPreviewTitle">Panel fotografa</h3>
           <p id="loginPreviewSubtitle">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
@@ -819,7 +853,7 @@
       <p class="eyebrow">PODGLĄD NA ŻYWO</p>
       <div id="clientLoginPreviewScreen" class="login-preview-screen">
         <div id="clientLoginPreviewCard" class="login-preview-card">
-          <img id="clientLoginPreviewLogo" src="logo-white.png?v=15.4" alt="">
+          <img id="clientLoginPreviewLogo" src="logo-white.png?v=16.0" alt="">
           <div id="clientLoginPreviewEyebrow" class="login-preview-eyebrow">PRYWATNA GALERIA</div>
           <h3 id="clientLoginPreviewTitle">M&K2026</h3>
           <p id="clientLoginPreviewInstruction">Wpisz hasło otrzymane od fotografa.</p>
@@ -936,9 +970,37 @@
   </div>
 </dialog>
 
+
+<dialog id="healthDialog" class="dialog xl health-dialog">
+  <div class="dialog-head">
+    <div>
+      <p class="eyebrow">DIAGNOSTYKA</p>
+      <h2>Zdrowie systemu</h2>
+      <p class="muted">Sprawdza Firebase Auth, Database, Storage, manifesty galerii i brakujące pliki.</p>
+    </div>
+    <button id="closeHealthDialog" type="button" class="ghost close-btn">×</button>
+  </div>
+
+  <div class="health-summary">
+    <article><span>Auth</span><strong id="healthAuth">—</strong></article>
+    <article><span>Database</span><strong id="healthDatabase">—</strong></article>
+    <article><span>Storage</span><strong id="healthStorage">—</strong></article>
+    <article><span>Problemy</span><strong id="healthProblems">—</strong></article>
+  </div>
+
+  <div class="actions health-actions">
+    <button id="runHealthScanBtn" type="button" class="primary">🩺 Uruchom pełny skan</button>
+    <button id="repairHealthBtn" type="button" class="ghost" disabled>⚙ Napraw bezpieczne problemy</button>
+  </div>
+  <div id="healthStatus" class="notice" hidden></div>
+  <div id="healthResults" class="health-results">
+    <div class="notice">Kliknij „Uruchom pełny skan”.</div>
+  </div>
+</dialog>
+
 <div id="toast" class="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
-<script type="module" src="admin.js?v=15.4"></script>
+<script type="module" src="admin.js?v=16.0"></script>
 </body>
 </html>
