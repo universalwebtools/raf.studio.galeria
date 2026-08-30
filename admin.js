@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata, getMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=16.0";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=16.1";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -2068,6 +2068,7 @@ $("#startUploadBtn").addEventListener("click", async () => {
         previewData.blob,
         {
           contentType: "image/webp",
+          cacheControl: "public,max-age=3600,must-revalidate",
           contentDisposition: `attachment; filename="${file.name}.webp"`
         },
         fraction => {
@@ -2075,7 +2076,8 @@ $("#startUploadBtn").addEventListener("click", async () => {
         }
       );
 
-      const previewUrl = await getDownloadURL(previewRef);
+      const previewRawUrl = await getDownloadURL(previewRef);
+      const previewUrl = `${previewRawUrl}${previewRawUrl.includes("?") ? "&" : "?"}v=${Date.now()}-${index}`;
 
       showNotice($("#uploadStatus"), `${index + 1}/${files.length}: ${file.name} — wysyłam oryginał…`);
 
@@ -2251,14 +2253,23 @@ async function openPhotos(slug) {
   $("#photosTitle").textContent = `Zdjęcia — ${galleries[slug]?.public?.title || slug}`;
   $("#photoManagerGrid").innerHTML = "";
   $("#photoManagerLoading").hidden = false;
+  $("#rebuildPreviewStatus").hidden = true;
   $("#coverEditor").hidden = true;
-  $("#photosDialog").showModal();
+
+  if (!$("#photosDialog").open) {
+    $("#photosDialog").showModal();
+  }
+
   syncCoverEditor(slug);
 
   try {
     const result = await listAll(sRef(storage, `galleries/${slug}/previews`));
+    const items = [...result.items].sort((a, b) =>
+      a.name.localeCompare(b.name, undefined, { numeric: true })
+    );
 
-    const items = [...result.items].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    const grid = $("#photoManagerGrid");
+    const pub = galleries[slug]?.public || {};
 
     for (const previewRef of items) {
       const previewUrl = await getDownloadURL(previewRef);
@@ -2266,118 +2277,373 @@ async function openPhotos(slug) {
         ? previewRef.name.slice(0, -5)
         : previewRef.name;
 
+      const key = manifestKey(originalName);
+      const privatePhoto = galleries[slug]?.privatePhotos?.[key];
+      const publicPhoto = galleries[slug]?.public?.photos?.[key];
+      const manifestPhoto = privatePhoto || publicPhoto || {};
+      const isPrivate = Boolean(privatePhoto);
+      const isFeatured = manifestPhoto.featured === true;
+      const isCover = pub.coverFile === originalName;
+      const isHero = (pub.heroBackgroundFile || pub.coverFile) === originalName;
+
       const item = document.createElement("article");
-      item.className = `pm-item${galleries[slug]?.public?.coverFile === originalName ? " current-cover" : ""}`;
+      item.className = [
+        "pm-item",
+        isCover ? "current-cover" : "",
+        isFeatured ? "pm-featured" : "",
+        isPrivate ? "pm-hidden-client" : ""
+      ].filter(Boolean).join(" ");
+
+      item.dataset.filename = originalName;
 
       item.innerHTML = `
         <div class="pm-thumb" style="background-image:url('${previewUrl}')"></div>
         <div class="pm-info">
-          <div class="pm-name" title="${escapeHtml(displayName(originalName))}">${escapeHtml(displayName(originalName))}</div>
+          <div class="pm-name" title="${escapeHtml(displayName(originalName))}">
+            ${escapeHtml(displayName(originalName))}
+          </div>
           <div class="pm-actions">
-            <button type="button" class="ghost cover">Okładka</button>
-            <button type="button" class="ghost hero-bg">Tło</button>
-            <button type="button" class="ghost featured">${adminManifestPhoto(slug, originalName)?.featured ? "★ Polecane" : "☆ Polecane"}</button>
-            <button type="button" class="ghost client-hide">${galleries[slug]?.privatePhotos?.[manifestKey(originalName)] ? "👁 Pokaż klientowi" : "🙈 Ukryj klientowi"}</button>
-            <button type="button" class="danger delete">Usuń</button>
+            <button type="button" class="ghost pm-action cover ${isCover ? "active" : ""}" data-action="cover">
+              ${isCover ? "✓ Okładka" : "Okładka"}
+            </button>
+            <button type="button" class="ghost pm-action hero-bg ${isHero ? "active" : ""}" data-action="hero">
+              ${isHero ? "✓ Tło" : "Tło"}
+            </button>
+            <button type="button" class="ghost pm-action featured ${isFeatured ? "active" : ""}" data-action="featured">
+              ${isFeatured ? "★ Polecane" : "☆ Polecane"}
+            </button>
+            <button type="button" class="ghost pm-action client-hide ${isPrivate ? "active danger-soft" : ""}" data-action="visibility">
+              ${isPrivate ? "👁 Pokaż klientowi" : "🙈 Ukryj klientowi"}
+            </button>
+            <button type="button" class="danger pm-action delete" data-action="delete">Usuń</button>
           </div>
         </div>
       `;
 
-      item.querySelector(".cover").addEventListener("click", async () => {
-        await update(ref(db, `galleries/${slug}/public`), { coverFile: originalName, updatedAt: Date.now() });
-        syncCoverEditor(slug);
-        toast("Ustawiono okładkę");
-      });
+      grid.appendChild(item);
+    }
 
-      item.querySelector(".hero-bg").addEventListener("click", async () => {
-        const isPrivate = Boolean(galleries[slug]?.privatePhotos?.[manifestKey(originalName)]);
-        if (isPrivate) {
-          toast("Najpierw pokaż to zdjęcie klientowi — ukryte zdjęcie nie może być tłem galerii.");
-          return;
-        }
-        await update(ref(db, `galleries/${slug}/public`), { heroBackgroundFile: originalName, updatedAt: Date.now() });
-        syncCoverEditor(slug);
-        toast("Ustawiono osobne zdjęcie w tle galerii");
-      });
-
-      item.querySelector(".featured").addEventListener("click", async (event) => {
-        const key = manifestKey(originalName);
-        const privatePhoto = galleries[slug]?.privatePhotos?.[key];
-        const publicPhoto = galleries[slug]?.public?.photos?.[key];
-        const current = (privatePhoto || publicPhoto)?.featured === true;
-        const path = privatePhoto ? `galleries/${slug}/privatePhotos/${key}` : `galleries/${slug}/public/photos/${key}`;
-        await update(ref(db, path), { featured: !current });
-        event.currentTarget.textContent = !current ? "★ Polecane" : "☆ Polecane";
-        item.classList.toggle("pm-featured", !current);
-        toast(!current ? "Oznaczono jako polecane" : "Usunięto oznaczenie polecane");
-      });
-
-      item.querySelector(".client-hide").addEventListener("click", async (event) => {
-        const key = manifestKey(originalName);
-        const privatePhoto = galleries[slug]?.privatePhotos?.[key];
-        const publicPhoto = galleries[slug]?.public?.photos?.[key];
-
-        if (privatePhoto) {
-          const restored = { ...privatePhoto };
-          delete restored.hiddenAt;
-          await set(ref(db, `galleries/${slug}/public/photos/${key}`), restored);
-          await remove(ref(db, `galleries/${slug}/privatePhotos/${key}`));
-          event.currentTarget.textContent = "🙈 Ukryj klientowi";
-          item.classList.remove("pm-hidden-client");
-          toast("Zdjęcie znów widoczne dla klienta");
-        } else if (publicPhoto) {
-          await set(ref(db, `galleries/${slug}/privatePhotos/${key}`), { ...publicPhoto, hiddenAt: Date.now() });
-          await remove(ref(db, `galleries/${slug}/public/photos/${key}`));
-          const pub = galleries[slug]?.public || {};
-          const rootPatch = { updatedAt: Date.now() };
-          if (pub.coverFile === originalName) rootPatch.coverFile = "";
-          if (pub.heroBackgroundFile === originalName) rootPatch.heroBackgroundFile = "";
-          await update(ref(db, `galleries/${slug}/public`), rootPatch);
-          event.currentTarget.textContent = "👁 Pokaż klientowi";
-          item.classList.add("pm-hidden-client");
-          toast("Zdjęcie przeniesione do prywatnej części — klient nie dostaje jego URL w manifeście");
-        } else {
-          toast("Brak wpisu zdjęcia w manifeście. Uruchom Zdrowie systemu.");
-        }
-        syncCoverEditor(slug);
-      });
-
-      const manifestPhoto = adminManifestPhoto(slug, originalName) || {};
-      item.classList.toggle("pm-featured", manifestPhoto.featured === true);
-      item.classList.toggle("pm-hidden-client", Boolean(galleries[slug]?.privatePhotos?.[manifestKey(originalName)]));
-
-      item.querySelector(".delete").addEventListener("click", async () => {
-        if (!confirm(`Usunąć zdjęcie ${originalName}?`)) return;
-
-        try {
-          await deleteObject(previewRef);
-          await deleteObject(sRef(storage, `galleries/${slug}/originals/${originalName}`)).catch(() => {});
-          await remove(ref(db, `galleries/${slug}/public/photos/${manifestKey(originalName)}`)).catch(() => {});
-          await remove(ref(db, `galleries/${slug}/privatePhotos/${manifestKey(originalName)}`)).catch(() => {});
-
-          item.remove();
-
-          const remaining = await listAll(sRef(storage, `galleries/${slug}/previews`));
-          await update(ref(db, `galleries/${slug}/public`), {
-            photoCount: remaining.items.length
-          });
-
-          toast("Zdjęcie usunięte");
-        } catch (error) {
-          console.error("DELETE PHOTO ERROR", error);
-          toast(`Nie udało się usunąć: ${error.code || error.message}`);
-        }
-      });
-
-      $("#photoManagerGrid").appendChild(item);
+    if (!items.length) {
+      grid.innerHTML = '<div class="notice">Ta galeria nie ma jeszcze żadnych preview.</div>';
     }
   } catch (error) {
-    $("#photoManagerGrid").innerHTML = `<div class="notice error">Błąd: ${escapeHtml(error.code || error.message || error)}</div>`;
+    console.error("OPEN PHOTOS ERROR", error);
+    $("#photoManagerGrid").innerHTML =
+      `<div class="notice error">Błąd: ${escapeHtml(error.code || error.message || error)}</div>`;
   } finally {
     syncCoverEditor(slug);
     $("#photoManagerLoading").hidden = true;
   }
 }
+
+async function runPhotoManagerAction(button) {
+  const item = button.closest(".pm-item");
+  const filename = item?.dataset?.filename;
+  const slug = currentPhotosSlug;
+  const action = button.dataset.action;
+
+  if (!item || !filename || !slug || !action) return;
+
+  const key = manifestKey(filename);
+  const oldLabel = button.textContent;
+
+  button.disabled = true;
+  button.classList.add("working");
+
+  try {
+    if (action === "cover") {
+      await update(ref(db, `galleries/${slug}/public`), {
+        coverFile: filename,
+        updatedAt: Date.now()
+      });
+
+      galleries[slug].public.coverFile = filename;
+
+      $("#photoManagerGrid").querySelectorAll('[data-action="cover"]').forEach(btn => {
+        const row = btn.closest(".pm-item");
+        const active = row?.dataset.filename === filename;
+        btn.classList.toggle("active", active);
+        btn.textContent = active ? "✓ Okładka" : "Okładka";
+        row?.classList.toggle("current-cover", active);
+      });
+
+      syncCoverEditor(slug);
+      toast("Ustawiono okładkę");
+    }
+
+    else if (action === "hero") {
+      const isPrivate = Boolean(galleries[slug]?.privatePhotos?.[key]);
+      if (isPrivate) {
+        toast("Ukryte zdjęcie nie może być tłem. Najpierw pokaż je klientowi.");
+        return;
+      }
+
+      await update(ref(db, `galleries/${slug}/public`), {
+        heroBackgroundFile: filename,
+        updatedAt: Date.now()
+      });
+
+      galleries[slug].public.heroBackgroundFile = filename;
+
+      $("#photoManagerGrid").querySelectorAll('[data-action="hero"]').forEach(btn => {
+        const active = btn.closest(".pm-item")?.dataset.filename === filename;
+        btn.classList.toggle("active", active);
+        btn.textContent = active ? "✓ Tło" : "Tło";
+      });
+
+      syncCoverEditor(slug);
+      toast("Ustawiono zdjęcie w tle galerii");
+    }
+
+    else if (action === "featured") {
+      const privatePhoto = galleries[slug]?.privatePhotos?.[key];
+      const publicPhoto = galleries[slug]?.public?.photos?.[key];
+      const currentPhoto = privatePhoto || publicPhoto;
+
+      if (!currentPhoto) {
+        throw new Error("Brak wpisu zdjęcia w manifeście.");
+      }
+
+      const next = currentPhoto.featured !== true;
+      const path = privatePhoto
+        ? `galleries/${slug}/privatePhotos/${key}`
+        : `galleries/${slug}/public/photos/${key}`;
+
+      // optimistic UI
+      button.classList.toggle("active", next);
+      button.textContent = next ? "★ Polecane" : "☆ Polecane";
+      item.classList.toggle("pm-featured", next);
+
+      await update(ref(db, path), { featured: next });
+
+      currentPhoto.featured = next;
+      toast(next ? "Oznaczono jako polecane" : "Usunięto oznaczenie polecane");
+    }
+
+    else if (action === "visibility") {
+      const privatePhoto = galleries[slug]?.privatePhotos?.[key];
+      const publicPhoto = galleries[slug]?.public?.photos?.[key];
+
+      if (privatePhoto) {
+        const restored = { ...privatePhoto };
+        delete restored.hiddenAt;
+
+        await set(ref(db, `galleries/${slug}/public/photos/${key}`), restored);
+        await remove(ref(db, `galleries/${slug}/privatePhotos/${key}`));
+
+        galleries[slug].public.photos ||= {};
+        galleries[slug].public.photos[key] = restored;
+        if (galleries[slug].privatePhotos) delete galleries[slug].privatePhotos[key];
+
+        button.textContent = "🙈 Ukryj klientowi";
+        button.classList.remove("active", "danger-soft");
+        item.classList.remove("pm-hidden-client");
+        toast("Zdjęcie znów widoczne dla klienta");
+      } else if (publicPhoto) {
+        const privateCopy = { ...publicPhoto, hiddenAt: Date.now() };
+
+        await set(ref(db, `galleries/${slug}/privatePhotos/${key}`), privateCopy);
+        await remove(ref(db, `galleries/${slug}/public/photos/${key}`));
+
+        galleries[slug].privatePhotos ||= {};
+        galleries[slug].privatePhotos[key] = privateCopy;
+        delete galleries[slug].public.photos[key];
+
+        const rootPatch = { updatedAt: Date.now() };
+        if (galleries[slug].public.coverFile === filename) {
+          rootPatch.coverFile = "";
+          galleries[slug].public.coverFile = "";
+        }
+        if (galleries[slug].public.heroBackgroundFile === filename) {
+          rootPatch.heroBackgroundFile = "";
+          galleries[slug].public.heroBackgroundFile = "";
+        }
+        await update(ref(db, `galleries/${slug}/public`), rootPatch);
+
+        button.textContent = "👁 Pokaż klientowi";
+        button.classList.add("active", "danger-soft");
+        item.classList.add("pm-hidden-client");
+        toast("Zdjęcie ukryte przed klientem");
+      } else {
+        throw new Error("Brak wpisu zdjęcia w manifeście.");
+      }
+
+      syncCoverEditor(slug);
+    }
+
+    else if (action === "delete") {
+      if (!confirm(`Usunąć zdjęcie ${displayName(filename)}?`)) return;
+
+      const previewRef = sRef(storage, `galleries/${slug}/previews/${filename}.webp`);
+
+      await deleteObject(previewRef).catch(() => {});
+      await deleteObject(sRef(storage, `galleries/${slug}/originals/${filename}`)).catch(() => {});
+      await remove(ref(db, `galleries/${slug}/public/photos/${key}`)).catch(() => {});
+      await remove(ref(db, `galleries/${slug}/privatePhotos/${key}`)).catch(() => {});
+
+      if (galleries[slug]?.public?.photos) delete galleries[slug].public.photos[key];
+      if (galleries[slug]?.privatePhotos) delete galleries[slug].privatePhotos[key];
+
+      item.remove();
+
+      const remaining = await listAll(sRef(storage, `galleries/${slug}/previews`));
+      await update(ref(db, `galleries/${slug}/public`), {
+        photoCount: remaining.items.length,
+        updatedAt: Date.now()
+      });
+
+      galleries[slug].public.photoCount = remaining.items.length;
+      toast("Zdjęcie usunięte");
+    }
+  } catch (error) {
+    console.error("PHOTO MANAGER ACTION ERROR", action, filename, error);
+
+    // refresh this dialog to restore true state after any failed optimistic action
+    toast(`Nie udało się wykonać akcji: ${error.code || error.message || error}`);
+
+    if (action === "featured") {
+      const current = adminManifestPhoto(slug, filename)?.featured === true;
+      button.classList.toggle("active", current);
+      button.textContent = current ? "★ Polecane" : "☆ Polecane";
+      item.classList.toggle("pm-featured", current);
+    }
+  } finally {
+    button.disabled = false;
+    button.classList.remove("working");
+    if (!button.textContent.trim()) button.textContent = oldLabel;
+  }
+}
+
+$("#photoManagerGrid")?.addEventListener("click", async (event) => {
+  const button = event.target.closest(".pm-action");
+  if (!button) return;
+  event.preventDefault();
+  event.stopPropagation();
+  await runPhotoManagerAction(button);
+});
+
+
+function manifestFilenameForLocalFile(slug, localName) {
+  const rows = Object.values(adminAllManifestPhotos(slug));
+  const exact = rows.find(item => item?.filename === localName);
+  if (exact) return exact.filename;
+
+  const base = displayName(localName).toLowerCase();
+  const byBase = rows.find(item => displayName(item?.filename).toLowerCase() === base);
+  return byBase?.filename || null;
+}
+
+async function rebuildSelectedPreviews(files) {
+  const slug = currentPhotosSlug;
+  if (!slug || !files.length) return;
+
+  const button = $("#rebuildPreviewsBtn");
+  const status = $("#rebuildPreviewStatus");
+  const old = button.textContent;
+  button.disabled = true;
+  button.textContent = "Przebudowuję…";
+  status.hidden = false;
+  status.className = "notice";
+
+  let done = 0;
+  let skipped = 0;
+
+  try {
+    for (let index = 0; index < files.length; index++) {
+      const file = files[index];
+      const manifestFilename = manifestFilenameForLocalFile(slug, file.name);
+
+      if (!manifestFilename) {
+        skipped++;
+        status.textContent = `${index + 1}/${files.length}: pomijam ${file.name} — nie ma takiego zdjęcia w galerii.`;
+        continue;
+      }
+
+      status.textContent = `${index + 1}/${files.length}: tworzę czyste preview ${displayName(manifestFilename)}…`;
+
+      const previewData = await makePreview(file);
+      const previewRef = sRef(storage, `galleries/${slug}/previews/${manifestFilename}.webp`);
+
+      await uploadTask(
+        previewRef,
+        previewData.blob,
+        {
+          contentType: "image/webp",
+          cacheControl: "no-cache,max-age=0,must-revalidate",
+          contentDisposition: `attachment; filename="${manifestFilename.replaceAll('"', '')}.webp"`
+        },
+        () => {}
+      );
+
+      const rawUrl = await getDownloadURL(previewRef);
+      const freshUrl = `${rawUrl}${rawUrl.includes("?") ? "&" : "?"}v=${Date.now()}-${index}`;
+
+      const key = manifestKey(manifestFilename);
+      const isPrivate = Boolean(galleries[slug]?.privatePhotos?.[key]);
+      const path = isPrivate
+        ? `galleries/${slug}/privatePhotos/${key}`
+        : `galleries/${slug}/public/photos/${key}`;
+
+      await update(ref(db, path), {
+        previewUrl: freshUrl,
+        width: previewData.width,
+        height: previewData.height,
+        orientation: previewData.orientation,
+        previewVersion: 161,
+        previewUpdatedAt: Date.now()
+      });
+
+      const localManifest = isPrivate
+        ? galleries[slug]?.privatePhotos?.[key]
+        : galleries[slug]?.public?.photos?.[key];
+
+      if (localManifest) {
+        localManifest.previewUrl = freshUrl;
+        localManifest.width = previewData.width;
+        localManifest.height = previewData.height;
+        localManifest.orientation = previewData.orientation;
+        localManifest.previewVersion = 161;
+      }
+
+      done++;
+    }
+
+    status.className = "notice ok";
+    status.textContent =
+      `Gotowe — przebudowano ${done} preview bez watermarku${skipped ? `, pominięto ${skipped}` : ""}.`;
+
+    toast(`Przebudowano ${done} preview bez RAF.studio`);
+
+    await openPhotos(slug);
+  } catch (error) {
+    console.error("REBUILD PREVIEWS ERROR", error);
+    status.className = "notice error";
+    status.textContent = `Błąd przebudowy preview: ${error.code || error.message || error}`;
+  } finally {
+    button.disabled = false;
+    button.textContent = old;
+    $("#rebuildPreviewFilesInput").value = "";
+  }
+}
+
+$("#rebuildPreviewsBtn")?.addEventListener("click", () => {
+  $("#rebuildPreviewFilesInput").click();
+});
+
+$("#rebuildPreviewFilesInput")?.addEventListener("change", async (event) => {
+  const files = [...(event.target.files || [])];
+  if (!files.length) return;
+
+  if (!confirm(
+    `Przebudować ${files.length} preview BEZ napisu RAF.studio?\n\n` +
+    `Wybierz lokalne oryginały tej galerii. Oryginały w Firebase nie będą ponownie wysyłane — nadpisane zostaną tylko małe preview.`
+  )) {
+    event.target.value = "";
+    return;
+  }
+
+  await rebuildSelectedPreviews(files);
+});
 
 $("#closePhotosDialog").addEventListener("click", () => $("#photosDialog").close());
 
@@ -2879,3 +3145,16 @@ async function openSelections(slug) {
 }
 
 $("#closeSelectionDialog").addEventListener("click", () => $("#selectionDialog").close());
+
+// ===== v16.1: health panel wiring =====
+$("#healthPanelBtn")?.addEventListener("click", () => {
+  $("#healthDialog").showModal();
+});
+
+$("#closeHealthDialog")?.addEventListener("click", () => {
+  $("#healthDialog").close();
+});
+
+$("#runHealthScanBtn")?.addEventListener("click", runHealthScan);
+$("#repairHealthBtn")?.addEventListener("click", repairHealthIssues);
+

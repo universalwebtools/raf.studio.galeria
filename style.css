@@ -1252,3 +1252,126 @@ input,select{width:100%;background:#0e0e10;border:1px solid #34343a;color:#fff;b
 
 .health-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}.health-summary article{padding:14px;border:1px solid #2d2d31;border-radius:14px;background:#101012}.health-summary span{display:block;color:#85858c;font-size:10px}.health-summary strong{display:block;margin-top:6px;font-size:20px}.health-actions{justify-content:flex-start;margin-bottom:12px}.health-results{display:grid;gap:10px;margin-top:12px}.health-gallery-block{padding:13px;border:1px solid #2d2d31;border-radius:14px;background:#0f0f11}.health-gallery-block h3{margin:0 0 9px}.health-issue{display:flex;gap:10px;padding:8px 0;border-top:1px solid #222228}.health-issue:first-of-type{border-top:0}.health-issue b{min-width:75px;font-size:9px;color:#ffb2b8}.health-issue span{font-size:11px;color:#bbb}.health-perfect{padding:25px;text-align:center;border:1px solid #315b3d;border-radius:14px;background:#11271855;color:#c4f5cf}
 @media(max-width:700px){.health-summary{grid-template-columns:1fr 1fr}}
+
+
+/* ===== v16.1: MANAGE PHOTO BUTTONS FIX ===== */
+.photo-manager-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:12px 14px;
+  margin-bottom:12px;
+  border:1px solid #2d2d31;
+  border-radius:14px;
+  background:#111114;
+}
+.photo-manager-toolbar > div:first-child{
+  display:grid;
+  gap:3px;
+}
+.photo-manager-toolbar strong{font-size:13px}
+.photo-manager-toolbar small{font-size:10px;color:#888890}
+.photo-manager-toolbar-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.photo-manager{
+  grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  align-items:start;
+}
+.pm-item{
+  overflow:hidden;
+  min-width:0;
+}
+.pm-info{
+  overflow:visible;
+  padding:11px;
+}
+.pm-actions{
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  gap:7px !important;
+  align-items:stretch;
+  overflow:visible !important;
+}
+.pm-actions button{
+  width:100%;
+  min-width:0;
+  min-height:38px;
+  padding:8px 7px !important;
+  white-space:normal;
+  line-height:1.15;
+  overflow:visible;
+  text-overflow:clip;
+  cursor:pointer !important;
+  pointer-events:auto !important;
+  position:relative;
+  z-index:5;
+}
+.pm-actions button.delete{
+  grid-column:1 / -1;
+}
+.pm-actions button.active{
+  background:#f3f3f0 !important;
+  color:#111 !important;
+  border-color:#f3f3f0 !important;
+}
+.pm-actions button.featured.active{
+  background:#d4ae37 !important;
+  border-color:#d4ae37 !important;
+  color:#12100a !important;
+}
+.pm-actions button.client-hide.active{
+  background:#743944 !important;
+  border-color:#9a5561 !important;
+  color:#fff !important;
+}
+.pm-actions button.working{
+  opacity:.65;
+  cursor:wait !important;
+}
+
+.pm-item.pm-hidden-client{
+  opacity:1 !important;
+}
+.pm-item.pm-hidden-client .pm-thumb{
+  opacity:.48;
+  position:relative;
+}
+.pm-item.pm-hidden-client .pm-thumb::after{
+  content:"UKRYTE PRZED KLIENTEM";
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  background:#0008;
+  color:#fff;
+  font-size:10px;
+  font-weight:900;
+  pointer-events:none;
+}
+
+@media(max-width:1050px){
+  .photo-manager{grid-template-columns:repeat(2,minmax(0,1fr)) !important}
+}
+@media(max-width:650px){
+  .photo-manager-toolbar{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .photo-manager-toolbar-actions button{width:100%}
+  .photo-manager{grid-template-columns:1fr !important}
+  .pm-actions{grid-template-columns:1fr 1fr !important}
+}
+
+/* v16.1: Health button/dialog always clickable */
+#healthPanelBtn,
+#runHealthScanBtn,
+#repairHealthBtn{
+  pointer-events:auto !important;
+  cursor:pointer !important;
+}
+
