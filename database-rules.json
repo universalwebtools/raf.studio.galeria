@@ -9,21 +9,19 @@
         }
       }
     },
-    "favorites": {
+    "selections": {
       ".read": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
       "$galleryId": {
-        "shared": {
-          ".read": "auth != null",
-          "$photoKey": {
-            ".write": "auth != null",
-            ".validate": "newData.val() === null || (newData.hasChildren(['filename','selectedAt']) && newData.child('filename').isString())"
-          }
-        },
-        "$clientUid": {
-          ".read": "auth != null && (auth.uid === $clientUid || auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1')",
-          ".write": "auth != null && auth.uid === $clientUid"
+        ".read": "auth != null",
+        ".write": "auth != null",
+        "$photoKey": {
+          ".validate": "newData.val() === null || (newData.hasChildren(['filename','selectedAt']) && newData.child('filename').isString() && newData.child('selectedAt').isNumber())"
         }
       }
+    },
+    "favorites": {
+      ".read": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
+      ".write": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'"
     }
   }
 }

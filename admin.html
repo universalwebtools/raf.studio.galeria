@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
   <title>RAF.studio — Studio Manager</title>
-  <link rel="stylesheet" href="style.css?v=14.2">
+  <link rel="stylesheet" href="style.css?v=15.0">
 </head>
 <body class="admin-body">
 
 <section id="adminLogin" class="lock-screen">
   <div class="lock-card">
-    <img class="raf-logo login-logo" src="logo-white.png?v=14.2" alt="RAF.studio">
+    <img class="raf-logo login-logo" src="logo-white.png?v=15.0" alt="RAF.studio">
     <p class="eyebrow">STUDIO MANAGER</p>
     <h1>Panel fotografa</h1>
     <p class="muted">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
@@ -40,7 +40,7 @@
 <main id="adminPanel" hidden>
   <aside class="sidebar">
     <div>
-      <img class="raf-logo sidebar-logo" src="logo-white.png?v=14.2" alt="RAF.studio">
+      <img class="raf-logo sidebar-logo" src="logo-white.png?v=15.0" alt="RAF.studio">
       <small>Studio Manager</small>
     </div>
     <div class="side-bottom">
@@ -279,9 +279,158 @@
   </div>
 </dialog>
 
+
+<dialog id="siteSettingsDialog" class="dialog xl site-settings-dialog">
+  <div class="dialog-head">
+    <div>
+      <p class="eyebrow">WYGLĄD GALERII</p>
+      <h2 id="siteSettingsTitle">Ustawienia strony</h2>
+      <p class="muted">Zmieniaj układ, rozmiary, kolory i nazwy przycisków bez grzebania w kodzie.</p>
+    </div>
+    <button id="closeSiteSettingsDialog" type="button" class="ghost close-btn">×</button>
+  </div>
+
+  <input id="siteSettingsSlug" type="hidden">
+
+  <div class="site-editor-layout">
+    <section class="site-editor-controls">
+      <div class="site-settings-section">
+        <h3>Układ zdjęć</h3>
+        <div class="form3">
+          <label>Kolumny — komputer
+            <input id="uiDesktopColumns" type="number" min="2" max="6" value="4">
+          </label>
+          <label>Kolumny — tablet
+            <input id="uiTabletColumns" type="number" min="2" max="5" value="3">
+          </label>
+          <label>Kolumny — telefon
+            <input id="uiMobileColumns" type="number" min="1" max="4" value="2">
+          </label>
+        </div>
+        <div class="form3">
+          <label>Odstęp zdjęć (px)
+            <input id="uiGridGap" type="number" min="2" max="30" value="10">
+          </label>
+          <label>Zaokrąglenie zdjęć (px)
+            <input id="uiCardRadius" type="number" min="0" max="30" value="9">
+          </label>
+          <label class="check">
+            <input id="uiShowFilenames" type="checkbox" checked>
+            Pokazuj nazwy zdjęć
+          </label>
+        </div>
+      </div>
+
+      <div class="site-settings-section">
+        <h3>Przyciski na zdjęciach</h3>
+        <div class="form3">
+          <label>Rozmiar przycisków (px)
+            <input id="uiButtonSize" type="number" min="26" max="64" value="40">
+          </label>
+          <label>Odstęp przycisków (px)
+            <input id="uiButtonGap" type="number" min="0" max="20" value="6">
+          </label>
+          <label>Tło zwykłego przycisku
+            <input id="uiButtonBg" class="color-field" type="color" value="#111114">
+          </label>
+        </div>
+        <div class="form3">
+          <label>♥ aktywne
+            <input id="uiHeartColor" class="color-field" type="color" value="#ff3b4d">
+          </label>
+          <label>A/B aktywne
+            <input id="uiCompareColor" class="color-field" type="color" value="#22c55e">
+          </label>
+          <label>✓ pobieranie aktywne
+            <input id="uiDownloadColor" class="color-field" type="color" value="#1b7f46">
+          </label>
+        </div>
+      </div>
+
+      <div class="site-settings-section">
+        <h3>Filtry i główne przyciski</h3>
+        <div class="form2">
+          <label>Wszystkie
+            <input id="uiLabelAll" value="Wszystkie">
+          </label>
+          <label>Wybrane
+            <input id="uiLabelFavorites" value="Wybrane">
+          </label>
+          <label>Pionowe
+            <input id="uiLabelPortrait" value="Pionowe">
+          </label>
+          <label>Poziome
+            <input id="uiLabelLandscape" value="Poziome">
+          </label>
+          <label>Ukryte
+            <input id="uiLabelHidden" value="Ukryte">
+          </label>
+          <label>Przycisk porównania
+            <input id="uiLabelCompare" value="A/B">
+          </label>
+          <label>Slideshow
+            <input id="uiLabelSlideshow" value="Slideshow">
+          </label>
+          <label>Udostępnij
+            <input id="uiLabelShare" value="Udostępnij">
+          </label>
+          <label>Wyjdź
+            <input id="uiLabelExit" value="Wyjdź">
+          </label>
+          <label>Pobierz serduszka
+            <input id="uiLabelDownloadFavorites" value="Pobierz wybrane">
+          </label>
+        </div>
+        <div class="form2">
+          <label>Aktywny filtr — tło
+            <input id="uiFilterBg" class="color-field" type="color" value="#f3f3f0">
+          </label>
+          <label>Aktywny filtr — tekst
+            <input id="uiFilterText" class="color-field" type="color" value="#111111">
+          </label>
+        </div>
+      </div>
+    </section>
+
+    <aside class="site-live-preview">
+      <p class="eyebrow">PODGLĄD NA ŻYWO</p>
+      <div id="uiPreviewFilters" class="ui-preview-filters">
+        <span class="active">Wszystkie</span><span>Wybrane</span><span>Pionowe</span>
+      </div>
+      <div id="uiPreviewGrid" class="ui-preview-grid">
+        <article class="ui-preview-card">
+          <div class="ui-preview-image">
+            <div id="uiPreviewTools" class="ui-preview-tools">
+              <button class="preview-heart active" type="button">♥</button>
+              <button type="button">×</button>
+              <button class="preview-compare active" type="button">A/B</button>
+              <button type="button">↓</button>
+              <button class="preview-download active" type="button">✓</button>
+            </div>
+          </div>
+          <div class="ui-preview-name">M&K022</div>
+        </article>
+        <article class="ui-preview-card">
+          <div class="ui-preview-image alt"></div>
+          <div class="ui-preview-name">M&K023</div>
+        </article>
+      </div>
+      <p class="muted ui-preview-tip">Podgląd pokazuje wielkość, odstępy, kolory i liczbę kolumn w uproszczonej formie.</p>
+    </aside>
+  </div>
+
+  <div id="siteSettingsStatus" class="notice" hidden></div>
+  <div class="actions">
+    <button id="resetSiteSettingsBtn" type="button" class="ghost">Przywróć domyślne</button>
+    <span class="spacer"></span>
+    <button id="cancelSiteSettingsBtn" type="button" class="ghost">Anuluj</button>
+    <button id="saveSiteSettingsBtn" type="button" class="primary">Zapisz wygląd</button>
+  </div>
+</dialog>
+
 <div id="toast" class="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
-<script type="module" src="admin.js?v=14.2"></script>
+<script type="module" src="admin.js?v=15.0"></script>
 </body>
 </html>

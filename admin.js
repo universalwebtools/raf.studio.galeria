@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=14.2";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=15.0";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -13,12 +13,14 @@ const $ = (selector) => document.querySelector(selector);
 
 let galleries = {};
 let favoritesRoot = {};
+let selectionsRoot = {};
 let unsubscribeGalleries = null;
 let uploadSlug = null;
 let createdSlug = null;
 let currentPhotosSlug = null;
 let qrGallerySlug = null;
 let qrInstance = null;
+let siteSettingsSlug = null;
 
 
 function escapeHtml(value) {
@@ -63,6 +65,52 @@ function galleryUrl(slug) {
   url.hash = "";
   url.searchParams.set("g", slug);
   return url.toString();
+}
+
+
+const DEFAULT_UI_CONFIG = {
+  desktopColumns: 4,
+  tabletColumns: 3,
+  mobileColumns: 2,
+  gridGap: 10,
+  cardRadius: 9,
+  buttonSize: 40,
+  buttonGap: 6,
+  buttonBg: "#111114",
+  heartColor: "#ff3b4d",
+  compareColor: "#22c55e",
+  downloadColor: "#1b7f46",
+  filterBg: "#f3f3f0",
+  filterText: "#111111",
+  showFilenames: true,
+  labels: {
+    all: "Wszystkie",
+    favorites: "Wybrane",
+    portrait: "Pionowe",
+    landscape: "Poziome",
+    hidden: "Ukryte",
+    compare: "A/B",
+    slideshow: "Slideshow",
+    share: "Udostępnij",
+    exit: "Wyjdź",
+    downloadFavorites: "Pobierz wybrane"
+  }
+};
+
+function normalizedUiConfig(pub) {
+  const stored = pub?.uiConfig || {};
+  return {
+    ...DEFAULT_UI_CONFIG,
+    ...stored,
+    labels: { ...DEFAULT_UI_CONFIG.labels, ...(stored.labels || {}) },
+    showFilenames: stored.showFilenames !== false
+  };
+}
+
+function clampValue(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
 }
 
 
@@ -119,6 +167,7 @@ function showNotice(element, message, type = "ok") {
 
 function mergedSelectionForSlug(slug) {
   const galleryFavorites = favoritesRoot?.[slug] || {};
+  const currentSelection = selectionsRoot?.[slug] || {};
   const pub = galleries[slug]?.public || {};
   const manifest = Object.values(pub.photos || {}).filter(item => item?.filename);
   const max = Number(pub.maxFavorites || 0);
@@ -133,22 +182,25 @@ function mergedSelectionForSlug(slug) {
     return byBase.get(displayName(filename).toLowerCase()) || null;
   };
 
-  // Prefer the new shared branch, but legacy branches may still exist until cleanup.
-  Object.values(galleryFavorites).forEach(selection => {
-    Object.values(selection || {}).forEach(item => {
-      if (!item?.filename) return;
-      const filename = canonicalFilename(item.filename);
-      if (!filename) return; // ignore deleted/old files that are no longer in this gallery
+  const consume = (item) => {
+    if (!item?.filename) return;
+    const filename = canonicalFilename(item.filename);
+    if (!filename) return;
+    const key = displayName(filename).toLowerCase();
+    const candidate = { ...item, filename };
+    const existing = merged.get(key);
+    if (!existing || Number(candidate.selectedAt || 0) < Number(existing.selectedAt || 0)) {
+      merged.set(key, candidate);
+    }
+  };
 
-      const key = displayName(filename).toLowerCase();
-      const existing = merged.get(key);
-      const candidate = { ...item, filename };
+  // v15: clean, flat selection branch.
+  Object.values(currentSelection || {}).forEach(consume);
 
-      // Keep the earliest real selection when duplicates exist.
-      if (!existing || Number(candidate.selectedAt || 0) < Number(existing.selectedAt || 0)) {
-        merged.set(key, candidate);
-      }
-    });
+  // Legacy data are read only for one-time migration/cleanup.
+  Object.values(galleryFavorites || {}).forEach(selection => {
+    if (selection?.filename) consume(selection);
+    else Object.values(selection || {}).forEach(consume);
   });
 
   let items = [...merged.values()].sort((a, b) => {
@@ -157,10 +209,8 @@ function mergedSelectionForSlug(slug) {
     return displayName(a.filename).localeCompare(displayName(b.filename), undefined, { numeric: true });
   });
 
-  // A selection can never exceed the number of current photos or the gallery limit.
   const hardLimit = max > 0 ? Math.min(max, manifest.length) : manifest.length;
-  if (hardLimit >= 0) items = items.slice(0, hardLimit);
-
+  items = items.slice(0, Math.max(0, hardLimit));
   return items;
 }
 
@@ -235,6 +285,17 @@ onAuthStateChanged(auth, (user) => {
       },
       (error) => {
         console.error("FAVORITES READ ERROR", error);
+      }
+    );
+
+    onValue(
+      ref(db, "selections"),
+      (snapshot) => {
+        selectionsRoot = snapshot.exists() ? snapshot.val() : {};
+        renderAll();
+      },
+      (error) => {
+        console.error("SELECTIONS READ ERROR", error);
       }
     );
   } else {
@@ -374,6 +435,7 @@ function renderCards() {
           <button type="button" class="ghost" data-manage="${slug}">Zarządzaj</button><button type="button" class="ghost" data-repair="${slug}">⚙ Napraw pobieranie</button>
           <button type="button" class="ghost" data-select="${slug}">♥ Wybory</button>
           <button type="button" class="ghost" data-qr="${slug}">QR</button>
+          <button type="button" class="ghost" data-site="${slug}">🎨 Ustawienia strony</button>
           <button type="button" class="ghost" data-edit="${slug}">Ustawienia</button>
           <a class="ghost" href="${galleryUrl(slug)}" target="_blank" rel="noopener">Otwórz</a>
         </div>
@@ -409,6 +471,10 @@ function renderCards() {
 
   list.querySelectorAll("[data-qr]").forEach(button =>
     button.addEventListener("click", () => openQrDialog(button.dataset.qr))
+  );
+
+  list.querySelectorAll("[data-site]").forEach(button =>
+    button.addEventListener("click", () => openSiteSettings(button.dataset.site))
   );
 
   list.querySelectorAll("[data-edit]").forEach(button =>
@@ -597,6 +663,7 @@ $("#deleteGalleryBtn").addEventListener("click", async () => {
   try {
     await deleteFolder(`galleries/${slug}`);
     await remove(ref(db, `favorites/${slug}`)).catch(() => {});
+    await remove(ref(db, `selections/${slug}`)).catch(() => {});
     await remove(ref(db, `galleries/${slug}`));
 
     $("#galleryDialog").close();
@@ -1140,28 +1207,24 @@ async function getAdminPhotoDownloadUrl(slug, filename) {
 
 async function migrateLegacyFavoritesToShared(slug) {
   const items = mergedSelectionForSlug(slug);
-  const pub = galleries[slug]?.public || {};
-
-  const cleanShared = {};
+  const cleanSelection = {};
   items.forEach(item => {
-    cleanShared[manifestKey(item.filename)] = {
+    cleanSelection[manifestKey(item.filename)] = {
       filename: item.filename,
       selectedAt: Number(item.selectedAt || Date.now())
     };
   });
 
   try {
-    // Replace the whole favorites tree for this gallery with one clean shared selection.
-    // This removes old anonymous client IDs, deleted filenames and anything above the limit.
-    await set(ref(db, `favorites/${slug}`), { shared: cleanShared });
+    await set(ref(db, `selections/${slug}`), cleanSelection);
+    await remove(ref(db, `favorites/${slug}`)).catch(() => {});
     await update(ref(db, `galleries/${slug}/public`), {
-      selectionMigrationVersion: 3,
+      selectionMigrationVersion: 5,
       updatedAt: Date.now()
     });
   } catch (error) {
-    console.warn("FAVORITES CLEANUP ERROR", error);
+    console.warn("SELECTION MIGRATION ERROR", error);
   }
-
   return items;
 }
 
@@ -1182,6 +1245,142 @@ async function downloadAdminSelected(slug, items, button) {
     if (button) { button.disabled = false; button.textContent = originalLabel; }
   }
 }
+
+
+function uiFieldValue(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.type === "checkbox") el.checked = Boolean(value);
+  else el.value = value ?? "";
+}
+
+function fillSiteSettings(config) {
+  uiFieldValue("uiDesktopColumns", config.desktopColumns);
+  uiFieldValue("uiTabletColumns", config.tabletColumns);
+  uiFieldValue("uiMobileColumns", config.mobileColumns);
+  uiFieldValue("uiGridGap", config.gridGap);
+  uiFieldValue("uiCardRadius", config.cardRadius);
+  uiFieldValue("uiButtonSize", config.buttonSize);
+  uiFieldValue("uiButtonGap", config.buttonGap);
+  uiFieldValue("uiButtonBg", config.buttonBg);
+  uiFieldValue("uiHeartColor", config.heartColor);
+  uiFieldValue("uiCompareColor", config.compareColor);
+  uiFieldValue("uiDownloadColor", config.downloadColor);
+  uiFieldValue("uiFilterBg", config.filterBg);
+  uiFieldValue("uiFilterText", config.filterText);
+  uiFieldValue("uiShowFilenames", config.showFilenames !== false);
+  uiFieldValue("uiLabelAll", config.labels.all);
+  uiFieldValue("uiLabelFavorites", config.labels.favorites);
+  uiFieldValue("uiLabelPortrait", config.labels.portrait);
+  uiFieldValue("uiLabelLandscape", config.labels.landscape);
+  uiFieldValue("uiLabelHidden", config.labels.hidden);
+  uiFieldValue("uiLabelCompare", config.labels.compare);
+  uiFieldValue("uiLabelSlideshow", config.labels.slideshow);
+  uiFieldValue("uiLabelShare", config.labels.share);
+  uiFieldValue("uiLabelExit", config.labels.exit);
+  uiFieldValue("uiLabelDownloadFavorites", config.labels.downloadFavorites);
+  updateSitePreview();
+}
+
+function readSiteSettings() {
+  return {
+    desktopColumns: clampValue($("#uiDesktopColumns").value, 2, 6, 4),
+    tabletColumns: clampValue($("#uiTabletColumns").value, 2, 5, 3),
+    mobileColumns: clampValue($("#uiMobileColumns").value, 1, 4, 2),
+    gridGap: clampValue($("#uiGridGap").value, 2, 30, 10),
+    cardRadius: clampValue($("#uiCardRadius").value, 0, 30, 9),
+    buttonSize: clampValue($("#uiButtonSize").value, 26, 64, 40),
+    buttonGap: clampValue($("#uiButtonGap").value, 0, 20, 6),
+    buttonBg: $("#uiButtonBg").value || DEFAULT_UI_CONFIG.buttonBg,
+    heartColor: $("#uiHeartColor").value || DEFAULT_UI_CONFIG.heartColor,
+    compareColor: $("#uiCompareColor").value || DEFAULT_UI_CONFIG.compareColor,
+    downloadColor: $("#uiDownloadColor").value || DEFAULT_UI_CONFIG.downloadColor,
+    filterBg: $("#uiFilterBg").value || DEFAULT_UI_CONFIG.filterBg,
+    filterText: $("#uiFilterText").value || DEFAULT_UI_CONFIG.filterText,
+    showFilenames: $("#uiShowFilenames").checked,
+    labels: {
+      all: $("#uiLabelAll").value.trim() || DEFAULT_UI_CONFIG.labels.all,
+      favorites: $("#uiLabelFavorites").value.trim() || DEFAULT_UI_CONFIG.labels.favorites,
+      portrait: $("#uiLabelPortrait").value.trim() || DEFAULT_UI_CONFIG.labels.portrait,
+      landscape: $("#uiLabelLandscape").value.trim() || DEFAULT_UI_CONFIG.labels.landscape,
+      hidden: $("#uiLabelHidden").value.trim() || DEFAULT_UI_CONFIG.labels.hidden,
+      compare: $("#uiLabelCompare").value.trim() || DEFAULT_UI_CONFIG.labels.compare,
+      slideshow: $("#uiLabelSlideshow").value.trim() || DEFAULT_UI_CONFIG.labels.slideshow,
+      share: $("#uiLabelShare").value.trim() || DEFAULT_UI_CONFIG.labels.share,
+      exit: $("#uiLabelExit").value.trim() || DEFAULT_UI_CONFIG.labels.exit,
+      downloadFavorites: $("#uiLabelDownloadFavorites").value.trim() || DEFAULT_UI_CONFIG.labels.downloadFavorites
+    }
+  };
+}
+
+function updateSitePreview() {
+  const config = readSiteSettings();
+  const preview = $("#uiPreviewGrid");
+  const filters = $("#uiPreviewFilters");
+  const tools = $("#uiPreviewTools");
+  if (!preview || !filters || !tools) return;
+
+  preview.style.setProperty("--preview-cols", Math.min(4, config.mobileColumns));
+  preview.style.setProperty("--preview-gap", `${config.gridGap}px`);
+  preview.style.setProperty("--preview-radius", `${config.cardRadius}px`);
+  tools.style.setProperty("--preview-button-size", `${config.buttonSize}px`);
+  tools.style.setProperty("--preview-button-gap", `${config.buttonGap}px`);
+  tools.style.setProperty("--preview-button-bg", config.buttonBg);
+  tools.style.setProperty("--preview-heart", config.heartColor);
+  tools.style.setProperty("--preview-compare", config.compareColor);
+  tools.style.setProperty("--preview-download", config.downloadColor);
+  preview.querySelectorAll(".ui-preview-name").forEach(el => el.hidden = config.showFilenames === false);
+
+  filters.innerHTML = `<span class="active">${escapeHtml(config.labels.all)}</span><span>${escapeHtml(config.labels.favorites)}</span><span>${escapeHtml(config.labels.portrait)}</span>`;
+  filters.style.setProperty("--preview-filter-bg", config.filterBg);
+  filters.style.setProperty("--preview-filter-text", config.filterText);
+  const compare = tools.querySelector(".preview-compare");
+  if (compare) compare.textContent = config.labels.compare;
+}
+
+function openSiteSettings(slug) {
+  siteSettingsSlug = slug;
+  const pub = galleries[slug]?.public || {};
+  $("#siteSettingsSlug").value = slug;
+  $("#siteSettingsTitle").textContent = `Ustawienia strony — ${pub.title || slug}`;
+  $("#siteSettingsStatus").hidden = true;
+  fillSiteSettings(normalizedUiConfig(pub));
+  $("#siteSettingsDialog").showModal();
+}
+
+const siteEditorIds = [
+  "uiDesktopColumns","uiTabletColumns","uiMobileColumns","uiGridGap","uiCardRadius","uiButtonSize","uiButtonGap",
+  "uiButtonBg","uiHeartColor","uiCompareColor","uiDownloadColor","uiFilterBg","uiFilterText","uiShowFilenames",
+  "uiLabelAll","uiLabelFavorites","uiLabelPortrait","uiLabelLandscape","uiLabelHidden","uiLabelCompare",
+  "uiLabelSlideshow","uiLabelShare","uiLabelExit","uiLabelDownloadFavorites"
+];
+siteEditorIds.forEach(id => {
+  document.getElementById(id)?.addEventListener("input", updateSitePreview);
+  document.getElementById(id)?.addEventListener("change", updateSitePreview);
+});
+
+$("#resetSiteSettingsBtn")?.addEventListener("click", () => fillSiteSettings(structuredClone(DEFAULT_UI_CONFIG)));
+$("#closeSiteSettingsDialog")?.addEventListener("click", () => $("#siteSettingsDialog").close());
+$("#cancelSiteSettingsBtn")?.addEventListener("click", () => $("#siteSettingsDialog").close());
+$("#saveSiteSettingsBtn")?.addEventListener("click", async () => {
+  if (!siteSettingsSlug) return;
+  const button = $("#saveSiteSettingsBtn");
+  button.disabled = true;
+  const oldLabel = button.textContent;
+  button.textContent = "Zapisywanie…";
+  try {
+    const uiConfig = readSiteSettings();
+    await update(ref(db, `galleries/${siteSettingsSlug}/public`), { uiConfig, updatedAt: Date.now() });
+    showNotice($("#siteSettingsStatus"), "Wygląd galerii zapisany. Klient zobaczy zmianę po odświeżeniu strony.", "ok");
+    toast("Ustawienia strony zapisane");
+  } catch (error) {
+    console.error("SAVE SITE SETTINGS ERROR", error);
+    showNotice($("#siteSettingsStatus"), `Błąd zapisu: ${error.code || error.message || error}`, "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = oldLabel;
+  }
+});
 
 function downloadText(filename, content, type = "text/plain") {
   const blob = new Blob([content], { type });

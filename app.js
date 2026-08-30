@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=14.2";
+import { firebaseConfig } from "./firebase-config.js?v=15.0";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -26,6 +26,98 @@ let galleryLoaded = false;
 let rejected = new Set();
 let compareSelection = [];
 let unsubscribeFavorites = null;
+
+
+const DEFAULT_UI_CONFIG = {
+  desktopColumns: 4,
+  tabletColumns: 3,
+  mobileColumns: 2,
+  gridGap: 10,
+  cardRadius: 9,
+  buttonSize: 40,
+  buttonGap: 6,
+  buttonBg: "#111114",
+  heartColor: "#ff3b4d",
+  compareColor: "#22c55e",
+  downloadColor: "#1b7f46",
+  filterBg: "#f3f3f0",
+  filterText: "#111111",
+  showFilenames: true,
+  labels: {
+    all: "Wszystkie",
+    favorites: "Wybrane",
+    portrait: "Pionowe",
+    landscape: "Poziome",
+    hidden: "Ukryte",
+    compare: "A/B",
+    slideshow: "Slideshow",
+    share: "Udostępnij",
+    exit: "Wyjdź",
+    downloadFavorites: "Pobierz wybrane"
+  }
+};
+
+let currentUiConfig = structuredClone(DEFAULT_UI_CONFIG);
+
+function clampNumber(value, min, max, fallback) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.min(max, Math.max(min, number));
+}
+
+function getUiConfig() {
+  const stored = gallery?.uiConfig || {};
+  const labels = { ...DEFAULT_UI_CONFIG.labels, ...(stored.labels || {}) };
+  return {
+    ...DEFAULT_UI_CONFIG,
+    ...stored,
+    labels,
+    desktopColumns: clampNumber(stored.desktopColumns, 2, 6, DEFAULT_UI_CONFIG.desktopColumns),
+    tabletColumns: clampNumber(stored.tabletColumns, 2, 5, DEFAULT_UI_CONFIG.tabletColumns),
+    mobileColumns: clampNumber(stored.mobileColumns, 1, 4, DEFAULT_UI_CONFIG.mobileColumns),
+    gridGap: clampNumber(stored.gridGap, 2, 30, DEFAULT_UI_CONFIG.gridGap),
+    cardRadius: clampNumber(stored.cardRadius, 0, 30, DEFAULT_UI_CONFIG.cardRadius),
+    buttonSize: clampNumber(stored.buttonSize, 26, 64, DEFAULT_UI_CONFIG.buttonSize),
+    buttonGap: clampNumber(stored.buttonGap, 0, 20, DEFAULT_UI_CONFIG.buttonGap),
+    showFilenames: stored.showFilenames !== false
+  };
+}
+
+function applyUiConfig() {
+  currentUiConfig = getUiConfig();
+  const root = document.documentElement;
+  root.style.setProperty("--gallery-cols-desktop", currentUiConfig.desktopColumns);
+  root.style.setProperty("--gallery-cols-tablet", currentUiConfig.tabletColumns);
+  root.style.setProperty("--gallery-cols-mobile", currentUiConfig.mobileColumns);
+  root.style.setProperty("--gallery-gap", `${currentUiConfig.gridGap}px`);
+  root.style.setProperty("--gallery-card-radius", `${currentUiConfig.cardRadius}px`);
+  root.style.setProperty("--gallery-button-size", `${currentUiConfig.buttonSize}px`);
+  root.style.setProperty("--gallery-button-gap", `${currentUiConfig.buttonGap}px`);
+  root.style.setProperty("--gallery-button-bg", currentUiConfig.buttonBg || DEFAULT_UI_CONFIG.buttonBg);
+  root.style.setProperty("--gallery-heart-color", currentUiConfig.heartColor || DEFAULT_UI_CONFIG.heartColor);
+  root.style.setProperty("--gallery-compare-color", currentUiConfig.compareColor || DEFAULT_UI_CONFIG.compareColor);
+  root.style.setProperty("--gallery-download-color", currentUiConfig.downloadColor || DEFAULT_UI_CONFIG.downloadColor);
+  root.style.setProperty("--gallery-filter-bg", currentUiConfig.filterBg || DEFAULT_UI_CONFIG.filterBg);
+  root.style.setProperty("--gallery-filter-text", currentUiConfig.filterText || DEFAULT_UI_CONFIG.filterText);
+
+  const labels = currentUiConfig.labels;
+  const labelMap = {
+    allFilter: labels.all,
+    favFilter: labels.favorites,
+    portraitFilter: labels.portrait,
+    landscapeFilter: labels.landscape,
+    hiddenFilter: labels.hidden,
+    favoritesToggleLabel: labels.favorites,
+    slideshowLabel: labels.slideshow,
+    shareLabel: labels.share,
+    exitLabel: labels.exit,
+    downloadFavoritesLabel: labels.downloadFavorites
+  };
+  Object.entries(labelMap).forEach(([id, value]) => {
+    const el = document.getElementById(id);
+    if (el && value) el.textContent = value;
+  });
+}
 
 async function sha256(text) {
   const data = new TextEncoder().encode(text);
@@ -208,6 +300,7 @@ async function init() {
       return;
     }
 
+    applyUiConfig();
     applyGalleryMeta();
 
     loadRejectedState();
@@ -358,7 +451,7 @@ function normalizedSharedFavorites(raw) {
 
 async function loadFavorites() {
   try {
-    const snap = await get(ref(db, `favorites/${slug}/shared`));
+    const snap = await get(ref(db, `selections/${slug}`));
     favorites = normalizedSharedFavorites(snap.exists() ? snap.val() : {});
   } catch (error) {
     console.error("LOAD FAVORITES ERROR", error);
@@ -368,7 +461,7 @@ async function loadFavorites() {
 function watchFavorites() {
   if (unsubscribeFavorites) unsubscribeFavorites();
   unsubscribeFavorites = onValue(
-    ref(db, `favorites/${slug}/shared`),
+    ref(db, `selections/${slug}`),
     (snapshot) => {
       favorites = normalizedSharedFavorites(snapshot.exists() ? snapshot.val() : {});
       if (galleryLoaded) {
@@ -470,7 +563,7 @@ function render() {
     const compareBtn = document.createElement("button");
     compareBtn.type = "button";
     compareBtn.className = `photo-compare${isCompared ? " active" : ""}`;
-    compareBtn.textContent = "A/B";
+    compareBtn.textContent = currentUiConfig.labels.compare || "A/B";
     compareBtn.title = "Dodaj do porównania";
 
     const downloadOne = document.createElement("button");
@@ -488,6 +581,7 @@ function render() {
     const filename = document.createElement("div");
     filename.className = "photo-filename";
     filename.textContent = displayName(photo.filename);
+    filename.hidden = currentUiConfig.showFilenames === false;
 
     img.addEventListener("load", () => {
       img.classList.add("loaded");
@@ -555,7 +649,7 @@ async function toggleFavorite(filename) {
   render();
 
   try {
-    const target = ref(db, `favorites/${slug}/shared/${selectionKey(filename)}`);
+    const target = ref(db, `selections/${slug}/${selectionKey(filename)}`);
 
     if (wasSelected) {
       await remove(target);
@@ -572,7 +666,7 @@ async function toggleFavorite(filename) {
 
     render();
     if(String(error.code||"").toUpperCase().includes("PERMISSION")){
-      toast("Brak uprawnień Firebase — wklej reguły v11.2 i kliknij Publish.");
+      toast("Brak uprawnień Firebase — wklej database-rules.json z v15 i kliknij Publish.");
     }else{
       toast(`Błąd zapisu wyboru: ${error.code || error.message || error}`);
     }
@@ -658,7 +752,10 @@ function updateCompareUI() {
   $("#compareSelectedCount").textContent = count;
   $("#compareSelectedNames").textContent = count ? compareSelection.map(displayName).join("  •  ") : "Wybierz dwa zdjęcia do porównania obok siebie";
   bar.hidden = count === 0;
-  $("#openCompareBtn").disabled = count !== 2;
+  document.body.classList.toggle("compare-bar-visible", count > 0);
+  const openButton = $("#openCompareBtn");
+  openButton.disabled = count !== 2;
+  openButton.textContent = count === 2 ? `↔ Porównaj (${currentUiConfig.labels.compare || "A/B"})` : `↔ ${currentUiConfig.labels.compare || "A/B"}`;
 }
 
 function setFilter(next) {
@@ -720,10 +817,10 @@ function updateDownloadUI() {
 
 
 function updateSlideshowButtons() {
-  const label = slideshowActive ? "❚❚ Stop" : "▶ Slideshow";
+  const slideshowName = currentUiConfig.labels.slideshow || "Slideshow";
   const topButton = $("#slideshowBtn");
   const lbButton = $("#lightboxSlideshow");
-  if (topButton) topButton.textContent = label;
+  if (topButton) topButton.innerHTML = slideshowActive ? "❚❚ Stop" : `▶ <span id="slideshowLabel">${slideshowName}</span>`;
   if (lbButton) lbButton.textContent = slideshowActive ? "❚❚" : "▶";
 }
 
@@ -827,7 +924,7 @@ async function downloadFavoriteFiles() {
     }
     if (inlineButton) {
       inlineButton.disabled = false;
-      inlineButton.textContent = `♥ Pobierz wybrane (${favorites.size})`;
+      inlineButton.textContent = `♥ ${currentUiConfig.labels.downloadFavorites || "Pobierz wybrane"} (${favorites.size})`;
     }
   }
 }
