@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInAnonymously, signOut } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata, getMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=16.1";
+import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=16.2";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -196,10 +196,18 @@ const DEFAULT_UI_CONFIG = {
   allowSelectedDownloads: true,
   allowFavoriteDownloads: true,
   blockSaveImage: true,
-  heroMode: "cover",
-  heroHeightDesktop: 330,
-  heroHeightMobile: 280,
-  heroImageWidth: 1500,
+  // HERO Designer v16.2
+  heroMode: "cover", // legacy compatibility
+  heroLayout: "trio",
+  heroFit: "cover",
+  heroHeightDesktop: 360,
+  heroHeightTablet: 320,
+  heroHeightMobile: 300,
+  heroMaxWidth: 1600,
+  heroTileGap: 6,
+  heroTileRadius: 10,
+  heroOverlay: 46,
+  heroImageWidth: 1500, // legacy compatibility
   heroBgColor: "#09090a",
   labels: {
     all: "Wszystkie",
@@ -232,8 +240,17 @@ function normalizedUiConfig(pub) {
     allowFavoriteDownloads: stored.allowFavoriteDownloads !== false,
     blockSaveImage: stored.blockSaveImage !== false,
     heroMode: ["cover","fixed","contain","none"].includes(stored.heroMode) ? stored.heroMode : DEFAULT_UI_CONFIG.heroMode,
-    heroHeightDesktop: clampValue(stored.heroHeightDesktop, 180, 700, DEFAULT_UI_CONFIG.heroHeightDesktop),
-    heroHeightMobile: clampValue(stored.heroHeightMobile, 160, 500, DEFAULT_UI_CONFIG.heroHeightMobile),
+    heroLayout: ["single","duo","trio","mosaic4","none"].includes(stored.heroLayout)
+      ? stored.heroLayout
+      : (stored.heroMode === "none" ? "none" : DEFAULT_UI_CONFIG.heroLayout),
+    heroFit: ["cover","contain"].includes(stored.heroFit) ? stored.heroFit : DEFAULT_UI_CONFIG.heroFit,
+    heroHeightDesktop: clampValue(stored.heroHeightDesktop, 200, 700, DEFAULT_UI_CONFIG.heroHeightDesktop),
+    heroHeightTablet: clampValue(stored.heroHeightTablet, 180, 600, DEFAULT_UI_CONFIG.heroHeightTablet),
+    heroHeightMobile: clampValue(stored.heroHeightMobile, 180, 520, DEFAULT_UI_CONFIG.heroHeightMobile),
+    heroMaxWidth: clampValue(stored.heroMaxWidth, 800, 2400, DEFAULT_UI_CONFIG.heroMaxWidth),
+    heroTileGap: clampValue(stored.heroTileGap, 0, 24, DEFAULT_UI_CONFIG.heroTileGap),
+    heroTileRadius: clampValue(stored.heroTileRadius, 0, 30, DEFAULT_UI_CONFIG.heroTileRadius),
+    heroOverlay: clampValue(stored.heroOverlay, 0, 85, DEFAULT_UI_CONFIG.heroOverlay),
     heroImageWidth: clampValue(stored.heroImageWidth, 600, 2600, DEFAULT_UI_CONFIG.heroImageWidth),
     heroBgColor: stored.heroBgColor || DEFAULT_UI_CONFIG.heroBgColor
   };
@@ -2782,10 +2799,15 @@ function uiFieldValue(id, value) {
 }
 
 function fillSiteSettings(config) {
-  uiFieldValue("uiHeroMode", config.heroMode);
+  uiFieldValue("uiHeroLayout", config.heroLayout);
+  uiFieldValue("uiHeroFit", config.heroFit);
   uiFieldValue("uiHeroHeightDesktop", config.heroHeightDesktop);
+  uiFieldValue("uiHeroHeightTablet", config.heroHeightTablet);
   uiFieldValue("uiHeroHeightMobile", config.heroHeightMobile);
-  uiFieldValue("uiHeroImageWidth", config.heroImageWidth);
+  uiFieldValue("uiHeroMaxWidth", config.heroMaxWidth);
+  uiFieldValue("uiHeroTileGap", config.heroTileGap);
+  uiFieldValue("uiHeroTileRadius", config.heroTileRadius);
+  uiFieldValue("uiHeroOverlay", config.heroOverlay);
   uiFieldValue("uiHeroBgColor", config.heroBgColor);
   uiFieldValue("uiDesktopColumns", config.desktopColumns);
   uiFieldValue("uiTabletColumns", config.tabletColumns);
@@ -2825,11 +2847,18 @@ function fillSiteSettings(config) {
 
 function readSiteSettings() {
   return {
-    heroMode: $("#uiHeroMode").value || DEFAULT_UI_CONFIG.heroMode,
-    heroHeightDesktop: clampValue($("#uiHeroHeightDesktop").value, 180, 700, DEFAULT_UI_CONFIG.heroHeightDesktop),
-    heroHeightMobile: clampValue($("#uiHeroHeightMobile").value, 160, 500, DEFAULT_UI_CONFIG.heroHeightMobile),
-    heroImageWidth: clampValue($("#uiHeroImageWidth").value, 600, 2600, DEFAULT_UI_CONFIG.heroImageWidth),
-    heroBgColor: $("#uiHeroBgColor").value || DEFAULT_UI_CONFIG.heroBgColor,
+    heroMode: "cover",
+    heroLayout: $("#uiHeroLayout").value || DEFAULT_UI_CONFIG.heroLayout,
+    heroFit: $("#uiHeroFit").value || DEFAULT_UI_CONFIG.heroFit,
+    heroHeightDesktop: clampValue($("#uiHeroHeightDesktop").value, 200, 700, DEFAULT_UI_CONFIG.heroHeightDesktop),
+    heroHeightTablet: clampValue($("#uiHeroHeightTablet").value, 180, 600, DEFAULT_UI_CONFIG.heroHeightTablet),
+    heroHeightMobile: clampValue($("#uiHeroHeightMobile").value, 180, 520, DEFAULT_UI_CONFIG.heroHeightMobile),
+    heroMaxWidth: clampValue($("#uiHeroMaxWidth").value, 800, 2400, DEFAULT_UI_CONFIG.heroMaxWidth),
+    heroTileGap: clampValue($("#uiHeroTileGap").value, 0, 24, DEFAULT_UI_CONFIG.heroTileGap),
+    heroTileRadius: clampValue($("#uiHeroTileRadius").value, 0, 30, DEFAULT_UI_CONFIG.heroTileRadius),
+    heroOverlay: clampValue($("#uiHeroOverlay").value, 0, 85, DEFAULT_UI_CONFIG.heroOverlay),
+    heroImageWidth: 1500,
+    heroBgColor: $("#uiHeroBgColor").value || DEFAULT_UI_CONFIG.heroBgColor,r,
     desktopColumns: clampValue($("#uiDesktopColumns").value, 2, 6, 4),
     tabletColumns: clampValue($("#uiTabletColumns").value, 2, 5, 3),
     mobileColumns: clampValue($("#uiMobileColumns").value, 1, 4, 2),
@@ -2868,6 +2897,106 @@ function readSiteSettings() {
   };
 }
 
+
+let heroPreviewDevice = "desktop";
+
+function publicPhotosForSiteSettings(slug) {
+  return Object.values(galleries[slug]?.public?.photos || {})
+    .filter(item => item?.filename && item?.previewUrl)
+    .sort((a, b) => itemSortName(a.filename).localeCompare(itemSortName(b.filename), undefined, { numeric: true }));
+}
+
+function itemSortName(filename) {
+  return displayName(filename || "").toLowerCase();
+}
+
+function populateHeroPhotoSelectors(slug) {
+  const photos = publicPhotosForSiteSettings(slug);
+  const pub = galleries[slug]?.public || {};
+  const configured = Array.isArray(pub.heroBackgroundFiles)
+    ? pub.heroBackgroundFiles.filter(Boolean)
+    : [];
+
+  const fallbacks = [];
+  [pub.heroBackgroundFile, pub.coverFile, ...photos.map(item => item.filename)].forEach(filename => {
+    if (filename && !fallbacks.includes(filename)) fallbacks.push(filename);
+  });
+
+  const selected = [];
+  for (let i = 0; i < 4; i++) {
+    selected[i] = configured[i] || fallbacks[i] || "";
+  }
+
+  for (let i = 1; i <= 4; i++) {
+    const select = document.getElementById(`uiHeroPhoto${i}`);
+    if (!select) continue;
+
+    select.innerHTML =
+      `<option value="">— brak —</option>` +
+      photos.map(item =>
+        `<option value="${escapeHtml(item.filename)}">${escapeHtml(displayName(item.filename))}</option>`
+      ).join("");
+
+    select.value = selected[i - 1] || "";
+  }
+}
+
+function selectedHeroBackgroundFiles() {
+  return [1,2,3,4]
+    .map(i => document.getElementById(`uiHeroPhoto${i}`)?.value || "")
+    .filter(Boolean);
+}
+
+function heroLayoutCount(layout) {
+  return layout === "mosaic4" ? 4
+    : layout === "trio" ? 3
+    : layout === "duo" ? 2
+    : layout === "single" ? 1
+    : 0;
+}
+
+function heroPreviewPhotoMap() {
+  const rows = publicPhotosForSiteSettings(siteSettingsSlug);
+  return new Map(rows.map(item => [item.filename, item.previewUrl]));
+}
+
+function updateHeroDesignerPreview() {
+  const preview = $("#heroDevicePreview");
+  const media = $("#heroPreviewMedia");
+  const shade = $("#heroPreviewShade");
+  if (!preview || !media || !shade) return;
+
+  const config = readSiteSettings();
+  const files = selectedHeroBackgroundFiles();
+  const urls = heroPreviewPhotoMap();
+  const needed = heroLayoutCount(config.heroLayout);
+
+  preview.classList.remove("device-desktop","device-tablet","device-mobile");
+  preview.classList.add(`device-${heroPreviewDevice}`);
+  preview.style.setProperty("--hero-preview-bg", config.heroBgColor);
+  preview.style.setProperty("--hero-preview-gap", `${Math.min(12, config.heroTileGap)}px`);
+  preview.style.setProperty("--hero-preview-radius", `${config.heroTileRadius}px`);
+  preview.style.setProperty("--hero-preview-fit", config.heroFit);
+  shade.style.opacity = String(config.heroOverlay / 100);
+
+  media.className = `hero-preview-media hero-preview-layout-${config.heroLayout}`;
+  media.innerHTML = "";
+
+  if (config.heroLayout !== "none") {
+    files.slice(0, needed).forEach((filename, index) => {
+      const url = urls.get(filename);
+      if (!url) return;
+      const tile = document.createElement("div");
+      tile.className = `hero-preview-tile hero-preview-tile-${index + 1}`;
+      tile.style.backgroundImage = `url("${url}")`;
+      media.appendChild(tile);
+    });
+  }
+
+  $("#heroPreviewTitle").textContent = galleries[siteSettingsSlug]?.public?.title || "Nazwa galerii";
+  $("#heroPreviewSubtitle").textContent = galleries[siteSettingsSlug]?.public?.subtitle || "Opis galerii klienta";
+}
+
 function updateSitePreview() {
   const config = readSiteSettings();
   const preview = $("#uiPreviewGrid");
@@ -2897,6 +3026,8 @@ function updateSitePreview() {
   if (previewButtons[2]) previewButtons[2].hidden = config.showCompareButton === false;
   if (previewButtons[3]) previewButtons[3].hidden = config.showSingleDownloadButton === false || !$("#uiMasterDownloadsEnabled")?.checked || config.allowSingleDownload === false;
   if (previewButtons[4]) previewButtons[4].hidden = config.showDownloadSelectButton === false;
+
+  updateHeroDesignerPreview();
 }
 
 function openSiteSettings(slug) {
@@ -2906,12 +3037,16 @@ function openSiteSettings(slug) {
   $("#siteSettingsTitle").textContent = `Ustawienia strony — ${pub.title || slug}`;
   $("#siteSettingsStatus").hidden = true;
   fillSiteSettings(normalizedUiConfig(pub));
+  populateHeroPhotoSelectors(slug);
   uiFieldValue("uiMasterDownloadsEnabled", pub.downloadsEnabled !== false);
   updateSitePreview();
   $("#siteSettingsDialog").showModal();
 }
 
 const siteEditorIds = [
+  "uiHeroLayout","uiHeroFit","uiHeroPhoto1","uiHeroPhoto2","uiHeroPhoto3","uiHeroPhoto4",
+  "uiHeroHeightDesktop","uiHeroHeightTablet","uiHeroHeightMobile","uiHeroMaxWidth",
+  "uiHeroTileGap","uiHeroTileRadius","uiHeroOverlay","uiHeroBgColor",
   "uiDesktopColumns","uiTabletColumns","uiMobileColumns","uiGridGap","uiCardRadius","uiButtonSize","uiButtonGap",
   "uiButtonBg","uiHeartColor","uiCompareColor","uiDownloadColor","uiFilterBg","uiFilterText","uiShowFilenames",
   "uiMasterDownloadsEnabled","uiShowHeartButton","uiShowRejectButton","uiShowCompareButton","uiShowSingleDownloadButton","uiShowDownloadSelectButton",
@@ -2924,8 +3059,20 @@ siteEditorIds.forEach(id => {
   document.getElementById(id)?.addEventListener("change", updateSitePreview);
 });
 
+
+document.querySelectorAll("[data-hero-device]").forEach(button => {
+  button.addEventListener("click", () => {
+    heroPreviewDevice = button.dataset.heroDevice || "desktop";
+    document.querySelectorAll("[data-hero-device]").forEach(other =>
+      other.classList.toggle("active", other === button)
+    );
+    updateHeroDesignerPreview();
+  });
+});
+
 $("#resetSiteSettingsBtn")?.addEventListener("click", () => {
   fillSiteSettings(structuredClone(DEFAULT_UI_CONFIG));
+  populateHeroPhotoSelectors(siteSettingsSlug);
   uiFieldValue("uiMasterDownloadsEnabled", true);
   updateSitePreview();
 });
@@ -2940,7 +3087,15 @@ $("#saveSiteSettingsBtn")?.addEventListener("click", async () => {
   try {
     const uiConfig = readSiteSettings();
     const downloadsEnabled = $("#uiMasterDownloadsEnabled").checked;
-    await update(ref(db, `galleries/${siteSettingsSlug}/public`), { uiConfig, downloadsEnabled, updatedAt: Date.now() });
+    const heroBackgroundFiles = selectedHeroBackgroundFiles();
+
+    await update(ref(db, `galleries/${siteSettingsSlug}/public`), {
+      uiConfig,
+      heroBackgroundFiles,
+      heroBackgroundFile: heroBackgroundFiles[0] || galleries[siteSettingsSlug]?.public?.coverFile || "",
+      downloadsEnabled,
+      updatedAt: Date.now()
+    });
     showNotice($("#siteSettingsStatus"), "Wygląd galerii zapisany. Klient zobaczy zmianę po odświeżeniu strony.", "ok");
     toast("Ustawienia strony zapisane");
   } catch (error) {

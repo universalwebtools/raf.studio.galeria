@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
   <title>RAF.studio — Studio Manager</title>
-  <link rel="stylesheet" href="style.css?v=16.1">
+  <link rel="stylesheet" href="style.css?v=16.2">
 </head>
 <body class="admin-body">
 
 <section id="adminLogin" class="lock-screen">
   <div class="lock-card">
-    <img class="raf-logo login-logo" src="logo-white.png?v=16.1" alt="RAF.studio">
+    <img class="raf-logo login-logo" src="logo-white.png?v=16.2" alt="RAF.studio">
     <p id="adminLoginEyebrow" class="eyebrow">STUDIO MANAGER</p>
     <h1 id="adminLoginTitle">Panel fotografa</h1>
     <p id="adminLoginSubtitle" class="muted">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
@@ -40,7 +40,7 @@
 <main id="adminPanel" hidden>
   <aside class="sidebar">
     <div>
-      <img class="raf-logo sidebar-logo" src="logo-white.png?v=16.1" alt="RAF.studio">
+      <img class="raf-logo sidebar-logo" src="logo-white.png?v=16.2" alt="RAF.studio">
       <small>Studio Manager</small>
     </div>
     <div class="side-bottom">
@@ -389,30 +389,107 @@
 
   <div class="site-editor-layout">
     <section class="site-editor-controls">
-      <div class="site-settings-section hero-settings-section">
-        <h3>Duże zdjęcie w tle galerii</h3>
-        <p class="muted">Steruj szerokim zdjęciem na górze strony. Zdjęcie wybierasz w „Zarządzaj → Tło”.</p>
-        <div class="form3">
-          <label>Sposób wyświetlania
-            <select id="uiHeroMode">
-              <option value="cover">Wypełnij szerokość (crop)</option>
-              <option value="fixed">Stała szerokość zdjęcia</option>
-              <option value="contain">Pokaż całe zdjęcie</option>
-              <option value="none">Bez zdjęcia w tle</option>
-            </select>
-          </label>
-          <label>Wysokość — komputer (px)
-            <input id="uiHeroHeightDesktop" type="number" min="180" max="700" value="330">
-          </label>
-          <label>Wysokość — telefon (px)
-            <input id="uiHeroHeightMobile" type="number" min="160" max="500" value="280">
-          </label>
-          <label>Szerokość zdjęcia w trybie stałym (px)
-            <input id="uiHeroImageWidth" type="number" min="600" max="2600" value="1500">
-          </label>
-          <label>Kolor tła obok zdjęcia
-            <input id="uiHeroBgColor" class="color-field" type="color" value="#09090a">
-          </label>
+      <div class="site-settings-section hero-settings-section hero-designer-section">
+        <div class="hero-designer-title">
+          <div>
+            <h3>Kreator tła HERO</h3>
+            <p class="muted">
+              Złoty środek: zamiast rozciągać jedno zdjęcie przez cały monitor możesz złożyć tło z 1–4 istniejących zdjęć.
+              Kolaż powstaje w przeglądarce i nie zajmuje dodatkowego miejsca w Firebase.
+            </p>
+          </div>
+          <span class="hero-smart-badge">SMART HERO</span>
+        </div>
+
+        <div class="hero-designer-layout">
+          <div class="hero-designer-controls">
+            <div class="form3">
+              <label>Układ HERO
+                <select id="uiHeroLayout">
+                  <option value="single">1 zdjęcie — klasyczne</option>
+                  <option value="duo">2 zdjęcia — Duo</option>
+                  <option value="trio">3 zdjęcia — Smart Trio ★</option>
+                  <option value="mosaic4">4 zdjęcia — Mozaika 2×2</option>
+                  <option value="none">Bez zdjęcia w tle</option>
+                </select>
+              </label>
+
+              <label>Dopasowanie zdjęć
+                <select id="uiHeroFit">
+                  <option value="cover">Wypełnij kafel — lekki crop</option>
+                  <option value="contain">Pokaż całe zdjęcie</option>
+                </select>
+              </label>
+
+              <label>Maks. szerokość HERO (px)
+                <input id="uiHeroMaxWidth" type="number" min="800" max="2400" step="20" value="1600">
+              </label>
+            </div>
+
+            <div class="hero-photo-selectors">
+              <label>Zdjęcie 1 — główne
+                <select id="uiHeroPhoto1"></select>
+              </label>
+              <label>Zdjęcie 2
+                <select id="uiHeroPhoto2"></select>
+              </label>
+              <label>Zdjęcie 3
+                <select id="uiHeroPhoto3"></select>
+              </label>
+              <label>Zdjęcie 4
+                <select id="uiHeroPhoto4"></select>
+              </label>
+            </div>
+
+            <div class="form3">
+              <label>Wysokość — komputer (px)
+                <input id="uiHeroHeightDesktop" type="number" min="200" max="700" value="360">
+              </label>
+              <label>Wysokość — tablet (px)
+                <input id="uiHeroHeightTablet" type="number" min="180" max="600" value="320">
+              </label>
+              <label>Wysokość — telefon (px)
+                <input id="uiHeroHeightMobile" type="number" min="180" max="520" value="300">
+              </label>
+            </div>
+
+            <div class="form3">
+              <label>Odstęp kafli (px)
+                <input id="uiHeroTileGap" type="number" min="0" max="24" value="6">
+              </label>
+              <label>Zaokrąglenie kafli (px)
+                <input id="uiHeroTileRadius" type="number" min="0" max="30" value="10">
+              </label>
+              <label>Przyciemnienie pod tekstem (%)
+                <input id="uiHeroOverlay" type="number" min="0" max="85" value="46">
+              </label>
+              <label>Kolor tła
+                <input id="uiHeroBgColor" class="color-field" type="color" value="#09090a">
+              </label>
+            </div>
+          </div>
+
+          <div class="hero-device-preview-wrap">
+            <div class="hero-device-tabs">
+              <button type="button" class="ghost active" data-hero-device="desktop">🖥 Komputer</button>
+              <button type="button" class="ghost" data-hero-device="tablet">▣ Tablet</button>
+              <button type="button" class="ghost" data-hero-device="mobile">▯ Telefon</button>
+            </div>
+
+            <div id="heroDevicePreview" class="hero-device-preview device-desktop">
+              <div id="heroPreviewMedia" class="hero-preview-media hero-preview-layout-trio"></div>
+              <div id="heroPreviewShade" class="hero-preview-shade"></div>
+              <div class="hero-preview-copy">
+                <small>RAF.STUDIO • GALERIA KLIENTA</small>
+                <strong id="heroPreviewTitle">Nazwa galerii</strong>
+                <span id="heroPreviewSubtitle">Opis galerii klienta</span>
+              </div>
+            </div>
+
+            <p class="muted hero-preview-help">
+              Klikaj Komputer / Tablet / Telefon. Podgląd używa prawdziwych zdjęć z tej galerii.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -726,7 +803,7 @@
       <p class="eyebrow">PODGLĄD NA ŻYWO</p>
       <div id="loginPreviewScreen" class="login-preview-screen">
         <div id="loginPreviewCard" class="login-preview-card">
-          <img id="loginPreviewLogo" src="logo-white.png?v=16.1" alt="">
+          <img id="loginPreviewLogo" src="logo-white.png?v=16.2" alt="">
           <div id="loginPreviewEyebrow" class="login-preview-eyebrow">STUDIO MANAGER</div>
           <h3 id="loginPreviewTitle">Panel fotografa</h3>
           <p id="loginPreviewSubtitle">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
@@ -865,7 +942,7 @@
       <p class="eyebrow">PODGLĄD NA ŻYWO</p>
       <div id="clientLoginPreviewScreen" class="login-preview-screen">
         <div id="clientLoginPreviewCard" class="login-preview-card">
-          <img id="clientLoginPreviewLogo" src="logo-white.png?v=16.1" alt="">
+          <img id="clientLoginPreviewLogo" src="logo-white.png?v=16.2" alt="">
           <div id="clientLoginPreviewEyebrow" class="login-preview-eyebrow">PRYWATNA GALERIA</div>
           <h3 id="clientLoginPreviewTitle">M&K2026</h3>
           <p id="clientLoginPreviewInstruction">Wpisz hasło otrzymane od fotografa.</p>
@@ -1013,6 +1090,6 @@
 <div id="toast" class="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
-<script type="module" src="admin.js?v=16.1"></script>
+<script type="module" src="admin.js?v=16.2"></script>
 </body>
 </html>

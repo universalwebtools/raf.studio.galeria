@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, onValue, push } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=16.1";
+import { firebaseConfig } from "./firebase-config.js?v=16.2";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -167,10 +167,18 @@ const DEFAULT_UI_CONFIG = {
   allowSelectedDownloads: true,
   allowFavoriteDownloads: true,
   blockSaveImage: true,
-  heroMode: "cover",
-  heroHeightDesktop: 330,
-  heroHeightMobile: 280,
-  heroImageWidth: 1500,
+  // HERO Designer v16.2
+  heroMode: "cover", // legacy compatibility
+  heroLayout: "trio",
+  heroFit: "cover",
+  heroHeightDesktop: 360,
+  heroHeightTablet: 320,
+  heroHeightMobile: 300,
+  heroMaxWidth: 1600,
+  heroTileGap: 6,
+  heroTileRadius: 10,
+  heroOverlay: 46,
+  heroImageWidth: 1500, // legacy compatibility
   heroBgColor: "#09090a",
   labels: {
     all: "Wszystkie",
@@ -219,8 +227,17 @@ function getUiConfig() {
     allowFavoriteDownloads: stored.allowFavoriteDownloads !== false,
     blockSaveImage: stored.blockSaveImage !== false,
     heroMode: ["cover","fixed","contain","none"].includes(stored.heroMode) ? stored.heroMode : DEFAULT_UI_CONFIG.heroMode,
-    heroHeightDesktop: clampNumber(stored.heroHeightDesktop, 180, 700, DEFAULT_UI_CONFIG.heroHeightDesktop),
-    heroHeightMobile: clampNumber(stored.heroHeightMobile, 160, 500, DEFAULT_UI_CONFIG.heroHeightMobile),
+    heroLayout: ["single","duo","trio","mosaic4","none"].includes(stored.heroLayout)
+      ? stored.heroLayout
+      : (stored.heroMode === "none" ? "none" : DEFAULT_UI_CONFIG.heroLayout),
+    heroFit: ["cover","contain"].includes(stored.heroFit) ? stored.heroFit : DEFAULT_UI_CONFIG.heroFit,
+    heroHeightDesktop: clampNumber(stored.heroHeightDesktop, 200, 700, DEFAULT_UI_CONFIG.heroHeightDesktop),
+    heroHeightTablet: clampNumber(stored.heroHeightTablet, 180, 600, DEFAULT_UI_CONFIG.heroHeightTablet),
+    heroHeightMobile: clampNumber(stored.heroHeightMobile, 180, 520, DEFAULT_UI_CONFIG.heroHeightMobile),
+    heroMaxWidth: clampNumber(stored.heroMaxWidth, 800, 2400, DEFAULT_UI_CONFIG.heroMaxWidth),
+    heroTileGap: clampNumber(stored.heroTileGap, 0, 24, DEFAULT_UI_CONFIG.heroTileGap),
+    heroTileRadius: clampNumber(stored.heroTileRadius, 0, 30, DEFAULT_UI_CONFIG.heroTileRadius),
+    heroOverlay: clampNumber(stored.heroOverlay, 0, 85, DEFAULT_UI_CONFIG.heroOverlay),
     heroImageWidth: clampNumber(stored.heroImageWidth, 600, 2600, DEFAULT_UI_CONFIG.heroImageWidth),
     heroBgColor: stored.heroBgColor || DEFAULT_UI_CONFIG.heroBgColor
   };
@@ -274,11 +291,20 @@ function applyUiConfig() {
   root.style.setProperty("--gallery-filter-bg", currentUiConfig.filterBg || DEFAULT_UI_CONFIG.filterBg);
   root.style.setProperty("--gallery-filter-text", currentUiConfig.filterText || DEFAULT_UI_CONFIG.filterText);
   root.style.setProperty("--hero-height-desktop", `${currentUiConfig.heroHeightDesktop}px`);
+  root.style.setProperty("--hero-height-tablet", `${currentUiConfig.heroHeightTablet}px`);
   root.style.setProperty("--hero-height-mobile", `${currentUiConfig.heroHeightMobile}px`);
+  root.style.setProperty("--hero-max-width", `${currentUiConfig.heroMaxWidth}px`);
+  root.style.setProperty("--hero-tile-gap", `${currentUiConfig.heroTileGap}px`);
+  root.style.setProperty("--hero-tile-radius", `${currentUiConfig.heroTileRadius}px`);
+  root.style.setProperty("--hero-fit", currentUiConfig.heroFit || "cover");
+  root.style.setProperty("--hero-overlay-opacity", `${currentUiConfig.heroOverlay / 100}`);
   root.style.setProperty("--hero-image-width", `${currentUiConfig.heroImageWidth}px`);
   root.style.setProperty("--hero-bg-color", currentUiConfig.heroBgColor || DEFAULT_UI_CONFIG.heroBgColor);
   const hero = $("#hero");
-  if (hero) hero.dataset.heroMode = currentUiConfig.heroMode || "cover";
+  if (hero) {
+    hero.dataset.heroMode = currentUiConfig.heroMode || "cover";
+    hero.dataset.heroLayout = currentUiConfig.heroLayout || "trio";
+  }
 
   const labels = currentUiConfig.labels;
   const labelMap = {
@@ -758,6 +784,81 @@ function watchFavorites() {
   );
 }
 
+
+function heroRequiredCount(layout) {
+  return layout === "mosaic4" ? 4
+    : layout === "trio" ? 3
+    : layout === "duo" ? 2
+    : layout === "single" ? 1
+    : 0;
+}
+
+function getHeroPhotos() {
+  const required = heroRequiredCount(currentUiConfig.heroLayout);
+  if (!required) return [];
+
+  const configured = Array.isArray(gallery?.heroBackgroundFiles)
+    ? gallery.heroBackgroundFiles.filter(Boolean)
+    : [];
+
+  const legacyPrimary = gallery?.heroBackgroundFile || gallery?.coverFile;
+  const requested = [];
+
+  [...configured, legacyPrimary].forEach(filename => {
+    if (filename && !requested.includes(filename)) requested.push(filename);
+  });
+
+  // Fill missing slots automatically from current public photos.
+  photos.forEach(photo => {
+    if (requested.length >= required) return;
+    if (!requested.includes(photo.filename)) requested.push(photo.filename);
+  });
+
+  return requested
+    .slice(0, required)
+    .map(filename => photos.find(photo => photo.filename === filename))
+    .filter(Boolean);
+}
+
+function renderHeroMedia() {
+  const hero = $("#hero");
+  const media = $("#heroMedia");
+  if (!hero || !media) return;
+
+  const layout = currentUiConfig.heroLayout || "trio";
+  hero.dataset.heroLayout = layout;
+  media.innerHTML = "";
+  hero.style.backgroundImage = "none";
+  hero.style.backgroundColor = currentUiConfig.heroBgColor || "#09090a";
+
+  if (layout === "none") {
+    media.hidden = true;
+    return;
+  }
+
+  const heroPhotos = getHeroPhotos();
+  if (!heroPhotos.length) {
+    media.hidden = true;
+    return;
+  }
+
+  media.hidden = false;
+
+  heroPhotos.forEach((photo, index) => {
+    const tile = document.createElement("div");
+    tile.className = `hero-media-tile hero-media-tile-${index + 1}`;
+    tile.style.backgroundImage = `url("${photo.preview}")`;
+
+    // Keep old manually selected focal point for the first / main tile.
+    if (index === 0) {
+      tile.style.backgroundPosition =
+        `${Number(gallery.coverPositionX ?? 50)}% ${Number(gallery.coverPositionY ?? 38)}%`;
+    }
+
+    media.appendChild(tile);
+  });
+}
+
 function loadManifest() {
   const manifest = gallery.photos || {};
 
@@ -785,14 +886,7 @@ function loadManifest() {
     return;
   }
 
-  const heroFile = gallery.heroBackgroundFile || gallery.coverFile;
-  const cover = photos.find(p => p.filename === heroFile) || photos.find(p => p.filename === gallery.coverFile) || photos[0];
-  if (cover && currentUiConfig.heroMode !== "none") {
-    $("#hero").style.backgroundImage = `url("${cover.preview}")`;
-    $("#hero").style.backgroundPosition = `${Number(gallery.coverPositionX ?? 50)}% ${Number(gallery.coverPositionY ?? 38)}%`;
-  } else {
-    $("#hero").style.backgroundImage = "none";
-  }
+  renderHeroMedia();
 
   photos.forEach(warmupOrientation);
 
