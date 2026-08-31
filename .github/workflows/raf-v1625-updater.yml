@@ -1,0 +1,232 @@
+name: RAF v16.2.5 one-time updater
+
+on:
+  push:
+    paths:
+      - '.github/workflows/raf-v1625-updater.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply v16.2.5 MOBILE GRID + COMPACT UI
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise RuntimeError(f'Missing pattern: {label}')
+              return text.replace(old, new, 1)
+
+          # ---------- HTML cache bumps ----------
+          for filename in ('index.html', 'admin.html'):
+              p = Path(filename)
+              text = p.read_text(encoding='utf-8')
+              text = text.replace('style.css?v=16.2.4', 'style.css?v=16.2.5')
+              text = text.replace('logo-white.png?v=16.2.4', 'logo-white.png?v=16.2.5')
+              text = text.replace('app.js?v=16.2.4', 'app.js?v=16.2.5')
+              text = text.replace('admin.js?v=16.2.4', 'admin.js?v=16.2.5')
+              p.write_text(text, encoding='utf-8')
+
+          # ---------- ADMIN HTML: mobile editor ----------
+          p = Path('admin.html')
+          text = p.read_text(encoding='utf-8')
+          pattern = re.compile(r'''      <div class="site-settings-section">\n        <h3>Układ zdjęć</h3>.*?      <div class="site-settings-section">\n        <h3>Kolory aktywne / filtry</h3>''', re.S)
+          replacement = '''      <div class="site-settings-section">
+        <h3>Układ zdjęć — komputer / tablet</h3>
+        <div class="form3">
+          <label>Kolumny — komputer
+            <input id="uiDesktopColumns" type="number" min="2" max="6" value="4">
+            <input class="hero-range" type="range" min="2" max="6" step="1" value="4" data-sync-number="uiDesktopColumns" aria-label="Kolumny komputer">
+          </label>
+          <label>Kolumny — tablet
+            <input id="uiTabletColumns" type="number" min="2" max="5" value="3">
+            <input class="hero-range" type="range" min="2" max="5" step="1" value="3" data-sync-number="uiTabletColumns" aria-label="Kolumny tablet">
+          </label>
+          <label>Odstęp zdjęć (px)
+            <input id="uiGridGap" type="number" min="2" max="30" value="10">
+            <input class="hero-range" type="range" min="2" max="30" step="1" value="10" data-sync-number="uiGridGap" aria-label="Odstęp zdjęć">
+          </label>
+        </div>
+        <div class="form3">
+          <label>Zaokrąglenie zdjęć (px)
+            <input id="uiCardRadius" type="number" min="0" max="30" value="9">
+            <input class="hero-range" type="range" min="0" max="30" step="1" value="9" data-sync-number="uiCardRadius" aria-label="Zaokrąglenie zdjęć">
+          </label>
+          <label>Rozmiar przycisków (px)
+            <input id="uiButtonSize" type="number" min="26" max="64" value="40">
+            <input class="hero-range" type="range" min="26" max="64" step="1" value="40" data-sync-number="uiButtonSize" aria-label="Rozmiar przycisków">
+          </label>
+          <label class="check">
+            <input id="uiShowFilenames" type="checkbox" checked>
+            Pokazuj nazwy zdjęć
+          </label>
+        </div>
+      </div>
+
+      <div class="site-settings-section">
+        <h3>Układ mobilny — telefon</h3>
+        <p class="muted">Osobna konfiguracja telefonu. Tu zmniejszysz kafelki, odstępy i wielkość pasków, żeby nie zasłaniały połowy ekranu.</p>
+        <div class="form3">
+          <label>Kolumny — telefon
+            <input id="uiMobileColumns" type="number" min="1" max="4" value="2">
+            <input class="hero-range" type="range" min="1" max="4" step="1" value="2" data-sync-number="uiMobileColumns" aria-label="Kolumny telefon">
+          </label>
+          <label>Odstęp zdjęć — telefon (px)
+            <input id="uiMobileGridGap" type="number" min="2" max="24" value="8">
+            <input class="hero-range" type="range" min="2" max="24" step="1" value="8" data-sync-number="uiMobileGridGap" aria-label="Odstęp zdjęć telefon">
+          </label>
+          <label>Zaokrąglenie zdjęć — telefon (px)
+            <input id="uiMobileCardRadius" type="number" min="0" max="30" value="8">
+            <input class="hero-range" type="range" min="0" max="30" step="1" value="8" data-sync-number="uiMobileCardRadius" aria-label="Zaokrąglenie zdjęć telefon">
+          </label>
+        </div>
+        <div class="form3">
+          <label>Rozmiar przycisków na zdjęciu — telefon (px)
+            <input id="uiMobileButtonSize" type="number" min="24" max="56" value="34">
+            <input class="hero-range" type="range" min="24" max="56" step="1" value="34" data-sync-number="uiMobileButtonSize" aria-label="Rozmiar przycisków telefon">
+          </label>
+          <label>Odstęp przycisków — telefon (px)
+            <input id="uiMobileButtonGap" type="number" min="0" max="16" value="4">
+            <input class="hero-range" type="range" min="0" max="16" step="1" value="4" data-sync-number="uiMobileButtonGap" aria-label="Odstęp przycisków telefon">
+          </label>
+          <label>Skala mobilnego interfejsu (%)
+            <input id="uiMobileUiScale" type="number" min="70" max="100" value="88">
+            <input class="hero-range" type="range" min="70" max="100" step="1" value="88" data-sync-number="uiMobileUiScale" aria-label="Skala mobilnego interfejsu">
+          </label>
+        </div>
+      </div>
+
+      <div class="site-settings-section">
+        <h3>Przyciski na zdjęciach</h3>
+        <div class="form3">
+          <label>Odstęp przycisków (px)
+            <input id="uiButtonGap" type="number" min="0" max="20" value="6">
+            <input class="hero-range" type="range" min="0" max="20" step="1" value="6" data-sync-number="uiButtonGap" aria-label="Odstęp przycisków">
+          </label>
+          <label>Tło zwykłego przycisku
+            <input id="uiButtonBg" class="color-field" type="color" value="#111114">
+          </label>
+          <label>♥ aktywne
+            <input id="uiHeartColor" class="color-field" type="color" value="#ff3b4d">
+          </label>
+        </div>
+        <div class="form3">
+          <label>A/B aktywne
+            <input id="uiCompareColor" class="color-field" type="color" value="#22c55e">
+          </label>
+          <label>✓ pobieranie aktywne
+            <input id="uiDownloadColor" class="color-field" type="color" value="#1b7f46">
+          </label>
+        </div>
+      </div>
+
+      <div class="site-settings-section">
+        <h3>Kolory aktywne / filtry</h3>'''
+          text, count = pattern.subn(replacement, text, count=1)
+          if count != 1:
+              raise RuntimeError(f'admin.html mobile editor replacement count={count}')
+          p.write_text(text, encoding='utf-8')
+
+          # ---------- ADMIN JS ----------
+          p = Path('admin.js')
+          text = p.read_text(encoding='utf-8')
+          text = replace_once(text,
+          '''  mobileColumns: 2,\n  gridGap: 10,\n  cardRadius: 9,\n  buttonSize: 40,\n  buttonGap: 6,\n''',
+          '''  mobileColumns: 2,\n  gridGap: 10,\n  mobileGridGap: 8,\n  cardRadius: 9,\n  mobileCardRadius: 8,\n  buttonSize: 40,\n  mobileButtonSize: 34,\n  buttonGap: 6,\n  mobileButtonGap: 4,\n  mobileUiScale: 88,\n''', 'admin defaults')
+
+          text = replace_once(text,
+          '''    heroImageWidth: clampValue(stored.heroImageWidth, 600, 2600, DEFAULT_UI_CONFIG.heroImageWidth),\n    heroBgColor: stored.heroBgColor || DEFAULT_UI_CONFIG.heroBgColor\n''',
+          '''    heroImageWidth: clampValue(stored.heroImageWidth, 600, 2600, DEFAULT_UI_CONFIG.heroImageWidth),\n    heroBgColor: stored.heroBgColor || DEFAULT_UI_CONFIG.heroBgColor,\n    desktopColumns: clampValue(stored.desktopColumns, 2, 6, DEFAULT_UI_CONFIG.desktopColumns),\n    tabletColumns: clampValue(stored.tabletColumns, 2, 5, DEFAULT_UI_CONFIG.tabletColumns),\n    mobileColumns: clampValue(stored.mobileColumns, 1, 4, DEFAULT_UI_CONFIG.mobileColumns),\n    gridGap: clampValue(stored.gridGap, 2, 30, DEFAULT_UI_CONFIG.gridGap),\n    mobileGridGap: clampValue(stored.mobileGridGap ?? stored.gridGap, 2, 24, DEFAULT_UI_CONFIG.mobileGridGap),\n    cardRadius: clampValue(stored.cardRadius, 0, 30, DEFAULT_UI_CONFIG.cardRadius),\n    mobileCardRadius: clampValue(stored.mobileCardRadius ?? stored.cardRadius, 0, 30, DEFAULT_UI_CONFIG.mobileCardRadius),\n    buttonSize: clampValue(stored.buttonSize, 26, 64, DEFAULT_UI_CONFIG.buttonSize),\n    mobileButtonSize: clampValue(stored.mobileButtonSize ?? stored.buttonSize, 24, 56, DEFAULT_UI_CONFIG.mobileButtonSize),\n    buttonGap: clampValue(stored.buttonGap, 0, 20, DEFAULT_UI_CONFIG.buttonGap),\n    mobileButtonGap: clampValue(stored.mobileButtonGap ?? stored.buttonGap, 0, 16, DEFAULT_UI_CONFIG.mobileButtonGap),\n    mobileUiScale: clampValue(stored.mobileUiScale, 70, 100, DEFAULT_UI_CONFIG.mobileUiScale)\n''', 'admin normalize')
+
+          text = replace_once(text,
+          '''  uiFieldValue("uiMobileColumns", config.mobileColumns);\n  uiFieldValue("uiGridGap", config.gridGap);\n  uiFieldValue("uiCardRadius", config.cardRadius);\n  uiFieldValue("uiButtonSize", config.buttonSize);\n  uiFieldValue("uiButtonGap", config.buttonGap);\n''',
+          '''  uiFieldValue("uiMobileColumns", config.mobileColumns);\n  uiFieldValue("uiGridGap", config.gridGap);\n  uiFieldValue("uiMobileGridGap", config.mobileGridGap ?? config.gridGap);\n  uiFieldValue("uiCardRadius", config.cardRadius);\n  uiFieldValue("uiMobileCardRadius", config.mobileCardRadius ?? config.cardRadius);\n  uiFieldValue("uiButtonSize", config.buttonSize);\n  uiFieldValue("uiMobileButtonSize", config.mobileButtonSize ?? config.buttonSize);\n  uiFieldValue("uiButtonGap", config.buttonGap);\n  uiFieldValue("uiMobileButtonGap", config.mobileButtonGap ?? Math.max(0, config.buttonGap - 2));\n  uiFieldValue("uiMobileUiScale", config.mobileUiScale ?? 88);\n''', 'admin fill')
+
+          text = replace_once(text,
+          '''    mobileColumns: clampValue($("#uiMobileColumns").value, 1, 4, 2),\n    gridGap: clampValue($("#uiGridGap").value, 2, 30, 10),\n    cardRadius: clampValue($("#uiCardRadius").value, 0, 30, 9),\n    buttonSize: clampValue($("#uiButtonSize").value, 26, 64, 40),\n    buttonGap: clampValue($("#uiButtonGap").value, 0, 20, 6),\n''',
+          '''    mobileColumns: clampValue($("#uiMobileColumns").value, 1, 4, 2),\n    gridGap: clampValue($("#uiGridGap").value, 2, 30, 10),\n    mobileGridGap: clampValue($("#uiMobileGridGap").value, 2, 24, 8),\n    cardRadius: clampValue($("#uiCardRadius").value, 0, 30, 9),\n    mobileCardRadius: clampValue($("#uiMobileCardRadius").value, 0, 30, 8),\n    buttonSize: clampValue($("#uiButtonSize").value, 26, 64, 40),\n    mobileButtonSize: clampValue($("#uiMobileButtonSize").value, 24, 56, 34),\n    buttonGap: clampValue($("#uiButtonGap").value, 0, 20, 6),\n    mobileButtonGap: clampValue($("#uiMobileButtonGap").value, 0, 16, 4),\n    mobileUiScale: clampValue($("#uiMobileUiScale").value, 70, 100, 88),\n''', 'admin read')
+
+          text = replace_once(text,
+          '''  preview.style.setProperty("--preview-cols", Math.min(4, config.mobileColumns));\n  preview.style.setProperty("--preview-gap", `${config.gridGap}px`);\n  preview.style.setProperty("--preview-radius", `${config.cardRadius}px`);\n  tools.style.setProperty("--preview-button-size", `${config.buttonSize}px`);\n  tools.style.setProperty("--preview-button-gap", `${config.buttonGap}px`);\n''',
+          '''  preview.style.setProperty("--preview-cols", Math.min(4, config.mobileColumns));\n  preview.style.setProperty("--preview-gap", `${config.mobileGridGap ?? config.gridGap}px`);\n  preview.style.setProperty("--preview-radius", `${config.mobileCardRadius ?? config.cardRadius}px`);\n  tools.style.setProperty("--preview-button-size", `${config.mobileButtonSize ?? config.buttonSize}px`);\n  tools.style.setProperty("--preview-button-gap", `${config.mobileButtonGap ?? config.buttonGap}px`);\n''', 'admin preview')
+
+          text = replace_once(text,
+          '''  "uiDesktopColumns","uiTabletColumns","uiMobileColumns","uiGridGap","uiCardRadius","uiButtonSize","uiButtonGap",\n''',
+          '''  "uiDesktopColumns","uiTabletColumns","uiMobileColumns","uiGridGap","uiMobileGridGap","uiCardRadius","uiMobileCardRadius","uiButtonSize","uiMobileButtonSize","uiButtonGap","uiMobileButtonGap","uiMobileUiScale",\n''', 'admin editor ids')
+          p.write_text(text, encoding='utf-8')
+
+          # ---------- APP JS ----------
+          p = Path('app.js')
+          text = p.read_text(encoding='utf-8')
+          text = replace_once(text,
+          '''  mobileColumns: 2,\n  gridGap: 10,\n  cardRadius: 9,\n  buttonSize: 40,\n  buttonGap: 6,\n''',
+          '''  mobileColumns: 2,\n  gridGap: 10,\n  mobileGridGap: 8,\n  cardRadius: 9,\n  mobileCardRadius: 8,\n  buttonSize: 40,\n  mobileButtonSize: 34,\n  buttonGap: 6,\n  mobileButtonGap: 4,\n  mobileUiScale: 88,\n''', 'app defaults')
+
+          text = replace_once(text,
+          '''    mobileColumns: clampNumber(stored.mobileColumns, 1, 4, DEFAULT_UI_CONFIG.mobileColumns),\n    gridGap: clampNumber(stored.gridGap, 2, 30, DEFAULT_UI_CONFIG.gridGap),\n    cardRadius: clampNumber(stored.cardRadius, 0, 30, DEFAULT_UI_CONFIG.cardRadius),\n    buttonSize: clampNumber(stored.buttonSize, 26, 64, DEFAULT_UI_CONFIG.buttonSize),\n    buttonGap: clampNumber(stored.buttonGap, 0, 20, DEFAULT_UI_CONFIG.buttonGap),\n''',
+          '''    mobileColumns: clampNumber(stored.mobileColumns, 1, 4, DEFAULT_UI_CONFIG.mobileColumns),\n    gridGap: clampNumber(stored.gridGap, 2, 30, DEFAULT_UI_CONFIG.gridGap),\n    mobileGridGap: clampNumber(stored.mobileGridGap ?? stored.gridGap, 2, 24, DEFAULT_UI_CONFIG.mobileGridGap),\n    cardRadius: clampNumber(stored.cardRadius, 0, 30, DEFAULT_UI_CONFIG.cardRadius),\n    mobileCardRadius: clampNumber(stored.mobileCardRadius ?? stored.cardRadius, 0, 30, DEFAULT_UI_CONFIG.mobileCardRadius),\n    buttonSize: clampNumber(stored.buttonSize, 26, 64, DEFAULT_UI_CONFIG.buttonSize),\n    mobileButtonSize: clampNumber(stored.mobileButtonSize ?? stored.buttonSize, 24, 56, DEFAULT_UI_CONFIG.mobileButtonSize),\n    buttonGap: clampNumber(stored.buttonGap, 0, 20, DEFAULT_UI_CONFIG.buttonGap),\n    mobileButtonGap: clampNumber(stored.mobileButtonGap ?? stored.buttonGap, 0, 16, DEFAULT_UI_CONFIG.mobileButtonGap),\n    mobileUiScale: clampNumber(stored.mobileUiScale, 70, 100, DEFAULT_UI_CONFIG.mobileUiScale),\n''', 'app normalize')
+
+          text = replace_once(text,
+          '''  root.style.setProperty("--gallery-cols-mobile", currentUiConfig.mobileColumns);\n  root.style.setProperty("--gallery-gap", `${currentUiConfig.gridGap}px`);\n  root.style.setProperty("--gallery-card-radius", `${currentUiConfig.cardRadius}px`);\n  root.style.setProperty("--gallery-button-size", `${currentUiConfig.buttonSize}px`);\n  root.style.setProperty("--gallery-button-gap", `${currentUiConfig.buttonGap}px`);\n''',
+          '''  root.style.setProperty("--gallery-cols-mobile", currentUiConfig.mobileColumns);\n  root.style.setProperty("--gallery-gap", `${currentUiConfig.gridGap}px`);\n  root.style.setProperty("--gallery-gap-mobile", `${currentUiConfig.mobileGridGap}px`);\n  root.style.setProperty("--gallery-card-radius", `${currentUiConfig.cardRadius}px`);\n  root.style.setProperty("--gallery-card-radius-mobile", `${currentUiConfig.mobileCardRadius}px`);\n  root.style.setProperty("--gallery-button-size", `${currentUiConfig.buttonSize}px`);\n  root.style.setProperty("--gallery-button-size-mobile", `${currentUiConfig.mobileButtonSize}px`);\n  root.style.setProperty("--gallery-button-gap", `${currentUiConfig.buttonGap}px`);\n  root.style.setProperty("--gallery-button-gap-mobile", `${currentUiConfig.mobileButtonGap}px`);\n  root.style.setProperty("--gallery-mobile-ui-scale", `${currentUiConfig.mobileUiScale / 100}`);\n''', 'app css vars')
+          p.write_text(text, encoding='utf-8')
+
+          # ---------- CSS: append mobile overrides ----------
+          p = Path('style.css')
+          text = p.read_text(encoding='utf-8')
+          marker = '/* ===== v16.2.5: MOBILE GRID + COMPACT UI ===== */'
+          if marker not in text:
+              text += r'''
+
+/* ===== v16.2.5: MOBILE GRID + COMPACT UI ===== */
+@media(max-width:760px){
+  .photo-grid{column-count:var(--gallery-cols-mobile) !important;column-gap:var(--gallery-gap-mobile,8px) !important;padding-left:6px !important;padding-right:6px !important}
+  .photo-card{margin-bottom:var(--gallery-gap-mobile,8px) !important;border-radius:var(--gallery-card-radius-mobile,8px) !important}
+  .photo-card-tools{gap:var(--gallery-button-gap-mobile,4px) !important}
+  .photo-card-tools .photo-fav,.photo-card-tools .photo-reject,.photo-card-tools .photo-compare,.photo-card-tools .photo-download,.photo-card-tools .photo-select-download{
+    min-width:var(--gallery-button-size-mobile,34px) !important;
+    height:var(--gallery-button-size-mobile,34px) !important;
+    font-size:calc(12px * var(--gallery-mobile-ui-scale,.88)) !important;
+    padding:0 calc(7px * var(--gallery-mobile-ui-scale,.88)) !important;
+  }
+  .client-topbar{padding:calc(10px * var(--gallery-mobile-ui-scale,.88)) clamp(10px,3vw,14px) !important}
+  .client-topbar .raf-logo{width:calc(132px * var(--gallery-mobile-ui-scale,.88)) !important}
+  .top-actions{gap:calc(6px * var(--gallery-mobile-ui-scale,.88)) !important}
+  .top-actions .ghost{padding:calc(8px * var(--gallery-mobile-ui-scale,.88)) calc(10px * var(--gallery-mobile-ui-scale,.88)) !important;font-size:calc(12px * var(--gallery-mobile-ui-scale,.88)) !important;border-radius:calc(14px * var(--gallery-mobile-ui-scale,.88)) !important}
+  .client-controls{padding:calc(10px * var(--gallery-mobile-ui-scale,.88)) clamp(8px,3vw,12px) !important}
+  .segments{padding:calc(3px * var(--gallery-mobile-ui-scale,.88)) !important;border-radius:calc(12px * var(--gallery-mobile-ui-scale,.88)) !important}
+  .seg{padding:calc(8px * var(--gallery-mobile-ui-scale,.88)) calc(11px * var(--gallery-mobile-ui-scale,.88)) !important;font-size:calc(12px * var(--gallery-mobile-ui-scale,.88)) !important}
+  .selection-count{font-size:calc(12px * var(--gallery-mobile-ui-scale,.88)) !important}
+  .selection-workflow:not([hidden]){padding:calc(10px * var(--gallery-mobile-ui-scale,.88)) calc(11px * var(--gallery-mobile-ui-scale,.88)) !important;border-radius:calc(18px * var(--gallery-mobile-ui-scale,.88)) !important}
+  .selection-workflow-info strong{font-size:calc(15px * var(--gallery-mobile-ui-scale,.88)) !important}
+  .selection-workflow-info small{font-size:calc(11px * var(--gallery-mobile-ui-scale,.88)) !important;line-height:1.3 !important}
+  .selection-workflow-actions{gap:calc(7px * var(--gallery-mobile-ui-scale,.88)) !important}
+  .selection-workflow-actions > *{padding:calc(12px * var(--gallery-mobile-ui-scale,.88)) calc(10px * var(--gallery-mobile-ui-scale,.88)) !important;font-size:calc(12px * var(--gallery-mobile-ui-scale,.88)) !important;border-radius:calc(16px * var(--gallery-mobile-ui-scale,.88)) !important}
+}
+'''
+          p.write_text(text, encoding='utf-8')
+          PY
+
+          node --check admin.js
+          node --check app.js
+
+      - name: Commit update and remove one-time workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/raf-v1625-updater.yml
+          git config user.name "RAF.studio updater"
+          git config user.email "actions@users.noreply.github.com"
+          git add index.html admin.html admin.js app.js style.css .github/workflows/raf-v1625-updater.yml
+          git commit -m "Update RAF.studio gallery to v16.2.5 mobile compact UI"
+          git push
