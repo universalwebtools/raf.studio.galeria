@@ -16,6 +16,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fix temporary patch regex
+        run: python3 -c "from pathlib import Path; p=Path('scripts/raf_v1625_update.py'); s=p.read_text(); s=s.replace('>'+chr(92)*2+'n'+chr(39), '>'+chr(92)+'n'+chr(39)); p.write_text(s)"
+
       - name: Apply v16.2.5 patch
         run: python3 scripts/raf_v1625_update.py
 
