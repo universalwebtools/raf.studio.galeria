@@ -6,6 +6,7 @@ on:
       - v16.3.0-final
     paths:
       - '.github/workflows/raf-v1630-final.yml'
+      - 'scripts/finalize_v1630.py'
 
 permissions:
   contents: write
@@ -28,6 +29,7 @@ jobs:
           node --check admin.js
           grep -q 'normalizedSharedRejected' app.js
           grep -q 'toggleRejected' app.js
+          grep -q 'rejected === true' app.js
           grep -q 'renderRejectedAdminTools' admin.js
           grep -q 'download-remaining' admin.js
           grep -q '>Odrzucone</button>' index.html
