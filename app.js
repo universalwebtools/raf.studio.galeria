@@ -2,7 +2,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, onValue, push } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=16.2.4.2.1";
+import { firebaseConfig } from "./firebase-config.js?v=16.3.0";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -190,7 +190,7 @@ const DEFAULT_UI_CONFIG = {
     favorites: "Wybrane",
     portrait: "Pionowe",
     landscape: "Poziome",
-    hidden: "Ukryte",
+    hidden: "Odrzucone",
     compare: "A/B",
     slideshow: "Slideshow",
     share: "Udostępnij",
@@ -210,6 +210,7 @@ function clampNumber(value, min, max, fallback) {
 function getUiConfig() {
   const stored = gallery?.uiConfig || {};
   const labels = { ...DEFAULT_UI_CONFIG.labels, ...(stored.labels || {}) };
+  if (!stored.labels?.hidden || stored.labels.hidden === "Ukryte") labels.hidden = "Odrzucone";
   return {
     ...DEFAULT_UI_CONFIG,
     ...stored,
@@ -398,6 +399,10 @@ function selectionKey(filename) {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
+function rejectionKey(filename) {
+  return `reject_${selectionKey(filename)}`;
+}
+
 function toast(message) {
   const el = $("#toast");
   el.textContent = message;
@@ -429,22 +434,12 @@ function daysLeft(dateString) {
   return diff;
 }
 
-function storageKeyRejected() {
-  return `raf-rejected-${slug}`;
-}
-
+function storageKeyRejected() { return `raf-rejected-${slug}`; }
 function loadRejectedState() {
-  try {
-    const raw = localStorage.getItem(storageKeyRejected());
-    rejected = new Set(JSON.parse(raw || "[]"));
-  } catch (_) {
-    rejected = new Set();
-  }
+  rejected = new Set();
+  try { localStorage.removeItem(storageKeyRejected()); } catch (_) {}
 }
-
-function saveRejectedState() {
-  localStorage.setItem(storageKeyRejected(), JSON.stringify([...rejected]));
-}
+function saveRejectedState() {}
 
 function detectOrientation(width, height) {
   if (!width || !height) return "";
@@ -654,7 +649,7 @@ function normalizedSharedFavorites(raw) {
   const normalized = new Map();
 
   Object.values(raw || {}).forEach(item => {
-    if (!item?.filename) return;
+    if (!item?.filename || item?.type === "rejected") return;
 
     const canonical = currentByExact.get(String(item.filename)) ||
       currentByBase.get(displayName(item.filename).toLowerCase());
@@ -683,15 +678,31 @@ function normalizedSharedFavorites(raw) {
   return new Map(items.map(item => [item.filename, item]));
 }
 
+function normalizedSharedRejected(raw) {
+  const exact = new Map(photos.map(p => [String(p.filename), p.filename]));
+  const base = new Map(photos.map(p => [displayName(p.filename).toLowerCase(), p.filename]));
+  const result = new Set();
+  Object.values(raw || {}).forEach(item => {
+    if (!item?.filename || item?.type !== "rejected") return;
+    const name = exact.get(String(item.filename)) || base.get(displayName(item.filename).toLowerCase());
+    if (name) result.add(name);
+  });
+  return result;
+}
+
+function applySharedSelectionState(raw) {
+  favorites = normalizedSharedFavorites(raw);
+  rejected = normalizedSharedRejected(raw);
+}
+
 async function loadFavorites() {
   try {
     const snap = await get(ref(db, `selections/${slug}`));
-    favorites = normalizedSharedFavorites(snap.exists() ? snap.val() : {});
+    applySharedSelectionState(snap.exists() ? snap.val() : {});
   } catch (error) {
-    console.error("LOAD FAVORITES ERROR", error);
+    console.error("LOAD SELECTION STATE ERROR", error);
   }
 }
-
 
 async function loadLatestApproval() {
   try {
@@ -727,25 +738,19 @@ function updateApprovalStatus() {
 }
 
 async function clearAllFavorites() {
-  if (!favorites.size) {
-    toast("Nie ma serduszek do wyczyszczenia.");
-    return;
-  }
+  if (!favorites.size) { toast("Nie ma serduszek do wyczyszczenia."); return; }
   if (!confirm(`Wyczyścić wszystkie ${favorites.size} wybrane zdjęcia i zacząć wybór od nowa?`)) return;
   const button = $("#clearFavoritesBtn");
   if (button) button.disabled = true;
   try {
-    await remove(ref(db, `selections/${slug}`));
-    favorites.clear();
-    toast("Wyczyszczono wszystkie serduszka");
-    render();
-    updateUI();
-  } catch (error) {
-    console.error("CLEAR FAVORITES ERROR", error);
-    toast(`Nie udało się wyczyścić: ${error.code || error.message || error}`);
-  } finally {
-    if (button) button.disabled = false;
-  }
+    const branchRef = ref(db, `selections/${slug}`);
+    const snap = await get(branchRef);
+    const keep = {};
+    Object.entries(snap.exists() ? snap.val() : {}).forEach(([key,item]) => { if(item?.type === "rejected") keep[key]=item; });
+    await set(branchRef, Object.keys(keep).length ? keep : null);
+    favorites.clear(); render(); updateUI(); toast("Wyczyszczono wszystkie serduszka");
+  } catch(error) { console.error("CLEAR FAVORITES ERROR",error); toast(`Nie udało się wyczyścić: ${error.code || error.message || error}`); }
+  finally { if(button) button.disabled=false; }
 }
 
 async function approveCurrentSelection() {
@@ -787,19 +792,11 @@ async function approveCurrentSelection() {
 
 function watchFavorites() {
   if (unsubscribeFavorites) unsubscribeFavorites();
-  unsubscribeFavorites = onValue(
-    ref(db, `selections/${slug}`),
-    (snapshot) => {
-      favorites = normalizedSharedFavorites(snapshot.exists() ? snapshot.val() : {});
-      if (galleryLoaded) {
-        render();
-        updateUI();
-      }
-    },
-    (error) => console.error("FAVORITES WATCH ERROR", error)
-  );
+  unsubscribeFavorites = onValue(ref(db, `selections/${slug}`), snapshot => {
+    applySharedSelectionState(snapshot.exists() ? snapshot.val() : {});
+    if (galleryLoaded) { render(); updateUI(); }
+  }, error => console.error("SELECTION STATE WATCH ERROR", error));
 }
-
 
 function heroRequiredCount(layout) {
   return layout === "mosaic4" ? 4
@@ -923,7 +920,7 @@ function render() {
       ? "Nie zaznaczono jeszcze żadnych zdjęć."
       : filter === "portrait" ? "Brak pionowych zdjęć."
       : filter === "landscape" ? "Brak poziomych zdjęć."
-      : filter === "hidden" ? "Nie ukryto żadnych zdjęć."
+      : filter === "hidden" ? "Nie odrzucono żadnych zdjęć."
       : "";
     grid.innerHTML = empty ? `<div class="notice">${empty}</div>` : "";
     updateUI();
@@ -961,7 +958,7 @@ function render() {
     rejectBtn.type = "button";
     rejectBtn.className = `photo-reject${isRejected ? " active" : ""}`;
     rejectBtn.textContent = "×";
-    rejectBtn.title = isRejected ? "Przywróć zdjęcie" : "Ukryj / odrzuć zdjęcie";
+    rejectBtn.title = isRejected ? "Cofnij odrzucenie" : "Odrzuć zdjęcie — nie używać";
 
     const compareBtn = document.createElement("button");
     compareBtn.type = "button";
@@ -1010,10 +1007,10 @@ function render() {
       await toggleFavorite(photo.filename);
     });
 
-    rejectBtn.addEventListener("click", (event) => {
+    rejectBtn.addEventListener("click", async (event) => {
       event.preventDefault();
       event.stopPropagation();
-      toggleRejected(photo.filename);
+      await toggleRejected(photo.filename);
     });
 
     compareBtn.addEventListener("click", (event) => {
@@ -1056,56 +1053,39 @@ function render() {
 async function toggleFavorite(filename) {
   if (currentUiConfig.showHeartButton === false) return;
   const wasSelected = favorites.has(filename);
-
-  if (!wasSelected && maxFavorites() > 0 && favorites.size >= maxFavorites()) {
-    toast(`Możesz wybrać maksymalnie ${maxFavorites()} zdjęć.`);
-    return;
-  }
-
-  const optimisticValue = { filename, selectedAt: Date.now() };
-
-  if (wasSelected) favorites.delete(filename);
-  else favorites.set(filename, optimisticValue);
-
+  const wasRejected = rejected.has(filename);
+  if (!wasSelected && maxFavorites() > 0 && favorites.size >= maxFavorites()) { toast(`Możesz wybrać maksymalnie ${maxFavorites()} zdjęć.`); return; }
+  const value = { filename, selectedAt: Date.now() };
+  if (wasSelected) favorites.delete(filename); else { favorites.set(filename,value); if(wasRejected) rejected.delete(filename); }
   render();
-
   try {
-    const target = ref(db, `selections/${slug}/${selectionKey(filename)}`);
-
-    if (wasSelected) {
-      await remove(target);
-    } else {
-      await set(target, optimisticValue);
-    }
-
-    toast(wasSelected ? "Usunięto z wybranych" : "Dodano do wybranych");
-  } catch (error) {
-    console.error("FAVORITE WRITE ERROR", error);
-
-    if (wasSelected) favorites.set(filename, optimisticValue);
-    else favorites.delete(filename);
-
-    render();
-    if(String(error.code||"").toUpperCase().includes("PERMISSION")){
-      toast("Brak uprawnień Firebase — wklej database-rules.json z v15 i kliknij Publish.");
-    }else{
-      toast(`Błąd zapisu wyboru: ${error.code || error.message || error}`);
-    }
+    const favRef=ref(db,`selections/${slug}/${selectionKey(filename)}`);
+    const rejRef=ref(db,`selections/${slug}/${rejectionKey(filename)}`);
+    if(wasSelected) await remove(favRef); else { if(wasRejected) await remove(rejRef); await set(favRef,value); }
+    toast(wasSelected ? "Usunięto z wybranych" : wasRejected ? "Przywrócono i dodano do wybranych" : "Dodano do wybranych");
+  } catch(error) {
+    if(wasSelected) favorites.set(filename,value); else favorites.delete(filename);
+    if(wasRejected) rejected.add(filename);
+    render(); console.error("FAVORITE WRITE ERROR",error); toast(`Błąd zapisu wyboru: ${error.code || error.message || error}`);
   }
 }
 
-function toggleRejected(filename) {
-  if (rejected.has(filename)) {
-    rejected.delete(filename);
-    toast("Przywrócono zdjęcie");
-  } else {
-    rejected.add(filename);
-    downloadSelection.delete(filename);
-    compareSelection = compareSelection.filter(name => name !== filename);
-    toast("Ukryto zdjęcie");
-  }
-  saveRejectedState();
+async function toggleRejected(filename) {
+  if (currentUiConfig.showRejectButton === false) return;
+  const wasRejected=rejected.has(filename);
+  const oldFavorite=favorites.get(filename)||null;
+  if(wasRejected) rejected.delete(filename); else { rejected.add(filename); favorites.delete(filename); downloadSelection.delete(filename); compareSelection=compareSelection.filter(n=>n!==filename); }
   render();
+  const rejRef=ref(db,`selections/${slug}/${rejectionKey(filename)}`);
+  const favRef=ref(db,`selections/${slug}/${selectionKey(filename)}`);
+  try {
+    if(wasRejected) { await remove(rejRef); toast("Cofnięto odrzucenie zdjęcia"); }
+    else { await set(rejRef,{filename,selectedAt:Date.now(),type:"rejected"}); if(oldFavorite) await remove(favRef); toast("Zdjęcie odrzucone — fotograf nie będzie go używał"); }
+  } catch(error) {
+    if(wasRejected) rejected.add(filename); else rejected.delete(filename);
+    if(oldFavorite) favorites.set(filename,oldFavorite);
+    render(); console.error("REJECT PHOTO WRITE ERROR",error); toast(`Nie udało się zapisać odrzucenia: ${error.code || error.message || error}`);
+  }
 }
 
 function toggleCompareSelection(filename) {
