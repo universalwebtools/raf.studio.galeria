@@ -1,0 +1,63 @@
+name: RAF v16.3 rejected photos test build
+
+on:
+  push:
+    branches:
+      - v16.3-rejected-photos
+    paths:
+      - '.github/workflows/v163-build.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: v16.3-rejected-photos
+          fetch-depth: 0
+
+      - name: Patch client
+        run: python3 scripts/v163_patch_app.py
+
+      - name: Patch admin
+        run: python3 scripts/v163_patch_admin.py
+
+      - name: Patch HTML cache versions and labels
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html'); s=p.read_text(encoding='utf-8')
+          s=s.replace('app.js?v=16.2.5','app.js?v=16.3.0')
+          s=s.replace('<button id="hiddenFilter" type="button" class="seg">Ukryte</button>','<button id="hiddenFilter" type="button" class="seg">Odrzucone</button>')
+          p.write_text(s,encoding='utf-8')
+          p=Path('admin.html'); s=p.read_text(encoding='utf-8')
+          s=s.replace('admin.js?v=16.2.5','admin.js?v=16.3.0')
+          s=s.replace('<input id="uiLabelHidden" value="Ukryte">','<input id="uiLabelHidden" value="Odrzucone">')
+          p.write_text(s,encoding='utf-8')
+          PY
+
+      - name: Validate JavaScript
+        run: |
+          node --check app.js
+          node --check admin.js
+          git diff --check
+
+      - name: Verify required v16.3 features
+        run: |
+          grep -q 'normalizedSharedRejected' app.js
+          grep -q 'type:"rejected"' app.js
+          grep -q 'Pobierz wszystkie nieodrzucone' admin.js
+          grep -q 'rejectedItemsForSlug' admin.js
+          grep -q 'app.js?v=16.3.0' index.html
+          grep -q 'admin.js?v=16.3.0' admin.html
+
+      - name: Commit tested v16.3 files to test branch
+        run: |
+          git config user.name "RAF.studio v16.3 builder"
+          git config user.email "actions@users.noreply.github.com"
+          git add app.js admin.js index.html admin.html
+          git commit -m "Build tested v16.3.0 rejected photos" || exit 0
+          git push origin v16.3-rejected-photos
