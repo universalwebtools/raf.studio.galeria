@@ -177,9 +177,14 @@ const DEFAULT_UI_CONFIG = {
   tabletColumns: 3,
   mobileColumns: 2,
   gridGap: 10,
+  mobileGridGap: 8,
   cardRadius: 9,
+  mobileCardRadius: 8,
   buttonSize: 40,
+  mobileButtonSize: 34,
   buttonGap: 6,
+  mobileButtonGap: 4,
+  mobileUiScale: 88,
   buttonBg: "#111114",
   heartColor: "#ff3b4d",
   compareColor: "#22c55e",
@@ -252,7 +257,19 @@ function normalizedUiConfig(pub) {
     heroTileRadius: clampValue(stored.heroTileRadius, 0, 30, DEFAULT_UI_CONFIG.heroTileRadius),
     heroOverlay: clampValue(stored.heroOverlay, 0, 85, DEFAULT_UI_CONFIG.heroOverlay),
     heroImageWidth: clampValue(stored.heroImageWidth, 600, 2600, DEFAULT_UI_CONFIG.heroImageWidth),
-    heroBgColor: stored.heroBgColor || DEFAULT_UI_CONFIG.heroBgColor
+    heroBgColor: stored.heroBgColor || DEFAULT_UI_CONFIG.heroBgColor,
+    desktopColumns: clampValue(stored.desktopColumns, 2, 6, DEFAULT_UI_CONFIG.desktopColumns),
+    tabletColumns: clampValue(stored.tabletColumns, 2, 5, DEFAULT_UI_CONFIG.tabletColumns),
+    mobileColumns: clampValue(stored.mobileColumns, 1, 4, DEFAULT_UI_CONFIG.mobileColumns),
+    gridGap: clampValue(stored.gridGap, 2, 30, DEFAULT_UI_CONFIG.gridGap),
+    mobileGridGap: clampValue(stored.mobileGridGap ?? stored.gridGap, 2, 24, DEFAULT_UI_CONFIG.mobileGridGap),
+    cardRadius: clampValue(stored.cardRadius, 0, 30, DEFAULT_UI_CONFIG.cardRadius),
+    mobileCardRadius: clampValue(stored.mobileCardRadius ?? stored.cardRadius, 0, 30, DEFAULT_UI_CONFIG.mobileCardRadius),
+    buttonSize: clampValue(stored.buttonSize, 26, 64, DEFAULT_UI_CONFIG.buttonSize),
+    mobileButtonSize: clampValue(stored.mobileButtonSize ?? stored.buttonSize, 24, 56, DEFAULT_UI_CONFIG.mobileButtonSize),
+    buttonGap: clampValue(stored.buttonGap, 0, 20, DEFAULT_UI_CONFIG.buttonGap),
+    mobileButtonGap: clampValue(stored.mobileButtonGap ?? stored.buttonGap, 0, 16, DEFAULT_UI_CONFIG.mobileButtonGap),
+    mobileUiScale: clampValue(stored.mobileUiScale, 70, 100, DEFAULT_UI_CONFIG.mobileUiScale)
   };
 }
 
@@ -2825,9 +2842,14 @@ function fillSiteSettings(config) {
   uiFieldValue("uiTabletColumns", config.tabletColumns);
   uiFieldValue("uiMobileColumns", config.mobileColumns);
   uiFieldValue("uiGridGap", config.gridGap);
+  uiFieldValue("uiMobileGridGap", config.mobileGridGap ?? config.gridGap);
   uiFieldValue("uiCardRadius", config.cardRadius);
+  uiFieldValue("uiMobileCardRadius", config.mobileCardRadius ?? config.cardRadius);
   uiFieldValue("uiButtonSize", config.buttonSize);
+  uiFieldValue("uiMobileButtonSize", config.mobileButtonSize ?? config.buttonSize);
   uiFieldValue("uiButtonGap", config.buttonGap);
+  uiFieldValue("uiMobileButtonGap", config.mobileButtonGap ?? Math.max(0, config.buttonGap - 2));
+  uiFieldValue("uiMobileUiScale", config.mobileUiScale ?? 88);
   uiFieldValue("uiButtonBg", config.buttonBg);
   uiFieldValue("uiHeartColor", config.heartColor);
   uiFieldValue("uiCompareColor", config.compareColor);
@@ -2876,9 +2898,14 @@ function readSiteSettings() {
     tabletColumns: clampValue($("#uiTabletColumns").value, 2, 5, 3),
     mobileColumns: clampValue($("#uiMobileColumns").value, 1, 4, 2),
     gridGap: clampValue($("#uiGridGap").value, 2, 30, 10),
+    mobileGridGap: clampValue($("#uiMobileGridGap").value, 2, 24, 8),
     cardRadius: clampValue($("#uiCardRadius").value, 0, 30, 9),
+    mobileCardRadius: clampValue($("#uiMobileCardRadius").value, 0, 30, 8),
     buttonSize: clampValue($("#uiButtonSize").value, 26, 64, 40),
+    mobileButtonSize: clampValue($("#uiMobileButtonSize").value, 24, 56, 34),
     buttonGap: clampValue($("#uiButtonGap").value, 0, 20, 6),
+    mobileButtonGap: clampValue($("#uiMobileButtonGap").value, 0, 16, 4),
+    mobileUiScale: clampValue($("#uiMobileUiScale").value, 70, 100, 88),
     buttonBg: $("#uiButtonBg").value || DEFAULT_UI_CONFIG.buttonBg,
     heartColor: $("#uiHeartColor").value || DEFAULT_UI_CONFIG.heartColor,
     compareColor: $("#uiCompareColor").value || DEFAULT_UI_CONFIG.compareColor,
@@ -3065,10 +3092,10 @@ function updateSitePreview() {
   if (!preview || !filters || !tools) return;
 
   preview.style.setProperty("--preview-cols", Math.min(4, config.mobileColumns));
-  preview.style.setProperty("--preview-gap", `${config.gridGap}px`);
-  preview.style.setProperty("--preview-radius", `${config.cardRadius}px`);
-  tools.style.setProperty("--preview-button-size", `${config.buttonSize}px`);
-  tools.style.setProperty("--preview-button-gap", `${config.buttonGap}px`);
+  preview.style.setProperty("--preview-gap", `${config.mobileGridGap ?? config.gridGap}px`);
+  preview.style.setProperty("--preview-radius", `${config.mobileCardRadius ?? config.cardRadius}px`);
+  tools.style.setProperty("--preview-button-size", `${config.mobileButtonSize ?? config.buttonSize}px`);
+  tools.style.setProperty("--preview-button-gap", `${config.mobileButtonGap ?? config.buttonGap}px`);
   tools.style.setProperty("--preview-button-bg", config.buttonBg);
   tools.style.setProperty("--preview-heart", config.heartColor);
   tools.style.setProperty("--preview-compare", config.compareColor);
@@ -3116,7 +3143,7 @@ const siteEditorIds = [
   "uiHeroLayout","uiHeroFit","uiHeroPhoto1","uiHeroPhoto2","uiHeroPhoto3","uiHeroPhoto4",
   "uiHeroHeightDesktop","uiHeroHeightTablet","uiHeroHeightMobile","uiHeroMaxWidth",
   "uiHeroTileGap","uiHeroTileRadius","uiHeroOverlay","uiHeroBgColor",
-  "uiDesktopColumns","uiTabletColumns","uiMobileColumns","uiGridGap","uiCardRadius","uiButtonSize","uiButtonGap",
+  "uiDesktopColumns","uiTabletColumns","uiMobileColumns","uiGridGap","uiMobileGridGap","uiCardRadius","uiMobileCardRadius","uiButtonSize","uiMobileButtonSize","uiButtonGap","uiMobileButtonGap","uiMobileUiScale",
   "uiButtonBg","uiHeartColor","uiCompareColor","uiDownloadColor","uiFilterBg","uiFilterText","uiShowFilenames",
   "uiMasterDownloadsEnabled","uiShowHeartButton","uiShowRejectButton","uiShowCompareButton","uiShowSingleDownloadButton","uiShowDownloadSelectButton",
   "uiAllowSingleDownload","uiAllowSelectedDownloads","uiAllowFavoriteDownloads","uiBlockSaveImage",

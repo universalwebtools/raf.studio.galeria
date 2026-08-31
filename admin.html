@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
   <title>RAF.studio — Studio Manager</title>
-  <link rel="stylesheet" href="style.css?v=16.2.4">
+  <link rel="stylesheet" href="style.css?v=16.2.5">
 </head>
 <body class="admin-body">
 
 <section id="adminLogin" class="lock-screen">
   <div class="lock-card">
-    <img class="raf-logo login-logo" src="logo-white.png?v=16.2.4" alt="RAF.studio">
+    <img class="raf-logo login-logo" src="logo-white.png?v=16.2.5" alt="RAF.studio">
     <p id="adminLoginEyebrow" class="eyebrow">STUDIO MANAGER</p>
     <h1 id="adminLoginTitle">Panel fotografa</h1>
     <p id="adminLoginSubtitle" class="muted">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
@@ -40,7 +40,7 @@
 <main id="adminPanel" hidden>
   <aside class="sidebar">
     <div>
-      <img class="raf-logo sidebar-logo" src="logo-white.png?v=16.2.4" alt="RAF.studio">
+      <img class="raf-logo sidebar-logo" src="logo-white.png?v=16.2.5" alt="RAF.studio">
       <small>Studio Manager</small>
     </div>
     <div class="side-bottom">
@@ -503,24 +503,29 @@
       </div>
 
       <div class="site-settings-section">
-        <h3>Układ zdjęć</h3>
+        <h3>Układ zdjęć — komputer / tablet</h3>
         <div class="form3">
           <label>Kolumny — komputer
             <input id="uiDesktopColumns" type="number" min="2" max="6" value="4">
+            <input class="hero-range" type="range" min="2" max="6" step="1" value="4" data-sync-number="uiDesktopColumns" aria-label="Kolumny komputer">
           </label>
           <label>Kolumny — tablet
             <input id="uiTabletColumns" type="number" min="2" max="5" value="3">
+            <input class="hero-range" type="range" min="2" max="5" step="1" value="3" data-sync-number="uiTabletColumns" aria-label="Kolumny tablet">
           </label>
-          <label>Kolumny — telefon
-            <input id="uiMobileColumns" type="number" min="1" max="4" value="2">
+          <label>Odstęp zdjęć (px)
+            <input id="uiGridGap" type="number" min="2" max="30" value="10">
+            <input class="hero-range" type="range" min="2" max="30" step="1" value="10" data-sync-number="uiGridGap" aria-label="Odstęp zdjęć">
           </label>
         </div>
         <div class="form3">
-          <label>Odstęp zdjęć (px)
-            <input id="uiGridGap" type="number" min="2" max="30" value="10">
-          </label>
           <label>Zaokrąglenie zdjęć (px)
             <input id="uiCardRadius" type="number" min="0" max="30" value="9">
+            <input class="hero-range" type="range" min="0" max="30" step="1" value="9" data-sync-number="uiCardRadius" aria-label="Zaokrąglenie zdjęć">
+          </label>
+          <label>Rozmiar przycisków (px)
+            <input id="uiButtonSize" type="number" min="26" max="64" value="40">
+            <input class="hero-range" type="range" min="26" max="64" step="1" value="40" data-sync-number="uiButtonSize" aria-label="Rozmiar przycisków">
           </label>
           <label class="check">
             <input id="uiShowFilenames" type="checkbox" checked>
@@ -530,22 +535,53 @@
       </div>
 
       <div class="site-settings-section">
+        <h3>Układ mobilny — telefon</h3>
+        <p class="muted">Osobna konfiguracja telefonu. Tu zmniejszysz kafelki, odstępy i wielkość pasków, żeby nie zasłaniały połowy ekranu.</p>
+        <div class="form3">
+          <label>Kolumny — telefon
+            <input id="uiMobileColumns" type="number" min="1" max="4" value="2">
+            <input class="hero-range" type="range" min="1" max="4" step="1" value="2" data-sync-number="uiMobileColumns" aria-label="Kolumny telefon">
+          </label>
+          <label>Odstęp zdjęć — telefon (px)
+            <input id="uiMobileGridGap" type="number" min="2" max="24" value="8">
+            <input class="hero-range" type="range" min="2" max="24" step="1" value="8" data-sync-number="uiMobileGridGap" aria-label="Odstęp zdjęć telefon">
+          </label>
+          <label>Zaokrąglenie zdjęć — telefon (px)
+            <input id="uiMobileCardRadius" type="number" min="0" max="30" value="8">
+            <input class="hero-range" type="range" min="0" max="30" step="1" value="8" data-sync-number="uiMobileCardRadius" aria-label="Zaokrąglenie zdjęć telefon">
+          </label>
+        </div>
+        <div class="form3">
+          <label>Rozmiar przycisków na zdjęciu — telefon (px)
+            <input id="uiMobileButtonSize" type="number" min="24" max="56" value="34">
+            <input class="hero-range" type="range" min="24" max="56" step="1" value="34" data-sync-number="uiMobileButtonSize" aria-label="Rozmiar przycisków telefon">
+          </label>
+          <label>Odstęp przycisków — telefon (px)
+            <input id="uiMobileButtonGap" type="number" min="0" max="16" value="4">
+            <input class="hero-range" type="range" min="0" max="16" step="1" value="4" data-sync-number="uiMobileButtonGap" aria-label="Odstęp przycisków telefon">
+          </label>
+          <label>Skala mobilnego interfejsu (%)
+            <input id="uiMobileUiScale" type="number" min="70" max="100" value="88">
+            <input class="hero-range" type="range" min="70" max="100" step="1" value="88" data-sync-number="uiMobileUiScale" aria-label="Skala mobilnego interfejsu">
+          </label>
+        </div>
+      </div>
+
+      <div class="site-settings-section">
         <h3>Przyciski na zdjęciach</h3>
         <div class="form3">
-          <label>Rozmiar przycisków (px)
-            <input id="uiButtonSize" type="number" min="26" max="64" value="40">
-          </label>
           <label>Odstęp przycisków (px)
             <input id="uiButtonGap" type="number" min="0" max="20" value="6">
+            <input class="hero-range" type="range" min="0" max="20" step="1" value="6" data-sync-number="uiButtonGap" aria-label="Odstęp przycisków">
           </label>
           <label>Tło zwykłego przycisku
             <input id="uiButtonBg" class="color-field" type="color" value="#111114">
           </label>
-        </div>
-        <div class="form3">
           <label>♥ aktywne
             <input id="uiHeartColor" class="color-field" type="color" value="#ff3b4d">
           </label>
+        </div>
+        <div class="form3">
           <label>A/B aktywne
             <input id="uiCompareColor" class="color-field" type="color" value="#22c55e">
           </label>
@@ -554,7 +590,6 @@
           </label>
         </div>
       </div>
-
       <div class="site-settings-section permissions-section">
         <h3>Funkcje, pobieranie i ochrona</h3>
         <p class="muted">Każdą funkcję możesz włączać i wyłączać osobno dla tej galerii.</p>
@@ -812,7 +847,7 @@
       <p class="eyebrow">PODGLĄD NA ŻYWO</p>
       <div id="loginPreviewScreen" class="login-preview-screen">
         <div id="loginPreviewCard" class="login-preview-card">
-          <img id="loginPreviewLogo" src="logo-white.png?v=16.2.4" alt="">
+          <img id="loginPreviewLogo" src="logo-white.png?v=16.2.5" alt="">
           <div id="loginPreviewEyebrow" class="login-preview-eyebrow">STUDIO MANAGER</div>
           <h3 id="loginPreviewTitle">Panel fotografa</h3>
           <p id="loginPreviewSubtitle">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
@@ -951,7 +986,7 @@
       <p class="eyebrow">PODGLĄD NA ŻYWO</p>
       <div id="clientLoginPreviewScreen" class="login-preview-screen">
         <div id="clientLoginPreviewCard" class="login-preview-card">
-          <img id="clientLoginPreviewLogo" src="logo-white.png?v=16.2.4" alt="">
+          <img id="clientLoginPreviewLogo" src="logo-white.png?v=16.2.5" alt="">
           <div id="clientLoginPreviewEyebrow" class="login-preview-eyebrow">PRYWATNA GALERIA</div>
           <h3 id="clientLoginPreviewTitle">M&K2026</h3>
           <p id="clientLoginPreviewInstruction">Wpisz hasło otrzymane od fotografa.</p>
@@ -1099,6 +1134,6 @@
 <div id="toast" class="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
-<script type="module" src="admin.js?v=16.2.4"></script>
+<script type="module" src="admin.js?v=16.2.5"></script>
 </body>
 </html>

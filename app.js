@@ -148,9 +148,14 @@ const DEFAULT_UI_CONFIG = {
   tabletColumns: 3,
   mobileColumns: 2,
   gridGap: 10,
+  mobileGridGap: 8,
   cardRadius: 9,
+  mobileCardRadius: 8,
   buttonSize: 40,
+  mobileButtonSize: 34,
   buttonGap: 6,
+  mobileButtonGap: 4,
+  mobileUiScale: 88,
   buttonBg: "#111114",
   heartColor: "#ff3b4d",
   compareColor: "#22c55e",
@@ -213,9 +218,14 @@ function getUiConfig() {
     tabletColumns: clampNumber(stored.tabletColumns, 2, 5, DEFAULT_UI_CONFIG.tabletColumns),
     mobileColumns: clampNumber(stored.mobileColumns, 1, 4, DEFAULT_UI_CONFIG.mobileColumns),
     gridGap: clampNumber(stored.gridGap, 2, 30, DEFAULT_UI_CONFIG.gridGap),
+    mobileGridGap: clampNumber(stored.mobileGridGap ?? stored.gridGap, 2, 24, DEFAULT_UI_CONFIG.mobileGridGap),
     cardRadius: clampNumber(stored.cardRadius, 0, 30, DEFAULT_UI_CONFIG.cardRadius),
+    mobileCardRadius: clampNumber(stored.mobileCardRadius ?? stored.cardRadius, 0, 30, DEFAULT_UI_CONFIG.mobileCardRadius),
     buttonSize: clampNumber(stored.buttonSize, 26, 64, DEFAULT_UI_CONFIG.buttonSize),
+    mobileButtonSize: clampNumber(stored.mobileButtonSize ?? stored.buttonSize, 24, 56, DEFAULT_UI_CONFIG.mobileButtonSize),
     buttonGap: clampNumber(stored.buttonGap, 0, 20, DEFAULT_UI_CONFIG.buttonGap),
+    mobileButtonGap: clampNumber(stored.mobileButtonGap ?? stored.buttonGap, 0, 16, DEFAULT_UI_CONFIG.mobileButtonGap),
+    mobileUiScale: clampNumber(stored.mobileUiScale, 70, 100, DEFAULT_UI_CONFIG.mobileUiScale),
     showFilenames: stored.showFilenames !== false,
     showHeartButton: stored.showHeartButton !== false,
     showRejectButton: stored.showRejectButton !== false,
@@ -281,9 +291,14 @@ function applyUiConfig() {
   root.style.setProperty("--gallery-cols-tablet", currentUiConfig.tabletColumns);
   root.style.setProperty("--gallery-cols-mobile", currentUiConfig.mobileColumns);
   root.style.setProperty("--gallery-gap", `${currentUiConfig.gridGap}px`);
+  root.style.setProperty("--gallery-gap-mobile", `${currentUiConfig.mobileGridGap}px`);
   root.style.setProperty("--gallery-card-radius", `${currentUiConfig.cardRadius}px`);
+  root.style.setProperty("--gallery-card-radius-mobile", `${currentUiConfig.mobileCardRadius}px`);
   root.style.setProperty("--gallery-button-size", `${currentUiConfig.buttonSize}px`);
+  root.style.setProperty("--gallery-button-size-mobile", `${currentUiConfig.mobileButtonSize}px`);
   root.style.setProperty("--gallery-button-gap", `${currentUiConfig.buttonGap}px`);
+  root.style.setProperty("--gallery-button-gap-mobile", `${currentUiConfig.mobileButtonGap}px`);
+  root.style.setProperty("--gallery-mobile-ui-scale", `${currentUiConfig.mobileUiScale / 100}`);
   root.style.setProperty("--gallery-button-bg", currentUiConfig.buttonBg || DEFAULT_UI_CONFIG.buttonBg);
   root.style.setProperty("--gallery-heart-color", currentUiConfig.heartColor || DEFAULT_UI_CONFIG.heartColor);
   root.style.setProperty("--gallery-compare-color", currentUiConfig.compareColor || DEFAULT_UI_CONFIG.compareColor);
