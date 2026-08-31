@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#09090a">
+  <title>RAF.studio — Strefa klienta</title>
+  <link rel="stylesheet" href="home.css?v=16.4">
+</head>
+<body>
+  <header class="zone-head">
+    <img class="zone-logo" src="logo-white.png" alt="RAF.studio">
+    <div>
+      <p class="eyebrow">RAF.STUDIO</p>
+      <h1>Strefa klienta</h1>
+      <p class="zone-lead">Wybierz swoją galerię, a następnie wpisz hasło otrzymane od fotografa.</p>
+    </div>
+  </header>
+
+  <main class="zone-main">
+    <div class="zone-tools">
+      <div>
+        <strong>Twoje galerie</strong>
+        <span id="galleryCount">Ładowanie…</span>
+      </div>
+      <label class="zone-search">
+        <span>⌕</span>
+        <input id="gallerySearch" type="search" placeholder="Znajdź galerię…" autocomplete="off">
+      </label>
+    </div>
+
+    <div id="homeLoading" class="zone-loading">
+      <span class="spinner"></span>
+      Ładowanie galerii…
+    </div>
+
+    <section id="galleryDirectory" class="gallery-directory" hidden></section>
+
+    <div id="homeEmpty" class="zone-empty" hidden>
+      <strong>Brak galerii do wyświetlenia</strong>
+      <span>Jeśli właśnie otrzymałeś link od fotografa, odśwież stronę za chwilę.</span>
+    </div>
+
+    <div id="homeError" class="zone-empty error" hidden>
+      <strong>Nie udało się pobrać listy galerii</strong>
+      <span>Spróbuj odświeżyć stronę.</span>
+    </div>
+  </main>
+
+  <footer class="zone-footer">
+    <img src="logo-white.png" alt="RAF.studio">
+    <span>Prywatne galerie klientów</span>
+  </footer>
+
+  <script type="module" src="home.js?v=16.4"></script>
+</body>
+</html>
