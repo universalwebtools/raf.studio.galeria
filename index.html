@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
   <title>RAF.studio — Galeria klienta</title>
-  <link rel="stylesheet" href="style.css?v=16.3.0">
+  <link rel="stylesheet" href="style.css?v=16.3.1">
 </head>
 <body class="client-body">
 
@@ -79,6 +79,7 @@
       <button id="hiddenFilter" type="button" class="seg">Odrzucone</button>
     </div>
     <div class="selection-count">Wybrano <strong id="selectedCount">0</strong><span id="maxFavoritesLabel"></span></div>
+    <div id="rejectedCountSummary" class="rejected-count-summary" hidden>Odrzucono <strong id="rejectedCountTop">0</strong></div>
   </section>
 
   <div id="progressWrap" class="select-progress" hidden>
@@ -97,6 +98,18 @@
     <div class="selection-workflow-actions">
       <button id="clearFavoritesBtn" type="button" class="ghost danger-soft">♡ Wyczyść serduszka</button>
       <button id="approveSelectionBtn" type="button" class="primary">✓ Zatwierdź swoje wybory do obróbki</button>
+    </div>
+  </div>
+
+  <div id="rejectionWorkflow" class="selection-workflow rejection-workflow" hidden>
+    <div class="selection-workflow-info rejection-workflow-info">
+      <strong>Zdjęcia do odrzucenia: <span id="rejectedWorkflowCount">0</span></strong>
+      <small id="rejectionApprovalStatus">Zaznacz zdjęcia, których fotograf nie powinien wykorzystywać.</small>
+      <div id="rejectedFilenameList" class="rejected-client-list" hidden></div>
+    </div>
+    <div class="selection-workflow-actions rejection-workflow-actions">
+      <button id="clearRejectedBtn" type="button" class="ghost danger-soft">× Wyczyść odrzucone</button>
+      <button id="approveRejectedBtn" type="button" class="primary">✓ Zatwierdź zdjęcia do odrzucenia</button>
     </div>
   </div>
 
@@ -184,6 +197,6 @@
 
 <div id="toast" class="toast" hidden></div>
 
-<script type="module" src="app.js?v=16.3.0"></script>
+<script type="module" src="app.js?v=16.3.1"></script>
 </body>
 </html>

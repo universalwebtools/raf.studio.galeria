@@ -1518,12 +1518,23 @@ $("#adminLogoutBtn").addEventListener("click", () => signOut(auth));
 function approvalRowsForSlug(slug) {
   return Object.entries(approvalsRoot?.[slug] || {})
     .map(([id,row]) => ({ id, ...(row || {}) }))
-    .filter(row => row.submittedAt)
+    .filter(row => row.submittedAt && row.mode !== "rejected")
+    .sort((a,b) => Number(b.submittedAt) - Number(a.submittedAt));
+}
+
+function rejectionApprovalRowsForSlug(slug) {
+  return Object.entries(approvalsRoot?.[slug] || {})
+    .map(([id,row]) => ({ id, ...(row || {}) }))
+    .filter(row => row.submittedAt && row.mode === "rejected")
     .sort((a,b) => Number(b.submittedAt) - Number(a.submittedAt));
 }
 
 function latestApprovalForSlug(slug) {
   return approvalRowsForSlug(slug)[0] || null;
+}
+
+function latestRejectionApprovalForSlug(slug) {
+  return rejectionApprovalRowsForSlug(slug)[0] || null;
 }
 
 function formatDateTimePl(timestamp) {
@@ -1604,6 +1615,7 @@ function renderCards() {
           ${pub.eventDate ? `<span>${escapeHtml(formatDate(pub.eventDate))}</span>` : ""}
           <span class="gallery-storage-badge" data-storage-slug="${slug}">Storage ${storageStatsForSlug(slug) ? formatBytes(storageStatsForSlug(slug).total) : "—"}</span>
           ${latestApprovalForSlug(slug) ? `<span class="approval-badge">✓ Zatwierdzono ${Number(latestApprovalForSlug(slug).selectedCount || 0)} • ${escapeHtml(formatDateTimePl(latestApprovalForSlug(slug).submittedAt))}</span>` : ""}
+          ${latestRejectionApprovalForSlug(slug) ? `<span class="approval-badge reject-approval-badge">× Odrzucenia ${Number(latestRejectionApprovalForSlug(slug).selectedCount || 0)} • ${escapeHtml(formatDateTimePl(latestRejectionApprovalForSlug(slug).submittedAt))}</span>` : ""}
         </div>
 
         <div class="gallery-link">
@@ -3486,21 +3498,44 @@ function renderRejectedAdminTools(slug) {
   const container = $("#selectionContent");
   if (!container) return;
   container.querySelector(".v163-rejection-tools")?.remove();
+
   const rejectedItems = rejectedItemsForSlug(slug);
   const remainingItems = remainingItemsForSlug(slug);
+  const rejectionApprovals = rejectionApprovalRowsForSlug(slug);
+
   const section = document.createElement("section");
   section.className = "selection-client selection-single v163-rejection-tools";
   section.innerHTML = `
     <div class="selection-single-head">
-      <div><p class="eyebrow">ODRZUCONE ZDJĘCIA</p><h3>× Odrzucone przez klienta</h3><div class="gallery-meta"><span>${rejectedItems.length} zdjęć — klient nie chce, aby były wykorzystywane</span></div></div>
+      <div>
+        <p class="eyebrow">ODRZUCONE ZDJĘCIA</p>
+        <h3>× Odrzucone przez klienta</h3>
+        <div class="gallery-meta"><span>${rejectedItems.length} zdjęć — klient nie chce, aby były wykorzystywane</span></div>
+      </div>
       <button type="button" class="ghost copy-rejected">Kopiuj listę odrzuconych</button>
     </div>
+
+    ${rejectionApprovals.length ? `
+      <div class="rejection-approval-history">
+        <p class="eyebrow">LOG ZATWIERDZEŃ ODRZUCEŃ</p>
+        ${rejectionApprovals.map((row,index) => `
+          <article class="approval-log-row${index === 0 ? " latest" : ""}">
+            <div><b>${index === 0 ? "NAJNOWSZE • " : ""}${Number(row.selectedCount || 0)} zdjęć do odrzucenia</b><span>${escapeHtml(formatDateTimePl(row.submittedAt))}</span></div>
+            <details>
+              <summary>Pokaż zatwierdzoną listę (${Object.keys(row.filenames || {}).length})</summary>
+              <div class="approval-filenames">${Object.values(row.filenames || {}).map(item => `<span>${escapeHtml(displayName(item?.filename))}</span>`).join("")}</div>
+            </details>
+          </article>`).join("")}
+      </div>` : '<div class="notice">Klient nie zatwierdził jeszcze listy zdjęć do odrzucenia.</div>'}
+
     <div class="approval-filenames rejected-filenames">${rejectedItems.length ? rejectedItems.map(item => `<span>${escapeHtml(displayName(item.filename))}</span>`).join("") : '<span>Brak odrzuconych zdjęć.</span>'}</div>
+
     <div class="selection-single-head" style="margin-top:18px">
       <div><p class="eyebrow">POZOSTAWIONE</p><h3>✓ Wszystkie nieodrzucone zdjęcia</h3><div class="gallery-meta"><span>${remainingItems.length} zdjęć pozostawionych przez klienta</span></div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="ghost copy-remaining">Kopiuj listę pozostawionych</button><button type="button" class="primary download-remaining">↓ Pobierz nieodrzucone (${remainingItems.length})</button></div>
     </div>
     <div class="approval-filenames remaining-filenames">${remainingItems.length ? remainingItems.map(item => `<span>${escapeHtml(displayName(item.filename))}</span>`).join("") : '<span>Brak nieodrzuconych zdjęć.</span>'}</div>`;
+
   section.querySelector(".copy-rejected")?.addEventListener("click", () => copyV163FilenameList(rejectedItems, "odrzucone"));
   section.querySelector(".copy-remaining")?.addEventListener("click", () => copyV163FilenameList(remainingItems, "pozostawione"));
   section.querySelector(".download-remaining")?.addEventListener("click", event => downloadAdminSelected(slug, remainingItems, event.currentTarget));

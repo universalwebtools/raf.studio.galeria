@@ -26,6 +26,7 @@ let galleryLoaded = false;
 let rejected = new Set();
 let compareSelection = [];
 let latestApproval = null;
+let latestRejectionApproval = null;
 
 const CLIENT_LOGIN_CONFIG_PATH = "galleries/__system__/public/clientLoginConfig";
 
@@ -474,13 +475,14 @@ function filteredPhotos() {
     case "favorites":
       return photos.filter(photo => favorites.has(photo.filename) && !rejected.has(photo.filename));
     case "portrait":
-      return photos.filter(photo => photo.orientation === "portrait" && !rejected.has(photo.filename));
+      return photos.filter(photo => photo.orientation === "portrait");
     case "landscape":
-      return photos.filter(photo => photo.orientation === "landscape" && !rejected.has(photo.filename));
+      return photos.filter(photo => photo.orientation === "landscape");
     case "hidden":
       return photos.filter(photo => rejected.has(photo.filename));
     default:
-      return photos.filter(photo => !rejected.has(photo.filename));
+      // Odrzucone zdjęcia zostają w głównym widoku — tylko są wyraźnie wyszarzone.
+      return photos;
   }
 }
 
@@ -632,7 +634,7 @@ async function openGallery() {
     $("#loading").hidden = false;
     loadManifest();
 
-    loadFavorites()
+    Promise.all([loadFavorites(), loadLatestApproval()])
       .then(() => {
         render();
         updateUI();
@@ -734,12 +736,20 @@ async function loadLatestApproval() {
     const snap = await get(ref(db, `approvals/${slug}`));
     if (!snap.exists()) {
       latestApproval = null;
+      latestRejectionApproval = null;
       updateApprovalStatus();
+      updateRejectionApprovalStatus();
       return;
     }
-    const rows = Object.values(snap.val() || {}).filter(row => row?.submittedAt).sort((a,b) => Number(b.submittedAt) - Number(a.submittedAt));
-    latestApproval = rows[0] || null;
+
+    const rows = Object.values(snap.val() || {})
+      .filter(row => row?.submittedAt)
+      .sort((a,b) => Number(b.submittedAt) - Number(a.submittedAt));
+
+    latestApproval = rows.find(row => row?.mode !== "rejected") || null;
+    latestRejectionApproval = rows.find(row => row?.mode === "rejected") || null;
     updateApprovalStatus();
+    updateRejectionApprovalStatus();
   } catch (error) {
     console.warn("LOAD APPROVAL ERROR", error);
   }
@@ -760,6 +770,98 @@ function updateApprovalStatus() {
     return;
   }
   status.textContent = `Ostatnio zatwierdzono ${latestApproval.selectedCount || 0} zdjęć • ${formatApprovalDate(latestApproval.submittedAt)}. Jeśli zmienisz wybór, zatwierdź ponownie.`;
+}
+
+function sortedRejectedNames() {
+  return [...rejected]
+    .filter(filename => photos.some(photo => photo.filename === filename))
+    .sort((a, b) => displayName(a).localeCompare(displayName(b), undefined, { numeric: true }));
+}
+
+function renderRejectedWorkflowList() {
+  const list = $("#rejectedFilenameList");
+  if (!list) return;
+  const names = sortedRejectedNames();
+  list.innerHTML = names.map(filename => `<span>${displayName(filename)}</span>`).join("");
+  list.hidden = names.length === 0;
+}
+
+function updateRejectionApprovalStatus() {
+  const status = $("#rejectionApprovalStatus");
+  if (!status) return;
+  const count = rejected.size;
+  if (!latestRejectionApproval) {
+    status.textContent = count
+      ? `Masz zaznaczone ${count} ${count === 1 ? "zdjęcie" : "zdjęć"} do odrzucenia. Możesz zmienić decyzję przed zatwierdzeniem.`
+      : "Zaznacz zdjęcia, których fotograf nie powinien wykorzystywać.";
+    return;
+  }
+  status.textContent = `Ostatnio zatwierdzono ${latestRejectionApproval.selectedCount || 0} zdjęć do odrzucenia • ${formatApprovalDate(latestRejectionApproval.submittedAt)}. Jeśli coś zmienisz, zatwierdź ponownie.`;
+}
+
+async function clearAllRejected() {
+  if (!rejected.size) {
+    toast("Nie ma odrzuconych zdjęć do wyczyszczenia.");
+    return;
+  }
+  if (!confirm(`Przywrócić wszystkie ${rejected.size} odrzucone zdjęcia i zacząć od nowa?`)) return;
+
+  const button = $("#clearRejectedBtn");
+  if (button) button.disabled = true;
+  try {
+    const filenames = [...rejected];
+    await Promise.all(filenames.map(filename =>
+      remove(ref(db, `selections/${slug}/${selectionKey(filename)}`))
+    ));
+    rejected.clear();
+    saveRejectedState();
+    toast("Wyczyszczono wszystkie odrzucone zdjęcia");
+    render();
+    updateUI();
+  } catch (error) {
+    console.error("CLEAR REJECTED ERROR", error);
+    toast(`Nie udało się wyczyścić odrzuceń: ${error.code || error.message || error}`);
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+async function approveRejectedSelection() {
+  if (!rejected.size) {
+    toast("Najpierw odrzuć przynajmniej jedno zdjęcie.");
+    return;
+  }
+
+  const names = sortedRejectedNames();
+  const count = names.length;
+  if (!confirm(`Zatwierdzić ${count} ${count === 1 ? "zdjęcie" : "zdjęć"} do odrzucenia?\n\nZapiszę datę, godzinę i pełną listę nazw zdjęć.`)) return;
+
+  const button = $("#approveRejectedBtn");
+  const old = button?.textContent || "✓ Zatwierdź zdjęcia do odrzucenia";
+  if (button) { button.disabled = true; button.textContent = "Zapisywanie…"; }
+
+  try {
+    const filenames = {};
+    names.forEach(filename => {
+      filenames[selectionKey(filename)] = { filename };
+    });
+    const payload = {
+      mode: "rejected",
+      submittedAt: Date.now(),
+      selectedCount: count,
+      filenames
+    };
+    const target = push(ref(db, `approvals/${slug}`));
+    await set(target, payload);
+    latestRejectionApproval = payload;
+    updateRejectionApprovalStatus();
+    toast(`Zatwierdzono ${count} zdjęć do odrzucenia ✓`);
+  } catch (error) {
+    console.error("APPROVE REJECTED ERROR", error);
+    toast(`Nie udało się zatwierdzić odrzuceń: ${error.code || error.message || error}`);
+  } finally {
+    if (button) { button.disabled = false; button.textContent = old; }
+  }
 }
 
 async function clearAllFavorites() {
@@ -965,7 +1067,7 @@ function render() {
       ? "Nie zaznaczono jeszcze żadnych zdjęć."
       : filter === "portrait" ? "Brak pionowych zdjęć."
       : filter === "landscape" ? "Brak poziomych zdjęć."
-      : filter === "hidden" ? "Nie ukryto żadnych zdjęć."
+      : filter === "hidden" ? "Nie odrzucono żadnych zdjęć."
       : "";
     grid.innerHTML = empty ? `<div class="notice">${empty}</div>` : "";
     updateUI();
@@ -1249,9 +1351,18 @@ function setFilter(next) {
 
 function updateUI() {
   const count = favorites.size;
+  const rejectedCount = rejected.size;
+  const heartsEnabled = currentUiConfig.showHeartButton !== false;
+  const rejectEnabled = currentUiConfig.showRejectButton !== false;
+  const rejectionOnlyMode = !heartsEnabled && rejectEnabled;
 
   $("#favCount").textContent = count;
   $("#selectedCount").textContent = count;
+
+  const rejectedTop = $("#rejectedCountTop");
+  const rejectedSummary = $("#rejectedCountSummary");
+  if (rejectedTop) rejectedTop.textContent = rejectedCount;
+  if (rejectedSummary) rejectedSummary.hidden = !rejectionOnlyMode;
 
   if (maxFavorites() > 0) {
     const percent = Math.min(100, (count / maxFavorites()) * 100);
@@ -1261,17 +1372,25 @@ function updateUI() {
 
   const inlineHeartDownload = $("#downloadFavoritesInlineBtn");
   if (inlineHeartDownload) {
-    inlineHeartDownload.hidden = currentUiConfig.showHeartButton === false || !canDownloadFavorites() || count === 0;
+    inlineHeartDownload.hidden = !heartsEnabled || !canDownloadFavorites() || count === 0;
     inlineHeartDownload.textContent = `♥ ${currentUiConfig.labels.downloadFavorites || "Pobierz wybrane"} (${count})`;
   }
   const progressWrap = $("#progressWrap");
-  if (progressWrap && currentUiConfig.showHeartButton === false) progressWrap.hidden = true;
+  if (progressWrap && !heartsEnabled) progressWrap.hidden = true;
 
   const workflow = $("#selectionWorkflow");
-  if (workflow) workflow.hidden = currentUiConfig.showHeartButton === false;
+  if (workflow) workflow.hidden = !heartsEnabled;
   if ($("#clearFavoritesBtn")) $("#clearFavoritesBtn").disabled = count === 0;
   if ($("#approveSelectionBtn")) $("#approveSelectionBtn").disabled = count === 0;
   updateApprovalStatus();
+
+  const rejectionWorkflow = $("#rejectionWorkflow");
+  if (rejectionWorkflow) rejectionWorkflow.hidden = !rejectionOnlyMode;
+  if ($("#rejectedWorkflowCount")) $("#rejectedWorkflowCount").textContent = rejectedCount;
+  if ($("#clearRejectedBtn")) $("#clearRejectedBtn").disabled = rejectedCount === 0;
+  if ($("#approveRejectedBtn")) $("#approveRejectedBtn").disabled = rejectedCount === 0;
+  renderRejectedWorkflowList();
+  updateRejectionApprovalStatus();
 
   updateDownloadUI();
   updateCompareUI();
@@ -1519,8 +1638,10 @@ function updateLightboxUI() {
   $("#lightboxFav").textContent = selected ? "♥" : "♡";
   $("#lightboxFav").classList.toggle("active", selected);
   $("#lightboxFav").hidden = currentUiConfig.showHeartButton === false;
-  $("#lightboxReject").classList.toggle("active", rejected.has(photo.filename));
+  const isRejected = rejected.has(photo.filename);
+  $("#lightboxReject").classList.toggle("active", isRejected);
   $("#lightboxReject").hidden = currentUiConfig.showRejectButton === false;
+  $("#lightboxImage").classList.toggle("rejected-preview", isRejected);
   $("#lightboxDownload").hidden = currentUiConfig.showSingleDownloadButton === false || !canDownloadSingle();
   updateSlideshowButtons();
 }
@@ -1681,6 +1802,8 @@ $("#compareDialog")?.addEventListener("click", (event) => {
 
 $("#clearFavoritesBtn")?.addEventListener("click", clearAllFavorites);
 $("#approveSelectionBtn")?.addEventListener("click", approveCurrentSelection);
+$("#clearRejectedBtn")?.addEventListener("click", clearAllRejected);
+$("#approveRejectedBtn")?.addEventListener("click", approveRejectedSelection);
 
 // Basic browser deterrence. This blocks normal Save image as / dragging / long-press menu.
 // It cannot prevent screenshots or an advanced user from inspecting network requests.
@@ -1702,7 +1825,7 @@ document.addEventListener("dragstart", (event) => {
 function syncStickyWorkflowOffsets() {
   const topbar = document.querySelector('.client-topbar');
   const controls = document.querySelector('.client-controls');
-  const workflow = document.querySelector('.selection-workflow');
+  const workflow = document.querySelector('.selection-workflow:not([hidden])');
 
   const topbarHeight = topbar && !topbar.hidden
     ? Math.ceil(topbar.getBoundingClientRect().height)
@@ -1731,10 +1854,11 @@ window.addEventListener('orientationchange', scheduleStickyWorkflowSync, { passi
 
 if ('ResizeObserver' in window) {
   const stickyWorkflowObserver = new ResizeObserver(scheduleStickyWorkflowSync);
-  ['.client-topbar', '.client-controls', '.selection-workflow'].forEach(selector => {
+  ['.client-topbar', '.client-controls'].forEach(selector => {
     const element = document.querySelector(selector);
     if (element) stickyWorkflowObserver.observe(element);
   });
+  document.querySelectorAll('.selection-workflow').forEach(element => stickyWorkflowObserver.observe(element));
 }
 
 init();
