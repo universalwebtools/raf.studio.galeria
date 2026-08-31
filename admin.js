@@ -219,7 +219,7 @@ const DEFAULT_UI_CONFIG = {
     favorites: "Wybrane",
     portrait: "Pionowe",
     landscape: "Poziome",
-    hidden: "Ukryte",
+    hidden: "Odrzucone",
     compare: "A/B",
     slideshow: "Slideshow",
     share: "Udostępnij",
@@ -1322,7 +1322,7 @@ function mergedSelectionForSlug(slug) {
   };
 
   const consume = (item) => {
-    if (!item?.filename) return;
+    if (!item?.filename || item?.rejected === true) return;
     const filename = canonicalFilename(item.filename);
     if (!filename) return;
     const key = displayName(filename).toLowerCase();
@@ -2776,6 +2776,17 @@ async function migrateLegacyFavoritesToShared(slug) {
     };
   });
 
+
+  Object.entries(selectionsRoot?.[slug] || {}).forEach(([key, item]) => {
+    if (item?.filename && item?.rejected === true) {
+      cleanSelection[key] = {
+        filename: item.filename,
+        selectedAt: Number(item.selectedAt || Date.now()),
+        rejected: true
+      };
+    }
+  });
+
   try {
     await set(ref(db, `selections/${slug}`), cleanSelection);
     await remove(ref(db, `favorites/${slug}`)).catch(() => {});
@@ -3439,3 +3450,65 @@ $("#closeHealthDialog")?.addEventListener("click", () => {
 $("#runHealthScanBtn")?.addEventListener("click", runHealthScan);
 $("#repairHealthBtn")?.addEventListener("click", repairHealthIssues);
 
+
+
+// ===== v16.3.0: shared rejected-photo workflow =====
+function rejectedItemsForSlug(slug) {
+  const raw = selectionsRoot?.[slug] || {};
+  const manifest = Object.values(galleries[slug]?.public?.photos || {}).filter(item => item?.filename);
+  const byExact = new Map(manifest.map(item => [String(item.filename), item]));
+  const byBase = new Map(manifest.map(item => [displayName(item.filename).toLowerCase(), item]));
+  const result = new Map();
+  Object.values(raw).forEach(item => {
+    if (!item?.filename || item?.rejected !== true) return;
+    const manifestItem = byExact.get(String(item.filename)) || byBase.get(displayName(item.filename).toLowerCase());
+    if (!manifestItem) return;
+    result.set(manifestItem.filename, { ...manifestItem, ...item, filename: manifestItem.filename });
+  });
+  return [...result.values()].sort((a,b) => displayName(a.filename).localeCompare(displayName(b.filename), undefined, { numeric:true }));
+}
+
+function remainingItemsForSlug(slug) {
+  const rejectedNames = new Set(rejectedItemsForSlug(slug).map(item => item.filename));
+  return Object.values(galleries[slug]?.public?.photos || {})
+    .filter(item => item?.filename && !rejectedNames.has(item.filename))
+    .sort((a,b) => displayName(a.filename).localeCompare(displayName(b.filename), undefined, { numeric:true }));
+}
+
+async function copyV163FilenameList(items, label) {
+  const text = items.map(item => displayName(item.filename)).join("\n");
+  if (!text) { toast(`Brak zdjęć na liście: ${label}.`); return; }
+  await navigator.clipboard.writeText(text);
+  toast(`Skopiowano ${items.length} nazw — ${label}`);
+}
+
+function renderRejectedAdminTools(slug) {
+  const container = $("#selectionContent");
+  if (!container) return;
+  container.querySelector(".v163-rejection-tools")?.remove();
+  const rejectedItems = rejectedItemsForSlug(slug);
+  const remainingItems = remainingItemsForSlug(slug);
+  const section = document.createElement("section");
+  section.className = "selection-client selection-single v163-rejection-tools";
+  section.innerHTML = `
+    <div class="selection-single-head">
+      <div><p class="eyebrow">ODRZUCONE ZDJĘCIA</p><h3>× Odrzucone przez klienta</h3><div class="gallery-meta"><span>${rejectedItems.length} zdjęć — klient nie chce, aby były wykorzystywane</span></div></div>
+      <button type="button" class="ghost copy-rejected">Kopiuj listę odrzuconych</button>
+    </div>
+    <div class="approval-filenames rejected-filenames">${rejectedItems.length ? rejectedItems.map(item => `<span>${escapeHtml(displayName(item.filename))}</span>`).join("") : '<span>Brak odrzuconych zdjęć.</span>'}</div>
+    <div class="selection-single-head" style="margin-top:18px">
+      <div><p class="eyebrow">POZOSTAWIONE</p><h3>✓ Wszystkie nieodrzucone zdjęcia</h3><div class="gallery-meta"><span>${remainingItems.length} zdjęć pozostawionych przez klienta</span></div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end"><button type="button" class="ghost copy-remaining">Kopiuj listę pozostawionych</button><button type="button" class="primary download-remaining">↓ Pobierz nieodrzucone (${remainingItems.length})</button></div>
+    </div>
+    <div class="approval-filenames remaining-filenames">${remainingItems.length ? remainingItems.map(item => `<span>${escapeHtml(displayName(item.filename))}</span>`).join("") : '<span>Brak nieodrzuconych zdjęć.</span>'}</div>`;
+  section.querySelector(".copy-rejected")?.addEventListener("click", () => copyV163FilenameList(rejectedItems, "odrzucone"));
+  section.querySelector(".copy-remaining")?.addEventListener("click", () => copyV163FilenameList(remainingItems, "pozostawione"));
+  section.querySelector(".download-remaining")?.addEventListener("click", event => downloadAdminSelected(slug, remainingItems, event.currentTarget));
+  container.appendChild(section);
+}
+
+const openSelectionsV1625 = openSelections;
+openSelections = async function(slug) {
+  await openSelectionsV1625(slug);
+  renderRejectedAdminTools(slug);
+};
