@@ -1,0 +1,85 @@
+name: RAF v16.3.1 reject workflow ZIP
+
+on:
+  push:
+    branches:
+      - build-v16.3.1-reject-workflow
+    paths:
+      - 'scripts/build_v1631.py'
+      - '.github/workflows/build-v1631-zip.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build v16.3.1 files
+        run: python scripts/build_v1631.py
+
+      - name: Check JavaScript syntax
+        run: |
+          node --check app.js
+          node --check admin.js
+
+      - name: Verify package contents
+        run: |
+          grep -q 'rejectionWorkflow' index.html
+          grep -q 'approveRejectedSelection' app.js
+          grep -q 'rejectionApprovalRowsForSlug' admin.js
+          grep -q 'v16.3.1: REJECT WORKFLOW' style.css
+
+      - name: Prepare clean manual-upload package
+        run: |
+          mkdir -p package
+          cp index.html package/
+          cp app.js package/
+          cp admin.html package/
+          cp admin.js package/
+          cp style.css package/
+          cat > package/README-v16.3.1.txt <<'EOF'
+          RAF.studio Galeria v16.3.1 — REJECT WORKFLOW
+
+          Wgraj / podmień w głównym katalogu repo TYLKO te pliki:
+          - index.html
+          - app.js
+          - admin.html
+          - admin.js
+          - style.css
+
+          Nie trzeba ruszać:
+          - firebase-config.js
+          - database-rules.json
+          - storage-rules.txt
+          - logo-white.png
+          - logo-black.png
+
+          Co nowego:
+          - w trybie tylko „Odrzuć zdjęcie” klient widzi licznik odrzuconych,
+          - odrzucone zdjęcie NIE znika z „Wszystkie” — zostaje wyszarzone i oznaczone,
+          - filtr „Odrzucone” nadal pokazuje tylko odrzucone,
+          - lista nazw/numerów odrzuconych jest widoczna w panelu klienta,
+          - można jednym kliknięciem wyczyścić wszystkie odrzucenia,
+          - klient może zatwierdzić ostateczną listę zdjęć do odrzucenia,
+          - zatwierdzenie zapisuje datę, godzinę, liczbę i pełną listę zdjęć,
+          - w panelu admina log odrzuceń jest oddzielony od logu serduszek,
+          - panel admina nadal pokazuje odrzucone i nieodrzucone oraz pobieranie nieodrzuconych.
+
+          Firebase Rules: bez zmian.
+          Baza: stabilne v16.3.0 z main.
+          EOF
+          cd package
+          zip -9 ../RAF-studio-Galeria-v16.3.1-REJECT-WORKFLOW.zip index.html app.js admin.html admin.js style.css README-v16.3.1.txt
+
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: RAF-studio-Galeria-v16.3.1-REJECT-WORKFLOW
+          path: RAF-studio-Galeria-v16.3.1-REJECT-WORKFLOW.zip
+          if-no-files-found: error
+          retention-days: 7
