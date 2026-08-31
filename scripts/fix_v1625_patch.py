@@ -8,7 +8,7 @@ while i < len(lines):
     if lines[i].startswith("pattern = re.compile("):
         out.extend([
             "start_marker = '      <div class=\"site-settings-section\">\\n        <h3>Układ zdjęć</h3>'",
-            "end_marker = '      <div class=\"site-settings-section\">\\n        <h3>Kolory aktywne / filtry</h3>'",
+            "end_marker = '      <div class=\"site-settings-section permissions-section\">\\n        <h3>Funkcje, pobieranie i ochrona</h3>'",
         ])
         i += 1
         while i < len(lines):
@@ -24,7 +24,7 @@ while i < len(lines):
             "end_pos = text.find(end_marker, start_pos)",
             "if start_pos < 0 or end_pos < 0:",
             "    raise RuntimeError(f'admin.html markers missing: start={start_pos}, end={end_pos}')",
-            "text = text[:start_pos] + replacement + text[end_pos + len(end_marker):]",
+            "text = text[:start_pos] + replacement + text[end_pos:]",
             "count = 1",
         ])
         i += 1
@@ -33,4 +33,10 @@ while i < len(lines):
     out.append(lines[i])
     i += 1
 
-p.write_text("\n".join(out) + "\n", encoding="utf-8")
+patched = "\n".join(out) + "\n"
+patched = patched.replace(
+    '\n      <div class="site-settings-section">\n        <h3>Kolory aktywne / filtry</h3>\'\'\'',
+    "'''",
+    1,
+)
+p.write_text(patched, encoding="utf-8")
