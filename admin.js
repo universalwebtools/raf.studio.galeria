@@ -3494,6 +3494,52 @@ async function copyV163FilenameList(items, label) {
   toast(`Skopiowano ${items.length} nazw — ${label}`);
 }
 
+async function deleteRejectionApprovalEntry(slug, approvalId, button) {
+  if (!slug || !approvalId) return;
+  const row = approvalsRoot?.[slug]?.[approvalId];
+  const count = Number(row?.selectedCount || 0);
+  if (!confirm(`Usunąć ten wpis historii odrzuceń${count ? ` (${count} zdjęć)` : ""}?\n\nAktualnie odrzucone zdjęcia NIE zostaną zmienione.`)) return;
+
+  const old = button?.textContent || "Usuń wpis";
+  if (button) { button.disabled = true; button.textContent = "Usuwanie…"; }
+  try {
+    await remove(ref(db, `approvals/${slug}/${approvalId}`));
+    if (approvalsRoot?.[slug]) delete approvalsRoot[slug][approvalId];
+    toast("Usunięto wpis historii odrzuceń");
+    renderRejectedAdminTools(slug);
+    renderAll();
+  } catch (error) {
+    console.error("DELETE REJECTION APPROVAL ERROR", error);
+    toast(`Nie udało się usunąć wpisu: ${error.code || error.message || error}`);
+    if (button) { button.disabled = false; button.textContent = old; }
+  }
+}
+
+async function clearRejectionApprovalHistory(slug, button) {
+  const rows = rejectionApprovalRowsForSlug(slug);
+  if (!rows.length) {
+    toast("Historia odrzuceń jest już pusta.");
+    return;
+  }
+  if (!confirm(`Wyczyścić całą historię zatwierdzeń odrzuceń (${rows.length} wpisów)?\n\nKasowane są tylko wpisy historii. Aktualnie odrzucone zdjęcia pozostaną bez zmian.`)) return;
+
+  const old = button?.textContent || "Wyczyść całą historię";
+  if (button) { button.disabled = true; button.textContent = "Czyszczenie…"; }
+  try {
+    await Promise.all(rows.map(row => remove(ref(db, `approvals/${slug}/${row.id}`))));
+    if (approvalsRoot?.[slug]) {
+      rows.forEach(row => delete approvalsRoot[slug][row.id]);
+    }
+    toast(`Wyczyszczono ${rows.length} wpisów historii odrzuceń`);
+    renderRejectedAdminTools(slug);
+    renderAll();
+  } catch (error) {
+    console.error("CLEAR REJECTION APPROVAL HISTORY ERROR", error);
+    toast(`Nie udało się wyczyścić historii: ${error.code || error.message || error}`);
+    if (button) { button.disabled = false; button.textContent = old; }
+  }
+}
+
 function renderRejectedAdminTools(slug) {
   const container = $("#selectionContent");
   if (!container) return;
@@ -3517,10 +3563,16 @@ function renderRejectedAdminTools(slug) {
 
     ${rejectionApprovals.length ? `
       <div class="rejection-approval-history">
-        <p class="eyebrow">LOG ZATWIERDZEŃ ODRZUCEŃ</p>
+        <div class="rejection-history-head">
+          <p class="eyebrow">LOG ZATWIERDZEŃ ODRZUCEŃ</p>
+          <button type="button" class="danger rejection-clear-history">Wyczyść całą historię</button>
+        </div>
         ${rejectionApprovals.map((row,index) => `
-          <article class="approval-log-row${index === 0 ? " latest" : ""}">
-            <div><b>${index === 0 ? "NAJNOWSZE • " : ""}${Number(row.selectedCount || 0)} zdjęć do odrzucenia</b><span>${escapeHtml(formatDateTimePl(row.submittedAt))}</span></div>
+          <article class="approval-log-row${index === 0 ? " latest" : ""}" data-rejection-approval-id="${escapeHtml(row.id)}">
+            <div class="approval-log-mainline">
+              <div><b>${index === 0 ? "NAJNOWSZE • " : ""}${Number(row.selectedCount || 0)} zdjęć do odrzucenia</b><span>${escapeHtml(formatDateTimePl(row.submittedAt))}</span></div>
+              <button type="button" class="danger rejection-delete-entry" data-approval-id="${escapeHtml(row.id)}">Usuń wpis</button>
+            </div>
             <details>
               <summary>Pokaż zatwierdzoną listę (${Object.keys(row.filenames || {}).length})</summary>
               <div class="approval-filenames">${Object.values(row.filenames || {}).map(item => `<span>${escapeHtml(displayName(item?.filename))}</span>`).join("")}</div>
@@ -3539,6 +3591,10 @@ function renderRejectedAdminTools(slug) {
   section.querySelector(".copy-rejected")?.addEventListener("click", () => copyV163FilenameList(rejectedItems, "odrzucone"));
   section.querySelector(".copy-remaining")?.addEventListener("click", () => copyV163FilenameList(remainingItems, "pozostawione"));
   section.querySelector(".download-remaining")?.addEventListener("click", event => downloadAdminSelected(slug, remainingItems, event.currentTarget));
+  section.querySelector(".rejection-clear-history")?.addEventListener("click", event => clearRejectionApprovalHistory(slug, event.currentTarget));
+  section.querySelectorAll(".rejection-delete-entry").forEach(button => {
+    button.addEventListener("click", event => deleteRejectionApprovalEntry(slug, button.dataset.approvalId, event.currentTarget));
+  });
   container.appendChild(section);
 }
 

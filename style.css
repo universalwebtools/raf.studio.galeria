@@ -2001,3 +2001,41 @@ input,select{width:100%;background:#0e0e10;border:1px solid #34343a;color:#fff;b
     font-size:8px;
   }
 }
+
+
+/* ===== v16.3.2: REJECT HISTORY CLEANUP ===== */
+.rejection-history-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.rejection-history-head .eyebrow{margin:0}
+.rejection-history-head .danger,
+.rejection-delete-entry{
+  padding:7px 10px !important;
+  font-size:10px !important;
+  white-space:nowrap;
+}
+.approval-log-mainline{
+  display:flex !important;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.approval-log-mainline > div{
+  display:grid;
+  gap:3px;
+  min-width:0;
+}
+.approval-log-mainline > div span{display:block}
+
+@media(max-width:650px){
+  .approval-log-mainline{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .rejection-delete-entry{align-self:flex-start}
+  .rejection-history-head .danger{width:100%}
+}
