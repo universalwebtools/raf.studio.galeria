@@ -20,6 +20,12 @@ function galleryHref(slug){
   return url.toString();
 }
 
+function applyClientZoneConfig(raw){
+  const blurPercent = Math.max(0, Math.min(100, Number(raw?.coverBlur ?? 50) || 0));
+  const blurPx = (blurPercent * 0.4).toFixed(1);
+  document.documentElement.style.setProperty("--zone-cover-blur", `${blurPx}px`);
+}
+
 function render(){
   const q = $("#gallerySearch").value.trim().toLowerCase();
   const visible = entries.filter(item => String(item.title || item.slug).toLowerCase().includes(q));
@@ -47,8 +53,14 @@ function render(){
 async function init(){
   try{
     await signInAnonymously(auth);
-    const snap = await get(ref(db, "galleries/__system__/public/galleryIndex"));
-    const data = snap.exists() ? snap.val() : {};
+    const [indexSnap, configSnap] = await Promise.all([
+      get(ref(db, "galleries/__system__/public/galleryIndex")),
+      get(ref(db, "galleries/__system__/public/clientZoneConfig")).catch(() => null)
+    ]);
+
+    applyClientZoneConfig(configSnap?.exists?.() ? configSnap.val() : null);
+
+    const data = indexSnap.exists() ? indexSnap.val() : {};
     entries = Object.entries(data || {})
       .map(([key, value]) => ({ slug: value?.slug || key, ...value }))
       .filter(item => item.slug && item.title)
