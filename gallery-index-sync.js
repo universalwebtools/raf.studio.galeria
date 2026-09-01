@@ -1,7 +1,7 @@
 import { getApps } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-import { ADMIN_UID } from "./firebase-config.js?v=16.2.4.2.1";
+import { ADMIN_UID } from "./firebase-config.js?v=17.0";
 
 const INDEX_PATH = "galleries/__system__/public/galleryIndex";
 
@@ -20,7 +20,7 @@ function buildIndex(all){
   Object.entries(all || {}).forEach(([slug, gallery]) => {
     if (slug.startsWith("__system__")) return;
     const pub = gallery?.public;
-    if (!pub) return;
+    if (!pub || pub.trashedAt) return;
 
     const photos = Object.values(pub.photos || {}).filter(Boolean);
     const cover = photos.find(photo => photo?.filename === pub.coverFile) || photos[0] || null;
@@ -29,7 +29,9 @@ function buildIndex(all){
       slug,
       title: String(pub.title || slug),
       coverUrl: String(cover?.previewUrl || ""),
-      enabled: pub.enabled !== false,
+      enabled: pub.enabled !== false && pub.active !== false,
+      homeHidden: pub.homeHidden === true,
+      homeOrder: Number.isFinite(Number(pub.homeOrder)) ? Number(pub.homeOrder) : 999999,
       expiresAt: pub.expiresAt || "",
       updatedAt: Number(pub.updatedAt || Date.now())
     };
@@ -80,3 +82,6 @@ async function start(){
 }
 
 start();
+
+// Premium Studio v17: ukrywanie galerii z home, kosz, kolejność home i karta udostępniania.
+import("./admin-premium-v17.js?v=17.0").catch(error => console.warn("RAF premium v17 load failed", error));
