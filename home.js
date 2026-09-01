@@ -1,7 +1,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-import { firebaseConfig } from "./firebase-config.js?v=16.2.4.2.1";
+import { firebaseConfig } from "./firebase-config.js?v=17.0";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -63,8 +63,12 @@ async function init(){
     const data = indexSnap.exists() ? indexSnap.val() : {};
     entries = Object.entries(data || {})
       .map(([key, value]) => ({ slug: value?.slug || key, ...value }))
-      .filter(item => item.slug && item.title)
-      .sort((a,b) => String(a.title).localeCompare(String(b.title), "pl", {numeric:true,sensitivity:"base"}));
+      .filter(item => item.slug && item.title && item.enabled !== false && item.homeHidden !== true)
+      .sort((a,b) => {
+        const orderA = Number.isFinite(Number(a.homeOrder)) ? Number(a.homeOrder) : 999999;
+        const orderB = Number.isFinite(Number(b.homeOrder)) ? Number(b.homeOrder) : 999999;
+        return orderA - orderB || String(a.title).localeCompare(String(b.title), "pl", {numeric:true,sensitivity:"base"});
+      });
 
     $("#homeLoading").hidden = true;
     render();
