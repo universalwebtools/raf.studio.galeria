@@ -85,5 +85,5 @@ start();
 
 // Premium Studio v17: ukrywanie galerii z home, kosz, kolejność home i karta udostępniania.
 import("./admin-premium-v17.js?v=17.0").catch(error => console.warn("RAF premium v17 load failed", error));
-// Premium Studio v18: szablony, status klienta, komentarze wyboru i statystyki.
-import("./admin-premium-v18.js?v=18.0").catch(error => console.warn("RAF premium v18 load failed", error));
+// Premium Studio v18.1 SAFE: szablony, status klienta i statystyki bez rekurencyjnego MutationObservera.
+import("./admin-premium-v18.1.js?v=18.1").catch(error => console.warn("RAF premium v18.1 load failed", error));
