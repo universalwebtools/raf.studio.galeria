@@ -202,3 +202,6 @@ async function init() {
 }
 
 init();
+
+// Premium Studio v18: prezentacja, komentarz do wyboru, status klienta i statystyki.
+import("./client-premium-v18.js?v=18.0").catch(error => console.warn("RAF client premium v18 load failed", error));
