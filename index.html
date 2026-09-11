@@ -202,8 +202,24 @@
 
 <div id="toast" class="toast" hidden></div>
 
+<script>
+  // v19.1: nigdy nie pozwalaj starszym handlerom pobierać serii pojedynczych JPG.
+  window.RAF_ZIP_READY = false;
+  document.addEventListener('click', function(event) {
+    var element = event.target instanceof Element ? event.target.closest('#downloadAllGalleryBtn,#downloadFavoritesBtn,#downloadFavoritesInlineBtn,#downloadSelectedBtn') : null;
+    if (!element || window.RAF_ZIP_READY) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    var toast = document.getElementById('toast');
+    if (toast) {
+      toast.textContent = 'Moduł ZIP jeszcze się ładuje. Spróbuj ponownie za chwilę.';
+      toast.hidden = false;
+      setTimeout(function(){ toast.hidden = true; }, 3500);
+    }
+  }, true);
+</script>
 <script type="module" src="app.js?v=16.3.1"></script>
 <script type="module" src="gallery-stability-v17.2.js?v=17.2"></script>
-<script type="module" src="downloads-v19-zip.js?v=19.0"></script>
+<script type="module" src="downloads-v19.1-localzip.js?v=19.1.1"></script>
 </body>
 </html>
