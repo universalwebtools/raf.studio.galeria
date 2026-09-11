@@ -4,10 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#09090a">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>RAF.studio — Galeria klienta</title>
   <link rel="stylesheet" href="style.css?v=16.3.1">
   <script>
-    // v16.4: główny adres jest katalogiem galerii; konkretne linki ?g=... działają jak dotąd.
     if (!new URLSearchParams(location.search).get('g')) {
       location.replace('home.html');
     }
@@ -21,13 +23,11 @@
     <p id="clientLoginEyebrow" class="eyebrow">PRYWATNA GALERIA</p>
     <h1 id="lockTitle">Galeria klienta</h1>
     <p id="clientLoginInstruction" class="muted">Wpisz hasło otrzymane od fotografa.</p>
-
     <form id="passwordForm">
       <input id="passwordInput" type="password" placeholder="Hasło do galerii" autocomplete="current-password" required>
       <button id="clientLoginSubmit" class="primary" type="submit">Otwórz galerię</button>
       <p id="passwordError" class="error" hidden>Nieprawidłowe hasło.</p>
     </form>
-
     <p id="galleryNotFound" class="error" hidden></p>
   </div>
 </section>
@@ -143,7 +143,6 @@
 
   <div id="loading" class="loading"><span class="spinner"></span>Ładowanie galerii…</div>
   <div id="storageError" class="notice error-box" hidden></div>
-
   <section id="grid" class="photo-grid"></section>
 
   <footer class="client-footer">
@@ -170,7 +169,6 @@
       <button id="closeLightbox" type="button" class="lb-btn" aria-label="Zamknij">×</button>
     </div>
   </div>
-
   <button id="prevPhoto" type="button" class="lb-arrow lb-left">‹</button>
   <div class="lightbox-stage"><img id="lightboxImage" alt=""></div>
   <button id="nextPhoto" type="button" class="lb-arrow lb-right">›</button>
@@ -203,7 +201,6 @@
 <div id="toast" class="toast" hidden></div>
 
 <script>
-  // v19.1: nigdy nie pozwalaj starszym handlerom pobierać serii pojedynczych JPG.
   window.RAF_ZIP_READY = false;
   document.addEventListener('click', function(event) {
     var element = event.target instanceof Element ? event.target.closest('#downloadAllGalleryBtn,#downloadFavoritesBtn,#downloadFavoritesInlineBtn,#downloadSelectedBtn') : null;
@@ -218,8 +215,8 @@
     }
   }, true);
 </script>
-<script type="module" src="app.js?v=16.3.1"></script>
+<script type="module" src="app.js?v=19.2.0"></script>
 <script type="module" src="gallery-stability-v17.2.js?v=17.2"></script>
-<script type="module" src="downloads-v19.1-localzip.js?v=19.1.1"></script>
+<script type="module" src="downloads-v19.2-mobilezip.js?v=19.2.0"></script>
 </body>
 </html>
