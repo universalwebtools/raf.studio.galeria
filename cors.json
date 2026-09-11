@@ -1,0 +1,17 @@
+[
+  {
+    "origin": [
+      "https://galeria.raf-studio.pl",
+      "https://universalwebtools.github.io",
+      "https://rafstudiogaleria.web.app",
+      "https://rafstudiogaleria.firebaseapp.com"
+    ],
+    "method": ["GET", "HEAD"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Content-Disposition"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]
