@@ -38,7 +38,7 @@ function withTimeout(promise, ms, label){
 function loadLegitModule(){
   if (legitModuleLoaded) return;
   legitModuleLoaded = true;
-  import("./home-legit-v16.6.js?v=17.1").catch(error => {
+  import("./home-legit-v16.6.js?v=19.5.0").catch(error => {
     console.warn("HOME LEGIT MODULE ERROR", error);
   });
 }
