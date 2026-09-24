@@ -1,11 +1,13 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
+import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { firebaseConfig } from "./firebase-config.js?v=17.1";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getDatabase(app);
+const storage = getStorage(app);
 const $ = selector => document.querySelector(selector);
 
 const CACHE_KEY = "raf-client-zone-gallery-index-v17";
@@ -56,6 +58,60 @@ function normalizeEntries(data){
       const orderB = Number.isFinite(Number(b.homeOrder)) ? Number(b.homeOrder) : 999999;
       return orderA - orderB || String(a.title).localeCompare(String(b.title), "pl", {numeric:true,sensitivity:"base"});
     });
+}
+
+
+async function resolveCoverUrl(item){
+  try{
+    const publicSnap = await get(ref(db, `galleries/${item.slug}/public`));
+    if (!publicSnap.exists()) return "";
+
+    const pub = publicSnap.val() || {};
+    const photos = Object.values(pub.photos || {}).filter(photo =>
+      photo?.filename && photo.hiddenFromClient !== true
+    );
+    if (!photos.length) return "";
+
+    const preferredFile = pub.coverFile || pub.heroBackgroundFile || item.coverFile || "";
+    const coverPhoto =
+      photos.find(photo => photo?.filename === preferredFile) ||
+      photos.find(photo => photo?.previewUrl) ||
+      photos[0];
+
+    if (coverPhoto?.previewUrl) return String(coverPhoto.previewUrl);
+
+    const filename = coverPhoto?.filename || preferredFile;
+    if (!filename) return "";
+
+    return await getDownloadURL(
+      sRef(storage, `galleries/${item.slug}/previews/${filename}.webp`)
+    );
+  }catch(error){
+    console.warn("CLIENT ZONE COVER FALLBACK FAILED", item?.slug, error);
+    return "";
+  }
+}
+
+async function repairMissingCovers(){
+  const missing = entries.filter(item => !String(item.coverUrl || "").trim());
+  if (!missing.length) return;
+
+  let changed = false;
+  await Promise.all(missing.map(async item => {
+    const url = await resolveCoverUrl(item);
+    if (url) {
+      item.coverUrl = url;
+      changed = true;
+    }
+  }));
+
+  if (!changed) return;
+
+  render();
+  try{
+    const data = Object.fromEntries(entries.map(item => [item.slug, item]));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
+  }catch(_){ }
 }
 
 function render(){
@@ -155,6 +211,7 @@ async function init(){
     const errorBox = $("#homeError");
     if (errorBox) errorBox.hidden = true;
     render();
+    repairMissingCovers().catch(error => console.warn("CLIENT ZONE COVER REPAIR ERROR", error));
   }catch(error){
     // Nawet po błędzie ładujemy wygląd strony z domyślną konfiguracją,
     // aby użytkownik nie widział martwego ekranu.
