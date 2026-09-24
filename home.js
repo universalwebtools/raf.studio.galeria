@@ -22,8 +22,8 @@ function escapeHtml(value){
 }
 
 function galleryHref(slug){
-  const url = new URL("./", location.href);
-  url.searchParams.set("g", slug);
+  const url = new URL("/", location.origin);
+  url.searchParams.set("g", String(slug || ""));
   return url.toString();
 }
 
@@ -131,7 +131,7 @@ function render(){
     const title = escapeHtml(item.title || item.slug || "Galeria");
     const cover = String(item.coverUrl || "").replace(/"/g, "%22");
     return `
-      <a class="gallery-entry" href="${galleryHref(item.slug)}" aria-label="Otwórz galerię ${title}">
+      <a class="gallery-entry" data-gallery-slug="${escapeHtml(item.slug)}" href="${galleryHref(item.slug)}" aria-label="Otwórz galerię ${title}">
         <div class="gallery-entry-cover"${cover ? ` style="background-image:url(&quot;${cover}&quot;)"` : ""}></div>
         <span class="gallery-entry-arrow">→</span>
         <div class="gallery-entry-content">
@@ -144,6 +144,25 @@ function render(){
   container.hidden = visible.length === 0;
   const empty = $("#homeEmpty");
   if (empty) empty.hidden = visible.length !== 0;
+
+  bindGalleryNavigation(container);
+}
+
+function bindGalleryNavigation(container){
+  container.querySelectorAll(".gallery-entry").forEach(card => {
+    if (card.dataset.rafNavBound === "1") return;
+    card.dataset.rafNavBound = "1";
+
+    card.addEventListener("click", event => {
+      // Let Ctrl/Cmd/Shift click keep normal browser behaviour.
+      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+      const slug = card.dataset.gallerySlug || "";
+      if (!slug) return;
+      event.preventDefault();
+      event.stopPropagation();
+      window.location.assign(galleryHref(slug));
+    });
+  });
 }
 
 function showCachedEntries(){
