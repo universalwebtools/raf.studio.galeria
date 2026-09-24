@@ -90,7 +90,14 @@ function renderContact(cfg) {
   wrap.appendChild(list); openDialog(cfg.contactTitle || DEFAULTS.contactTitle, wrap);
 }
 function renderHow(cfg) { const list = document.createElement("div"); list.className = "home-how-list"; [cfg.howStep1,cfg.howStep2,cfg.howStep3].filter(Boolean).forEach((text,index)=>{ const row=document.createElement("div"); row.className="home-how-step"; const number=document.createElement("b"); number.textContent=String(index+1); const copy=document.createElement("span"); copy.textContent=text; row.append(number,copy); list.appendChild(row); }); openDialog(cfg.howTitle || DEFAULTS.howTitle, list); }
-function updateGalleryBadges(cfg) { document.querySelectorAll(".gallery-entry-content small").forEach(label => { label.textContent = cfg.privateBadgeText || DEFAULTS.privateBadgeText; label.hidden = cfg.showPrivateBadge === false; }); }
+function updateGalleryBadges(cfg) {
+  const nextText = cfg.privateBadgeText || DEFAULTS.privateBadgeText;
+  const nextHidden = cfg.showPrivateBadge === false;
+  document.querySelectorAll(".gallery-entry-content small").forEach(label => {
+    if (label.textContent !== nextText) label.textContent = nextText;
+    if (label.hidden !== nextHidden) label.hidden = nextHidden;
+  });
+}
 
 function applyConfig(raw) {
   const cfg = normalize(raw); ensureUi();
@@ -102,7 +109,13 @@ function applyConfig(raw) {
   const contactBtn = $("#zoneContactBtn"); if (contactBtn) { contactBtn.textContent = cfg.contactLabel || DEFAULTS.contactLabel; contactBtn.hidden = cfg.showContact === false; contactBtn.onclick = () => renderContact(cfg); }
   const howBtn = $("#zoneHowBtn"); if (howBtn) { howBtn.textContent = cfg.howLabel || DEFAULTS.howLabel; howBtn.hidden = cfg.showHow === false; howBtn.onclick = () => renderHow(cfg); }
   const nav = $("#zoneFooterNav"); if (nav) nav.hidden = [cfg.showPrivacy,cfg.showContact,cfg.showHow].every(v => v === false);
-  updateGalleryBadges(cfg); const observer = new MutationObserver(() => updateGalleryBadges(cfg)); const directory = $("#galleryDirectory"); if (directory) observer.observe(directory, { childList:true, subtree:true });
+  updateGalleryBadges(cfg);
+  const directory = $("#galleryDirectory");
+  if (directory) {
+    window.__rafHomeBadgeObserver?.disconnect?.();
+    window.__rafHomeBadgeObserver = new MutationObserver(() => updateGalleryBadges(cfg));
+    window.__rafHomeBadgeObserver.observe(directory, { childList:true, subtree:false });
+  }
 }
 
 async function init() { injectStyles(); ensureUi(); try { if (!auth.currentUser) await signInAnonymously(auth); const snap = await get(ref(db, CONFIG_PATH)); applyConfig(snap.exists() ? snap.val() : DEFAULTS); } catch (error) { console.warn("HOME LEGIT CONFIG ERROR", error); applyConfig(DEFAULTS); } }
