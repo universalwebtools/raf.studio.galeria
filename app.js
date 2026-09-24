@@ -632,9 +632,8 @@ async function openGallery() {
   if (!galleryLoaded) {
     galleryLoaded = true;
     $("#loading").hidden = false;
-    loadManifest();
-
-    Promise.all([loadFavorites(), loadLatestApproval()])
+    loadManifest()
+      .then(() => Promise.all([loadFavorites(), loadLatestApproval()]))
       .then(() => {
         render();
         updateUI();
@@ -1022,15 +1021,27 @@ function renderHeroMedia() {
   });
 }
 
-function loadManifest() {
+async function freshPreviewUrl(filename, fallback = "") {
+  if (!filename) return fallback || "";
+  try {
+    return await getDownloadURL(
+      sRef(storage, `galleries/${slug}/previews/${filename}.webp`)
+    );
+  } catch (error) {
+    console.warn("PREVIEW URL REFRESH FAILED", filename, error);
+    return fallback || "";
+  }
+}
+
+async function loadManifest() {
   const manifest = gallery.photos || {};
 
   photos = Object.values(manifest)
-    .filter(item => item?.filename && item?.previewUrl && item.hiddenFromClient !== true)
+    .filter(item => item?.filename && item.hiddenFromClient !== true)
     .sort((a, b) => a.filename.localeCompare(b.filename, undefined, { numeric: true }))
     .map(item => ({
       filename: item.filename,
-      preview: item.previewUrl,
+      preview: item.previewUrl || "",
       originalPath: item.originalPath || `galleries/${slug}/originals/${item.filename}`,
       originalUrl: null,
       width: Number(item.width || 0),
@@ -1039,20 +1050,59 @@ function loadManifest() {
       featured: item.featured === true
     }));
 
-  $("#loading").hidden = true;
   $("#photoCountHero").textContent = `${photos.length} zdjęć`;
 
   if (!photos.length) {
+    $("#loading").hidden = true;
     $("#storageError").hidden = false;
     $("#storageError").textContent = "W tej galerii nie ma jeszcze zdjęć.";
     render();
     return;
   }
 
+  // Firebase download tokens / metadata can change. Never trust an old
+  // previewUrl as the only source: rebuild fresh URLs from Storage paths.
+  const concurrency = Math.min(6, photos.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < photos.length) {
+      const index = cursor++;
+      const photo = photos[index];
+      photo.preview = await freshPreviewUrl(photo.filename, photo.preview);
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+
+  // Remove only genuinely unavailable previews after both fresh URL and fallback failed.
+  photos = photos.filter(photo => Boolean(photo.preview));
+
+  $("#loading").hidden = true;
+
+  if (!photos.length) {
+    $("#storageError").hidden = false;
+    $("#storageError").textContent = "Nie udało się odczytać podglądów zdjęć z Firebase Storage.";
+    render();
+    return;
+  }
+
+  $("#storageError").hidden = true;
+
+  // Refresh intro background with the same fresh URL used by the gallery.
+  const introFile = gallery.heroBackgroundFile || gallery.coverFile;
+  const introPhoto =
+    photos.find(photo => photo.filename === introFile) ||
+    photos[0];
+
+  if (introPhoto?.preview) {
+    $("#introBackdrop").style.backgroundImage = `url("${introPhoto.preview}")`;
+    $("#introBackdrop").style.backgroundPosition =
+      `${Number(gallery.coverPositionX ?? 50)}% ${Number(gallery.coverPositionY ?? 38)}%`;
+  }
+
   renderHeroMedia();
-
   photos.forEach(warmupOrientation);
-
   render();
 }
 
@@ -1139,6 +1189,16 @@ function render() {
     img.addEventListener("load", () => {
       img.classList.add("loaded");
       card.classList.add("is-loaded");
+    });
+
+    img.addEventListener("error", async () => {
+      if (img.dataset.previewRetry === "1") return;
+      img.dataset.previewRetry = "1";
+      const refreshed = await freshPreviewUrl(photo.filename, "");
+      if (refreshed) {
+        photo.preview = refreshed;
+        img.src = refreshed;
+      }
     });
 
     if (img.complete && img.naturalWidth > 0) {
