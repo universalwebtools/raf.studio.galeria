@@ -64,40 +64,42 @@ function normalizeEntries(data){
 async function resolveCoverUrl(item){
   try{
     const publicSnap = await get(ref(db, `galleries/${item.slug}/public`));
-    if (!publicSnap.exists()) return "";
+    if (!publicSnap.exists()) return String(item.coverUrl || "");
 
     const pub = publicSnap.val() || {};
     const photos = Object.values(pub.photos || {}).filter(photo =>
       photo?.filename && photo.hiddenFromClient !== true
     );
-    if (!photos.length) return "";
+    if (!photos.length) return String(item.coverUrl || "");
 
-    const preferredFile = pub.coverFile || pub.heroBackgroundFile || item.coverFile || "";
+    const preferredFile = pub.coverFile || pub.heroBackgroundFile || item.coverFile || photos[0]?.filename || "";
     const coverPhoto =
       photos.find(photo => photo?.filename === preferredFile) ||
-      photos.find(photo => photo?.previewUrl) ||
       photos[0];
 
-    if (coverPhoto?.previewUrl) return String(coverPhoto.previewUrl);
-
     const filename = coverPhoto?.filename || preferredFile;
-    if (!filename) return "";
+    if (filename) {
+      try {
+        return await getDownloadURL(
+          sRef(storage, `galleries/${item.slug}/previews/${filename}.webp`)
+        );
+      } catch (storageError) {
+        console.warn("CLIENT ZONE FRESH COVER URL FAILED", item?.slug, storageError);
+      }
+    }
 
-    return await getDownloadURL(
-      sRef(storage, `galleries/${item.slug}/previews/${filename}.webp`)
-    );
+    return String(coverPhoto?.previewUrl || item.coverUrl || "");
   }catch(error){
     console.warn("CLIENT ZONE COVER FALLBACK FAILED", item?.slug, error);
-    return "";
+    return String(item.coverUrl || "");
   }
 }
 
 async function repairMissingCovers(){
-  const missing = entries.filter(item => !String(item.coverUrl || "").trim());
-  if (!missing.length) return;
+  if (!entries.length) return;
 
   let changed = false;
-  await Promise.all(missing.map(async item => {
+  await Promise.all(entries.map(async item => {
     const url = await resolveCoverUrl(item);
     if (url) {
       item.coverUrl = url;
