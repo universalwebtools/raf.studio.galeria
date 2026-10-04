@@ -8,7 +8,24 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="RAF Galeria">
   <title>Zainstaluj RAF.studio Galeria</title>
-  <link rel="manifest" href="/manifest.webmanifest?v=20.1">
+
+  <!--
+    WAŻNE: listener musi powstać PRZED manifestem i przed resztą strony.
+    Samsung Internet / Chromium potrafi zgłosić beforeinstallprompt bardzo wcześnie.
+    Wcześniej zdarzenie mogło zostać zgubione zanim dolny skrypt zaczął nasłuchiwać.
+  -->
+  <script>
+    window.__rafPwaInstallPrompt = null;
+    window.__rafPwaInstallPromptSeen = false;
+    window.addEventListener('beforeinstallprompt', function(event){
+      event.preventDefault();
+      window.__rafPwaInstallPrompt = event;
+      window.__rafPwaInstallPromptSeen = true;
+      window.dispatchEvent(new Event('raf-pwa-install-ready'));
+    });
+  </script>
+
+  <link rel="manifest" href="/manifest.webmanifest?v=20.2">
   <link rel="icon" href="/app-icon-192.svg">
   <style>
     *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#09090a;color:#f5f5f2;font-family:Inter,Arial,sans-serif}
@@ -17,6 +34,7 @@
     .icon{width:116px;height:116px;margin:0 auto 18px;display:block;border-radius:28px}
     h1{font-size:31px;line-height:1.05;margin:0 0 12px}p{color:#a4a4aa;line-height:1.5;margin:0 0 22px}
     button,a{width:100%;min-height:52px;border-radius:15px;border:1px solid #36363b;font-weight:800;font-size:16px;cursor:pointer}
+    button:disabled{opacity:.65;cursor:default}
     #installBtn{background:#f5f5f2;color:#09090a;border-color:#f5f5f2}.secondary{display:flex;align-items:center;justify-content:center;margin-top:10px;background:#19191c;color:#fff;text-decoration:none}
     #status{margin-top:18px;padding:12px;border-radius:12px;background:#0e0e10;color:#b7b7bd;font-size:13px;line-height:1.45}
     .ok{color:#aaf0bb!important;border:1px solid #2f5b3b}.warn{color:#ffd9a0!important;border:1px solid #685027}
@@ -26,7 +44,7 @@
   <main class="card">
     <img class="icon" src="/app-icon-512.svg" alt="RAF.studio Galeria">
     <h1>RAF.studio Galeria</h1>
-    <p>Zainstaluj panel fotografa jako osobną aplikację. Po instalacji uruchomi się bez paska adresu Chrome i pojawi się w przełączniku aplikacji.</p>
+    <p>Zainstaluj panel fotografa jako osobną aplikację. Po instalacji uruchomi się bez paska przeglądarki i pojawi się w przełączniku aplikacji.</p>
     <button id="installBtn" type="button">Przygotowuję instalację…</button>
     <a class="secondary" href="/admin.html">Otwórz panel bez instalacji</a>
     <div id="status">Sprawdzam możliwość instalacji PWA…</div>
@@ -34,34 +52,56 @@
 
 <script>
 (() => {
+  const VERSION = '20.2';
   const btn = document.getElementById('installBtn');
   const status = document.getElementById('status');
-  let deferred = null;
+  const ua = navigator.userAgent || '';
+  const isSamsungInternet = /SamsungBrowser\//i.test(ua);
+  const isChrome = /Chrome\//i.test(ua) && !isSamsungInternet;
+  const browserName = isSamsungInternet ? 'Samsung Internet' : (isChrome ? 'Chrome' : 'przeglądarka');
+  const reloadKey = 'raf-pwa-sw-bootstrap-' + VERSION;
+  let deferred = window.__rafPwaInstallPrompt || null;
 
   const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const setStatus = (text, cls='') => { status.textContent = text; status.className = cls; };
 
+  function syncInstallPrompt(){
+    if (window.__rafPwaInstallPrompt) deferred = window.__rafPwaInstallPrompt;
+    if (!deferred || standalone()) return;
+    btn.disabled = false;
+    btn.textContent = '📲 Zainstaluj aplikację';
+    setStatus('Aplikacja jest gotowa do instalacji w ' + browserName + '.', 'ok');
+  }
+
+  window.addEventListener('raf-pwa-install-ready', syncInstallPrompt);
+
   async function registerSW(){
     if (!('serviceWorker' in navigator)) throw new Error('Ta przeglądarka nie obsługuje Service Worker.');
-    const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js?v=20.1', {scope:'/'});
+
+    const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js?v=' + VERSION, {scope:'/'});
     await navigator.serviceWorker.ready;
+
+    // Przy pierwszej rejestracji bieżąca karta może jeszcze nie być kontrolowana przez SW.
+    // Jedno automatyczne przeładowanie daje Samsung Internet / Chromium pełną szansę
+    // ponownie ocenić instalowalność PWA. Flaga zapobiega pętli przeładowań.
+    if (!navigator.serviceWorker.controller && !sessionStorage.getItem(reloadKey)) {
+      sessionStorage.setItem(reloadKey, '1');
+      setStatus('Kończę przygotowanie aplikacji… strona odświeży się jeden raz.');
+      location.reload();
+      return null;
+    }
+
+    if (navigator.serviceWorker.controller) sessionStorage.removeItem(reloadKey);
     return reg;
   }
 
-  window.addEventListener('beforeinstallprompt', event => {
-    event.preventDefault();
-    deferred = event;
-    btn.disabled = false;
-    btn.textContent = '📲 Zainstaluj aplikację';
-    setStatus('Aplikacja jest gotowa do instalacji.', 'ok');
-  });
-
   window.addEventListener('appinstalled', () => {
     deferred = null;
+    window.__rafPwaInstallPrompt = null;
     btn.textContent = '✓ Aplikacja zainstalowana';
     btn.disabled = true;
     setStatus('Gotowe. RAF.studio Galeria jest teraz osobną aplikacją na telefonie.', 'ok');
-    setTimeout(() => location.replace('/admin.html?source=pwa'), 1200);
+    setTimeout(() => location.replace('/admin.html?source=pwa'), 900);
   });
 
   btn.addEventListener('click', async () => {
@@ -69,20 +109,43 @@
       location.replace('/admin.html?source=pwa');
       return;
     }
+
+    syncInstallPrompt();
+
     if (!deferred) {
-      setStatus('Chrome jeszcze nie zgłosił gotowości instalacji. Zamknij wcześniejszy zwykły skrót RAF.studio, odśwież tę stronę i spróbuj ponownie. Jeśli używasz Chrome na Androidzie z usługami Google, po chwili powinien pojawić się przycisk instalacji.', 'warn');
+      if (isSamsungInternet) {
+        setStatus('Samsung Internet nie przekazał jeszcze systemowego okna instalacji do przycisku strony. Naciśnij ikonę instalacji przy pasku adresu albo menu przeglądarki → Dodaj stronę do / Ekran aplikacji. To jest instalacja PWA, nie zwykły skrót.', 'warn');
+      } else if (isChrome) {
+        setStatus('Chrome nie zgłosił jeszcze gotowości instalacji. Odśwież stronę i spróbuj ponownie. Jeśli aplikacja była wcześniej dodana, usuń starą pozycję RAF.studio z ekranu aplikacji.', 'warn');
+      } else {
+        setStatus('Ta przeglądarka nie udostępniła stronie systemowego okna instalacji. Użyj jej opcji „Zainstaluj aplikację” / „Dodaj do ekranu aplikacji”.', 'warn');
+      }
       return;
     }
+
     btn.disabled = true;
     const prompt = deferred;
     deferred = null;
-    await prompt.prompt();
-    const result = await prompt.userChoice;
-    if (result.outcome !== 'accepted') {
+    window.__rafPwaInstallPrompt = null;
+
+    try {
+      await prompt.prompt();
+      const result = await prompt.userChoice;
+      if (result.outcome !== 'accepted') {
+        btn.disabled = false;
+        btn.textContent = '📲 Zainstaluj aplikację';
+        setStatus('Instalacja została anulowana. Możesz uruchomić ją ponownie.', 'warn');
+      }
+    } catch (error) {
       btn.disabled = false;
       btn.textContent = '📲 Zainstaluj aplikację';
-      setStatus('Instalacja została anulowana. Możesz uruchomić ją ponownie.', 'warn');
+      setStatus('Nie udało się otworzyć systemowego instalatora: ' + (error?.message || error), 'warn');
     }
+  });
+
+  navigator.serviceWorker?.addEventListener('controllerchange', () => {
+    sessionStorage.removeItem(reloadKey);
+    syncInstallPrompt();
   });
 
   (async () => {
@@ -92,14 +155,32 @@
       setStatus('RAF.studio Galeria jest już uruchomiona w trybie aplikacji.', 'ok');
       return;
     }
+
+    syncInstallPrompt();
+
     try {
-      await registerSW();
+      const reg = await registerSW();
+      if (!reg) return;
+
+      syncInstallPrompt();
+      if (deferred) return;
+
       btn.disabled = false;
       btn.textContent = '📲 Zainstaluj aplikację';
-      setStatus('Service Worker działa. Czekam na systemowy instalator Chrome…');
+      setStatus('Service Worker działa. Czekam na instalator w ' + browserName + '…');
+
       setTimeout(() => {
-        if (!deferred && !standalone()) setStatus('Jeśli po kilku sekundach instalator nadal się nie pojawi, usuń wcześniejszy skrót RAF.studio z ekranu głównego i odśwież tę stronę. Zwykły skrót może blokować ponowną promocję instalacji.', 'warn');
-      }, 4000);
+        syncInstallPrompt();
+        if (deferred || standalone()) return;
+
+        if (isSamsungInternet) {
+          setStatus('PWA jest przygotowane poprawnie, ale Samsung Internet nie wysłał zdarzenia instalacji do strony. Możesz użyć ikony instalacji przy pasku adresu albo menu → Dodaj stronę do / Ekran aplikacji.', 'warn');
+        } else if (isChrome) {
+          setStatus('PWA jest przygotowane poprawnie, ale Chrome nie wysłał jeszcze zdarzenia instalacji. Odśwież stronę i spróbuj ponownie.', 'warn');
+        } else {
+          setStatus('PWA jest przygotowane, ale ta przeglądarka nie przekazała systemowego instalatora stronie.', 'warn');
+        }
+      }, 3500);
     } catch (error) {
       btn.disabled = false;
       btn.textContent = 'Spróbuj ponownie';
