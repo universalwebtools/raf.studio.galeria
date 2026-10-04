@@ -110,3 +110,5 @@ start();
 import("./admin-premium-v17.js?v=17.0").catch(error => console.warn("RAF premium v17 load failed", error));
 // Premium Studio v18.1 SAFE: szablony, status klienta i statystyki bez rekurencyjnego MutationObservera.
 import("./admin-premium-v18.1.js?v=18.1").catch(error => console.warn("RAF premium v18.1 load failed", error));
+// PWA v20: instalacja panelu na telefonie + rejestracja powiadomień PUSH.
+import("./admin-pwa-v20.js?v=20.0.1").catch(error => console.warn("RAF PWA v20 load failed", error));
