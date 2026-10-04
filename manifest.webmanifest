@@ -1,0 +1,33 @@
+{
+  "id": "/admin/",
+  "name": "RAF.studio Galeria",
+  "short_name": "RAF Galeria",
+  "description": "Panel RAF.studio do zarządzania galeriami klientów i odbierania powiadomień o zatwierdzonych wyborach.",
+  "start_url": "/admin/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "background_color": "#09090a",
+  "theme_color": "#09090a",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Studio Manager",
+      "short_name": "Manager",
+      "url": "/admin/"
+    },
+    {
+      "name": "Strefa klienta",
+      "short_name": "Galerie",
+      "url": "/home.html"
+    }
+  ]
+}
