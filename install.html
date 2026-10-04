@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#09090a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="RAF Galeria">
+  <title>Zainstaluj RAF.studio Galeria</title>
+  <link rel="manifest" href="/manifest.webmanifest?v=20.1">
+  <link rel="icon" href="/app-icon-192.svg">
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#09090a;color:#f5f5f2;font-family:Inter,Arial,sans-serif}
+    body{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 0,#202024 0,#0d0d0f 38%,#09090a 72%)}
+    .card{width:min(92vw,520px);padding:28px;border:1px solid #2d2d32;border-radius:26px;background:#121214;box-shadow:0 24px 80px #0008;text-align:center}
+    .icon{width:116px;height:116px;margin:0 auto 18px;display:block;border-radius:28px}
+    h1{font-size:31px;line-height:1.05;margin:0 0 12px}p{color:#a4a4aa;line-height:1.5;margin:0 0 22px}
+    button,a{width:100%;min-height:52px;border-radius:15px;border:1px solid #36363b;font-weight:800;font-size:16px;cursor:pointer}
+    #installBtn{background:#f5f5f2;color:#09090a;border-color:#f5f5f2}.secondary{display:flex;align-items:center;justify-content:center;margin-top:10px;background:#19191c;color:#fff;text-decoration:none}
+    #status{margin-top:18px;padding:12px;border-radius:12px;background:#0e0e10;color:#b7b7bd;font-size:13px;line-height:1.45}
+    .ok{color:#aaf0bb!important;border:1px solid #2f5b3b}.warn{color:#ffd9a0!important;border:1px solid #685027}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <img class="icon" src="/app-icon-512.svg" alt="RAF.studio Galeria">
+    <h1>RAF.studio Galeria</h1>
+    <p>Zainstaluj panel fotografa jako osobną aplikację. Po instalacji uruchomi się bez paska adresu Chrome i pojawi się w przełączniku aplikacji.</p>
+    <button id="installBtn" type="button">Przygotowuję instalację…</button>
+    <a class="secondary" href="/admin.html">Otwórz panel bez instalacji</a>
+    <div id="status">Sprawdzam możliwość instalacji PWA…</div>
+  </main>
+
+<script>
+(() => {
+  const btn = document.getElementById('installBtn');
+  const status = document.getElementById('status');
+  let deferred = null;
+
+  const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const setStatus = (text, cls='') => { status.textContent = text; status.className = cls; };
+
+  async function registerSW(){
+    if (!('serviceWorker' in navigator)) throw new Error('Ta przeglądarka nie obsługuje Service Worker.');
+    const reg = await navigator.serviceWorker.register('/firebase-messaging-sw.js?v=20.1', {scope:'/'});
+    await navigator.serviceWorker.ready;
+    return reg;
+  }
+
+  window.addEventListener('beforeinstallprompt', event => {
+    event.preventDefault();
+    deferred = event;
+    btn.disabled = false;
+    btn.textContent = '📲 Zainstaluj aplikację';
+    setStatus('Aplikacja jest gotowa do instalacji.', 'ok');
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferred = null;
+    btn.textContent = '✓ Aplikacja zainstalowana';
+    btn.disabled = true;
+    setStatus('Gotowe. RAF.studio Galeria jest teraz osobną aplikacją na telefonie.', 'ok');
+    setTimeout(() => location.replace('/admin.html?source=pwa'), 1200);
+  });
+
+  btn.addEventListener('click', async () => {
+    if (standalone()) {
+      location.replace('/admin.html?source=pwa');
+      return;
+    }
+    if (!deferred) {
+      setStatus('Chrome jeszcze nie zgłosił gotowości instalacji. Zamknij wcześniejszy zwykły skrót RAF.studio, odśwież tę stronę i spróbuj ponownie. Jeśli używasz Chrome na Androidzie z usługami Google, po chwili powinien pojawić się przycisk instalacji.', 'warn');
+      return;
+    }
+    btn.disabled = true;
+    const prompt = deferred;
+    deferred = null;
+    await prompt.prompt();
+    const result = await prompt.userChoice;
+    if (result.outcome !== 'accepted') {
+      btn.disabled = false;
+      btn.textContent = '📲 Zainstaluj aplikację';
+      setStatus('Instalacja została anulowana. Możesz uruchomić ją ponownie.', 'warn');
+    }
+  });
+
+  (async () => {
+    if (standalone()) {
+      btn.textContent = 'Otwórz aplikację';
+      btn.disabled = false;
+      setStatus('RAF.studio Galeria jest już uruchomiona w trybie aplikacji.', 'ok');
+      return;
+    }
+    try {
+      await registerSW();
+      btn.disabled = false;
+      btn.textContent = '📲 Zainstaluj aplikację';
+      setStatus('Service Worker działa. Czekam na systemowy instalator Chrome…');
+      setTimeout(() => {
+        if (!deferred && !standalone()) setStatus('Jeśli po kilku sekundach instalator nadal się nie pojawi, usuń wcześniejszy skrót RAF.studio z ekranu głównego i odśwież tę stronę. Zwykły skrót może blokować ponowną promocję instalacji.', 'warn');
+      }, 4000);
+    } catch (error) {
+      btn.disabled = false;
+      btn.textContent = 'Spróbuj ponownie';
+      setStatus('Nie udało się przygotować PWA: ' + (error.message || error), 'warn');
+    }
+  })();
+})();
+</script>
+</body>
+</html>
