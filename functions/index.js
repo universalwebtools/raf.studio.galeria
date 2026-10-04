@@ -5,8 +5,8 @@ const { getMessaging } = require("firebase-admin/messaging");
 
 initializeApp();
 
-const ADMIN_UID = "NLYAfU5UNcfldH4k2x2r9m1g4Vx1";
 const DATABASE_INSTANCE = "rafstudiogaleria-default-rtdb";
+const TOKEN_PATH = "galleries/__system__/adminPushTokens";
 
 exports.notifyAdminOnApproval = onValueCreated(
   {
@@ -20,7 +20,7 @@ exports.notifyAdminOnApproval = onValueCreated(
     const approval = event.data?.val() || {};
 
     // Powiadamiamy tylko o zatwierdzeniu zdjęć do obróbki,
-    // a nie o osobnym zatwierdzeniu zdjęć do odrzucenia.
+    // nie o osobnym zatwierdzeniu zdjęć do odrzucenia.
     if (approval.mode === "rejected") return;
 
     const selectedCount = Number(approval.selectedCount || 0);
@@ -31,7 +31,7 @@ exports.notifyAdminOnApproval = onValueCreated(
     const db = getDatabase();
 
     const [tokensSnap, titleSnap] = await Promise.all([
-      db.ref(`adminPushTokens/${ADMIN_UID}`).get(),
+      db.ref(TOKEN_PATH).get(),
       db.ref(`galleries/${galleryId}/public/title`).get()
     ]);
 
@@ -79,14 +79,12 @@ exports.notifyAdminOnApproval = onValueCreated(
       const code = response.error?.code || "";
       console.warn("PUSH error", devices[index]?.key, code, response.error?.message || "");
       if (invalidCodes.has(code) && devices[index]?.key) {
-        cleanup.push(db.ref(`adminPushTokens/${ADMIN_UID}/${devices[index].key}`).remove());
+        cleanup.push(db.ref(`${TOKEN_PATH}/${devices[index].key}`).remove());
       }
     });
 
     if (cleanup.length) await Promise.allSettled(cleanup);
 
-    console.log(
-      `PUSH ${galleryTitle}: success=${result.successCount}, failed=${result.failureCount}`
-    );
+    console.log(`PUSH ${galleryTitle}: success=${result.successCount}, failed=${result.failureCount}`);
   }
 );
