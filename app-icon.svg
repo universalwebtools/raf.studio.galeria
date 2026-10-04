@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#09090a"/>
+  <g fill="#ffffff">
+    <text x="256" y="255" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="142" font-weight="800" letter-spacing="-10">RAF</text>
+    <rect x="118" y="294" width="276" height="2" opacity=".65"/>
+    <text x="256" y="340" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="400" letter-spacing="12">STUDIO</text>
+  </g>
+</svg>
