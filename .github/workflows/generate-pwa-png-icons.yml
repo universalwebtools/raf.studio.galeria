@@ -1,0 +1,105 @@
+name: Generate PWA PNG icons
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/generate-pwa-png-icons.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate 192 and 512 PNG icons without external dependencies
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import struct, zlib
+
+          BG = (9, 9, 10, 255)
+          FG = (255, 255, 255, 255)
+
+          # Simple vector-like RAF monogram. Kept inside Android maskable safe area.
+          def make(size, path):
+              px = bytearray(BG * (size * size))
+
+              def rect(x0, y0, x1, y1, color=FG):
+                  x0=max(0,int(x0)); y0=max(0,int(y0)); x1=min(size,int(x1)); y1=min(size,int(y1))
+                  for y in range(y0,y1):
+                      row=(y*size+x0)*4
+                      for _ in range(x0,x1):
+                          px[row:row+4]=bytes(color); row+=4
+
+              def line(x0,y0,x1,y1,w,color=FG):
+                  x0=float(x0); y0=float(y0); x1=float(x1); y1=float(y1)
+                  steps=max(1,int(max(abs(x1-x0),abs(y1-y0))*1.8))
+                  r=max(1,int(w/2))
+                  for i in range(steps+1):
+                      t=i/steps
+                      x=x0+(x1-x0)*t; y=y0+(y1-y0)*t
+                      rect(x-r,y-r,x+r+1,y+r+1,color)
+
+              # background subtle rounded-like inner panel
+              m=int(size*.08)
+              # RAF mark around center
+              y0=size*.31; y1=size*.58
+              left=size*.18; mid=size*.41; right=size*.66
+              sw=size*.038
+
+              # R
+              line(left,y0,left,y1,sw)
+              line(left,y0,mid*.93,y0,sw)
+              line(mid*.93,y0,mid*.99,y0+size*.10,sw)
+              line(mid*.99,y0+size*.10,left,y0+size*.10,sw)
+              line(left+size*.075,y0+size*.10,mid*.99,y1,sw)
+
+              # A
+              ax0=size*.395; ax1=size*.635; apex=size*.515
+              line(ax0,y1,apex,y0,sw)
+              line(apex,y0,ax1,y1,sw)
+              line(size*.445,size*.485,size*.588,size*.485,sw*.72)
+
+              # F
+              fx=size*.665
+              line(fx,y0,fx,y1,sw)
+              line(fx,y0,size*.835,y0,sw)
+              line(fx,y0+size*.115,size*.80,y0+size*.115,sw)
+
+              # studio separator and tiny blocks suggesting S T U D I O
+              line(size*.22,size*.665,size*.78,size*.665,max(1,size*.006),(190,190,195,255))
+              base_y=size*.71
+              start=size*.29
+              gap=size*.07
+              for i in range(6):
+                  rect(start+i*gap,base_y,start+i*gap+size*.024,base_y+size*.012,(210,210,214,255))
+
+              raw=b''.join(b'\x00'+bytes(px[y*size*4:(y+1)*size*4]) for y in range(size))
+              def chunk(tag,data):
+                  return struct.pack('>I',len(data))+tag+data+struct.pack('>I',zlib.crc32(tag+data)&0xffffffff)
+              png=b'\x89PNG\r\n\x1a\n'
+              png+=chunk(b'IHDR',struct.pack('>IIBBBBB',size,size,8,6,0,0,0))
+              png+=chunk(b'IDAT',zlib.compress(raw,9))
+              png+=chunk(b'IEND',b'')
+              open(path,'wb').write(png)
+
+          make(192,'app-icon-192.png')
+          make(512,'app-icon-512.png')
+          print('generated raster PWA icons')
+          PY
+
+      - name: Commit icons
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app-icon-192.png app-icon-512.png
+          git diff --cached --quiet && exit 0
+          git commit -m "Add raster PNG icons for PWA"
+          git push
