@@ -3,6 +3,7 @@ import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/
 import { getDatabase, ref, get, update, remove, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, deleteObject } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { ADMIN_UID } from "./firebase-config.js?v=17.0";
+import { cleanupGalleryData } from "./gallery-cleanup.js?v=21.1";
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
@@ -263,11 +264,7 @@ async function permanentDelete(slug, ask = true) {
   deletingSlugs.add(slug);
   try {
     await deleteStorageTree(`galleries/${slug}`).catch(() => {});
-    await Promise.all([
-      remove(ref(db, `favorites/${slug}`)).catch(() => {}),
-      remove(ref(db, `selections/${slug}`)).catch(() => {}),
-      remove(ref(db, `approvals/${slug}`)).catch(() => {})
-    ]);
+    await cleanupGalleryData(db, slug);
     await remove(ref(db, `galleries/${slug}`));
     toast("Galeria usunięta na stałe");
     setTimeout(renderTrash, 100);

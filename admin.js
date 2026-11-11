@@ -3,6 +3,7 @@ import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signInAnonymou
 import { getDatabase, ref, get, set, remove, update, onValue } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, listAll, getDownloadURL, uploadBytesResumable, deleteObject, updateMetadata, getMetadata } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
 import { firebaseConfig, ADMIN_UID } from "./firebase-config.js?v=16.2.4.2.1";
+import { cleanupGalleryData } from "./gallery-cleanup.js?v=21.1";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
@@ -1919,8 +1920,7 @@ $("#deleteGalleryBtn").addEventListener("click", async () => {
 
   try {
     await deleteFolder(`galleries/${slug}`);
-    await remove(ref(db, `favorites/${slug}`)).catch(() => {});
-    await remove(ref(db, `selections/${slug}`)).catch(() => {});
+    await cleanupGalleryData(db, slug);
     await remove(ref(db, `galleries/${slug}`));
 
     $("#galleryDialog").close();
