@@ -37,7 +37,7 @@ const DEFAULT_ADMIN_LOGIN_CONFIG = {
   buttonLabel: "Zaloguj",
   emailPlaceholder: "E-mail",
   passwordPlaceholder: "Hasło",
-  rememberLabel: "Zapamiętaj dane na tym urządzeniu",
+  rememberLabel: "Zapamiętaj e-mail na tym urządzeniu",
   showPasswordLabel: "Pokaż hasło",
   hidePasswordLabel: "Ukryj hasło",
 
@@ -368,7 +368,7 @@ function applyAdminLoginConfig(config = adminLoginConfig) {
   if (email) email.placeholder = adminLoginConfig.emailPlaceholder || "E-mail";
   if (password) password.placeholder = adminLoginConfig.passwordPlaceholder || "Hasło";
 
-  if (rememberText) rememberText.textContent = adminLoginConfig.rememberLabel || "Zapamiętaj dane na tym urządzeniu";
+  if (rememberText) rememberText.textContent = adminLoginConfig.rememberLabel || "Zapamiętaj e-mail na tym urządzeniu";
   if (remember) remember.hidden = !adminLoginConfig.showRemember;
 
   if (toggle) {
@@ -1369,7 +1369,10 @@ function restoreSavedAdminLogin() {
     const saved = JSON.parse(raw);
 
     if (saved?.email) $("#adminEmail").value = saved.email;
-    if (saved?.password) $("#adminPassword").value = saved.password;
+    // Starsze wersje zapisywały tu hasło otwartym tekstem — usuwamy je.
+    if (saved?.password) {
+      localStorage.setItem("raf-admin-login", JSON.stringify({ email: saved.email || "" }));
+    }
     if ($("#rememberAdminLogin")) $("#rememberAdminLogin").checked = true;
   } catch (error) {
     console.debug("Saved login restore failed:", error);
@@ -1387,8 +1390,8 @@ function saveAdminLoginIfRequested() {
   localStorage.setItem(
     "raf-admin-login",
     JSON.stringify({
-      email: $("#adminEmail").value.trim(),
-      password: $("#adminPassword").value
+      // Zapamiętujemy tylko e-mail. Sesję i tak utrzymuje Firebase Auth.
+      email: $("#adminEmail").value.trim()
     })
   );
 }

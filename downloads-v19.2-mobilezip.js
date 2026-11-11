@@ -229,6 +229,7 @@ async function init() {
     if (!getApps().length) throw new Error("Firebase nie został uruchomiony.");
     const app = getApp(), auth = getAuth(app); db = getDatabase(app); storage = getStorage(app);
     if (!auth.currentUser) await signInAnonymously(auth);
+    if (window.RAF_GALLERY_ACCESS) await window.RAF_GALLERY_ACCESS;
     const snap = await get(ref(db, `galleries/${slug}/public`));
     if (!snap.exists()) throw new Error("Nie znaleziono galerii.");
     gallery = snap.val();

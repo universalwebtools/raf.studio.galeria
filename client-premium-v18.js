@@ -383,6 +383,7 @@ async function init() {
   db = getDatabase(app);
 
   try {
+    if (window.RAF_GALLERY_ACCESS) await window.RAF_GALLERY_ACCESS;
     const snap = await get(ref(db, `galleries/${slug}/public`));
     galleryPublic = snap.exists() ? (snap.val() || {}) : {};
     presentationPhotos = photoListFromPublic(galleryPublic);

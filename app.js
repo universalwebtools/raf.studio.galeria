@@ -2,12 +2,19 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebas
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
 import { getDatabase, ref, get, set, remove, onValue, push } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
+import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-functions.js";
 import { firebaseConfig } from "./firebase-config.js?v=16.2.4.2.1";
 
 const fb = initializeApp(firebaseConfig);
 const auth = getAuth(fb);
 const db = getDatabase(fb);
 const storage = getStorage(fb);
+const galleryAccessFn = httpsCallable(getFunctions(fb, "europe-west1"), "galleryAccess");
+
+// Rozwiązywane, gdy ten klient ma już dostęp do danych galerii (poprawne hasło
+// sprawdzone przez serwer). Moduły dodatkowe czekają na to przed odczytem danych.
+let resolveGalleryAccess;
+window.RAF_GALLERY_ACCESS = new Promise(resolve => { resolveGalleryAccess = resolve; });
 
 const $ = (selector) => document.querySelector(selector);
 const slug = new URLSearchParams(location.search).get("g") || "";
@@ -384,6 +391,33 @@ async function passwordMatches(entered) {
   return false;
 }
 
+// Hasło sprawdza Cloud Function; po sukcesie serwer przyznaje dostęp do danych i plików.
+async function unlockOnServer(entered) {
+  if (!auth.currentUser) await signInAnonymously(auth);
+  const result = await callGalleryAccess({ action: "unlock", slug, password: entered });
+
+  if (result.status === "rate-limited") {
+    throw new Error("Zbyt wiele prób. Spróbuj ponownie za kilkanaście minut.");
+  }
+  if (result.status === "wrong-password") return false;
+  if (result.status !== "ok") {
+    showAccessStatus(result);
+    throw new Error("Galeria jest niedostępna.");
+  }
+
+  // Nowy token z uprawnieniem do plików galerii (reguły Storage).
+  await auth.currentUser.getIdToken(true);
+
+  const publicResult = await readGalleryPublic();
+  if (!publicResult.snap?.exists()) {
+    throw publicResult.error || new Error("Nie udało się wczytać galerii.");
+  }
+  if (!acceptGalleryData(publicResult.snap.val())) {
+    throw new Error("Galeria jest niedostępna.");
+  }
+  return true;
+}
+
 async function getCurrentClientUid() {
   if (auth.currentUser) return auth.currentUser.uid;
 
@@ -507,9 +541,9 @@ async function init() {
     const credential = await signInAnonymously(auth);
     uid = credential.user.uid;
 
-    const [clientLoginConfigSnap, publicSnap] = await Promise.all([
+    const [clientLoginConfigSnap, publicResult] = await Promise.all([
       get(ref(db, CLIENT_LOGIN_CONFIG_PATH)).catch(() => null),
-      get(ref(db, `galleries/${slug}/public`))
+      readGalleryPublic()
     ]);
 
     if (clientLoginConfigSnap?.exists?.()) {
@@ -517,35 +551,87 @@ async function init() {
       applyClientLoginConfig(clientLoginConfig);
     }
 
-    if (!publicSnap.exists()) {
-      showFatal("Galeria nie istnieje.");
-      return;
-    }
-
-    gallery = publicSnap.val();
-
-    if (gallery.active === false) {
-      showFatal("Galeria została wyłączona.");
-      return;
-    }
-
-    if (isExpired()) {
-      showFatal("Dostęp do galerii wygasł.");
-      return;
-    }
-
-    applyUiConfig();
-    applyGalleryMeta();
-
     loadRejectedState();
 
-    if (sessionStorage.getItem(`raf-access-${slug}`) === "1") {
-      showIntro();
+    if (publicResult.snap) {
+      // To urządzenie ma już dostęp (hasło zostało wcześniej sprawdzone przez serwer).
+      if (!publicResult.snap.exists()) {
+        showFatal("Galeria nie istnieje.");
+        return;
+      }
+      if (!acceptGalleryData(publicResult.snap.val())) return;
+      if (sessionStorage.getItem(`raf-access-${slug}`) === "1") {
+        showIntro();
+      }
+      return;
     }
+
+    if (!isPermissionDenied(publicResult.error)) throw publicResult.error;
+
+    // Brak dostępu — pokazujemy tylko ekran hasła z tytułem galerii.
+    const info = await callGalleryAccess({ action: "info", slug });
+    if (!showAccessStatus(info)) return;
+    if (info.title) $("#lockTitle").textContent = info.title;
   } catch (error) {
     console.error("INIT ERROR", error);
     showFatal(`Nie udało się uruchomić galerii: ${error.code || error.message || error}`);
   }
+}
+
+function isPermissionDenied(error) {
+  const code = String(error?.code || error?.message || "").toLowerCase();
+  return code.includes("permission") || code.includes("denied");
+}
+
+async function readGalleryPublic() {
+  try {
+    return { snap: await get(ref(db, `galleries/${slug}/public`)) };
+  } catch (error) {
+    return { error };
+  }
+}
+
+async function callGalleryAccess(payload) {
+  const result = await galleryAccessFn(payload);
+  return result?.data || {};
+}
+
+// Zwraca true, gdy galeria jest dostępna; w przeciwnym razie pokazuje komunikat.
+function showAccessStatus(info) {
+  switch (info?.status) {
+    case "ok":
+    case "wrong-password":
+    case "rate-limited":
+      return true;
+    case "inactive":
+      showFatal("Galeria została wyłączona.");
+      return false;
+    case "expired":
+      showFatal("Dostęp do galerii wygasł.");
+      return false;
+    default:
+      showFatal("Galeria nie istnieje.");
+      return false;
+  }
+}
+
+function acceptGalleryData(data) {
+  gallery = data || {};
+
+  if (gallery.active === false) {
+    showFatal("Galeria została wyłączona.");
+    return false;
+  }
+
+  if (isExpired()) {
+    showFatal("Dostęp do galerii wygasł.");
+    return false;
+  }
+
+  applyUiConfig();
+  applyGalleryMeta();
+  resolveGalleryAccess(gallery);
+  return true;
 }
 
 function applyGalleryMeta() {
@@ -781,7 +867,11 @@ function renderRejectedWorkflowList() {
   const list = $("#rejectedFilenameList");
   if (!list) return;
   const names = sortedRejectedNames();
-  list.innerHTML = names.map(filename => `<span>${displayName(filename)}</span>`).join("");
+  list.replaceChildren(...names.map(filename => {
+    const span = document.createElement("span");
+    span.textContent = displayName(filename);
+    return span;
+  }));
   list.hidden = names.length === 0;
 }
 
@@ -1735,10 +1825,6 @@ $("#passwordForm").addEventListener("submit", async (event) => {
   submitButton.textContent = "Sprawdzanie…";
 
   try {
-    if (!gallery) {
-      throw new Error("Dane galerii nie zostały jeszcze wczytane. Odśwież stronę.");
-    }
-
     const entered = input.value;
 
     if (!normalizePassword(entered)) {
@@ -1747,7 +1833,8 @@ $("#passwordForm").addEventListener("submit", async (event) => {
       return;
     }
 
-    const ok = await passwordMatches(entered);
+    // Urządzenie z już przyznanym dostępem: sprawdzamy lokalnie, bez wywołania serwera.
+    const ok = gallery ? await passwordMatches(entered) : await unlockOnServer(entered);
 
     if (!ok) {
       errorEl.textContent = "Nieprawidłowe hasło.";

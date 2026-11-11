@@ -190,6 +190,7 @@ async function init() {
     if (!user) return;
 
     const db = getDatabase(app);
+    if (window.RAF_GALLERY_ACCESS) await window.RAF_GALLERY_ACCESS;
     const snap = await get(ref(db, `galleries/${slug}/public/photos`));
     Object.values(snap.exists() ? (snap.val() || {}) : {}).forEach(addMeta);
     metadataReady = true;
@@ -204,4 +205,4 @@ async function init() {
 init();
 
 // Premium Studio v18: prezentacja, komentarz do wyboru, status klienta i statystyki.
-import("./client-premium-v18.js?v=18.0").catch(error => console.warn("RAF client premium v18 load failed", error));
+import("./client-premium-v18.js?v=21.0").catch(error => console.warn("RAF client premium v18 load failed", error));

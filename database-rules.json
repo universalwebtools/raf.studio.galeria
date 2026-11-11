@@ -5,29 +5,48 @@
       "$galleryId": {
         ".write": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
         "public": {
-          ".read": "auth != null"
+          ".read": "auth != null && ($galleryId === '__system__' || root.child('access').child(auth.uid).child($galleryId).exists())"
         }
+      }
+    },
+    "access": {
+      ".read": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
+      ".write": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
       }
     },
     "selections": {
       ".read": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
+      ".write": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
       "$galleryId": {
-        ".read": "auth != null",
-        ".write": "auth != null",
+        ".read": "auth != null && root.child('access').child(auth.uid).child($galleryId).exists()",
+        ".write": "auth != null && root.child('access').child(auth.uid).child($galleryId).exists()",
         "$photoKey": {
           ".validate": "newData.val() === null || (newData.hasChildren(['filename','selectedAt']) && newData.child('filename').isString() && newData.child('selectedAt').isNumber())"
         }
       }
     },
     "approvals": {
+      ".read": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
+      ".write": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
       "$galleryId": {
-        ".read": "auth != null",
+        ".read": "auth != null && root.child('access').child(auth.uid).child($galleryId).exists()",
         "$approvalId": {
-          ".write": "auth != null",
+          ".write": "auth != null && root.child('access').child(auth.uid).child($galleryId).exists()",
           ".validate": "newData.val() === null || (newData.hasChildren(['submittedAt','selectedCount','filenames']) && newData.child('submittedAt').isNumber() && newData.child('selectedCount').isNumber() && newData.child('selectedCount').val() > 0)"
         }
-      },
-      ".read": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'"
+      }
+    },
+    "clientAnalytics": {
+      ".read": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
+      ".write": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
+      "$galleryId": {
+        "$uid": {
+          ".read": "auth != null && auth.uid === $uid",
+          ".write": "auth != null && auth.uid === $uid && root.child('access').child(auth.uid).child($galleryId).exists()"
+        }
+      }
     },
     "favorites": {
       ".read": "auth != null && auth.uid === 'NLYAfU5UNcfldH4k2x2r9m1g4Vx1'",
