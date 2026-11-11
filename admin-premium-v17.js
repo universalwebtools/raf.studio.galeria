@@ -15,7 +15,6 @@ let auth;
 let db;
 let storage;
 let allGalleries = {};
-let orderDraft = [];
 let currentShareSlug = null;
 let shareBlob = null;
 let initialized = false;
@@ -66,17 +65,14 @@ function injectStyles() {
   style.textContent = `
     .premium17-card-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
     .premium17-card-actions button{font-size:10px;padding:8px 10px}
-    .premium17-home-hidden{opacity:.82}
-    .premium17-home-hidden .gallery-cover::after{content:"UKRYTA NA HOME";position:absolute;inset:auto 12px 12px auto;padding:6px 8px;border-radius:999px;background:#000c;border:1px solid #ffffff2c;color:var(--ink);font:800 9px system-ui;letter-spacing:.06em;z-index:4}
-    #premiumTrashDialog,#premiumOrderDialog,#premiumShareDialog{width:min(920px,calc(100% - 18px));max-height:90vh;padding:0;border:1px solid var(--line);border-radius:20px;background:var(--bg);color:var(--ink)}
-    #premiumTrashDialog::backdrop,#premiumOrderDialog::backdrop,#premiumShareDialog::backdrop{background:#000c;backdrop-filter:blur(7px)}
+    #premiumTrashDialog,#premiumShareDialog{width:min(920px,calc(100% - 18px));max-height:90vh;padding:0;border:1px solid var(--line);border-radius:20px;background:var(--bg);color:var(--ink)}
+    #premiumTrashDialog::backdrop,#premiumShareDialog::backdrop{background:#000c;backdrop-filter:blur(7px)}
     .premium17-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:20px;border-bottom:1px solid var(--line)}
     .premium17-head h2{margin:3px 0 5px;font-size:28px}.premium17-head p{margin:0;color:var(--muted);font-size:12px}.premium17-close{width:39px;height:39px;border:1px solid var(--line);border-radius:11px;background:var(--bg-2);color:var(--ink);font-size:21px;cursor:pointer}
     .premium17-body{padding:16px 20px 20px}.premium17-list{display:grid;gap:9px}.premium17-empty{padding:24px;border:1px dashed var(--line);border-radius:14px;color:var(--muted);text-align:center}
     .trash-row,.order-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:13px;background:var(--bg-2)}
     .trash-row strong,.order-row strong{display:block;font-size:13px}.trash-row small,.order-row small{display:block;color:var(--muted);margin-top:4px;font-size:10px}.trash-actions,.order-actions{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
     .premium17-danger{background:var(--danger-soft)!important;border-color:var(--danger)!important;color:var(--danger)!important}
-    .premium17-order-num{display:inline-grid;place-items:center;width:25px;height:25px;border:1px solid var(--line-2);border-radius:8px;margin-right:8px;color:var(--muted)}
     .premium17-footer{display:flex;gap:8px;align-items:center;padding:14px 20px;border-top:1px solid var(--line)}.premium17-footer .spacer{flex:1}
     .premium17-share-layout{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:16px;align-items:start}.premium17-canvas-wrap{background:var(--bg-2);border:1px solid var(--line);border-radius:14px;padding:10px}.premium17-canvas-wrap canvas{display:block;width:100%;height:auto;border-radius:10px;background:var(--bg-2)}.premium17-share-side{display:grid;gap:10px}.premium17-share-side .ghost,.premium17-share-side .primary{width:100%}.premium17-share-note{padding:11px;border:1px solid var(--line);border-radius:11px;background:var(--bg-2);color:var(--muted);font-size:10px;line-height:1.45}
     @media(max-width:700px){.premium17-share-layout{grid-template-columns:1fr}.trash-row,.order-row{grid-template-columns:1fr}.trash-actions,.order-actions{justify-content:flex-start}.premium17-head h2{font-size:23px}}
@@ -87,16 +83,6 @@ function injectStyles() {
 function injectHeaderButtons() {
   const actions = $(".admin-head-actions");
   if (!actions) return;
-
-  if (!$("#premiumOrderBtn")) {
-    const btn = document.createElement("button");
-    btn.id = "premiumOrderBtn";
-    btn.type = "button";
-    btn.className = "ghost";
-    btn.textContent = "↕ Kolejność home";
-    actions.insertBefore(btn, $("#newGalleryBtn") || null);
-    btn.addEventListener("click", openOrderDialog);
-  }
 
   if (!$("#premiumTrashBtn")) {
     const btn = document.createElement("button");
@@ -119,15 +105,6 @@ function injectDialogs() {
       </dialog>`);
   }
 
-  if (!$("#premiumOrderDialog")) {
-    document.body.insertAdjacentHTML("beforeend", `
-      <dialog id="premiumOrderDialog">
-        <div class="premium17-head"><div><small class="eyebrow">STREFA KLIENTA</small><h2>Kolejność galerii na home</h2><p>Ustaw, które galerie klient zobaczy jako pierwsze. Galerie ukryte na home są pomijane.</p></div><button class="premium17-close" data-close-premium="premiumOrderDialog">×</button></div>
-        <div class="premium17-body"><div id="premiumOrderList" class="premium17-list"></div></div>
-        <div class="premium17-footer"><button id="premiumOrderAlphabetical" type="button" class="ghost">A–Z</button><span class="spacer"></span><button type="button" class="ghost" data-close-premium="premiumOrderDialog">Anuluj</button><button id="premiumOrderSave" type="button" class="primary">Zapisz kolejność</button></div>
-      </dialog>`);
-  }
-
   if (!$("#premiumShareDialog")) {
     document.body.insertAdjacentHTML("beforeend", `
       <dialog id="premiumShareDialog">
@@ -142,11 +119,6 @@ function injectDialogs() {
     btn.addEventListener("click", () => $("#" + btn.dataset.closePremium)?.close());
   });
 
-  $("#premiumOrderSave")?.addEventListener("click", saveOrder);
-  $("#premiumOrderAlphabetical")?.addEventListener("click", () => {
-    orderDraft.sort((a,b) => a.title.localeCompare(b.title, "pl", {numeric:true,sensitivity:"base"}));
-    renderOrderRows();
-  });
   $("#premiumShareNative")?.addEventListener("click", shareCardNative);
   $("#premiumShareDownload")?.addEventListener("click", downloadShareCard);
   $("#premiumShareCopyLink")?.addEventListener("click", async () => {
@@ -284,68 +256,6 @@ async function cleanupExpiredTrash() {
   }
 }
 
-function visibleHomeEntries() {
-  return Object.entries(allGalleries || {})
-    .filter(([slug,g]) => !slug.startsWith("__system__") && g?.public && !g.public.trashedAt && g.public.homeHidden !== true)
-    .map(([slug,g]) => ({slug, title:String(g.public.title || slug), order:Number.isFinite(Number(g.public.homeOrder)) ? Number(g.public.homeOrder) : 999999, createdAt:Number(g.public.createdAt || 0)}))
-    .sort((a,b) => a.order - b.order || b.createdAt - a.createdAt || a.title.localeCompare(b.title,"pl",{numeric:true,sensitivity:"base"}));
-}
-
-function openOrderDialog() {
-  orderDraft = visibleHomeEntries().map(item => ({...item}));
-  renderOrderRows();
-  $("#premiumOrderDialog")?.showModal();
-}
-
-function renderOrderRows() {
-  const list = $("#premiumOrderList");
-  if (!list) return;
-  if (!orderDraft.length) {
-    list.innerHTML = `<div class="premium17-empty">Brak galerii widocznych na stronie głównej.</div>`;
-    return;
-  }
-  list.innerHTML = orderDraft.map((item,index) => `<div class="order-row"><div><strong><span class="premium17-order-num">${index+1}</span>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.slug)}</small></div><div class="order-actions"><button type="button" class="ghost" data-order-up="${index}" ${index===0?"disabled":""}>↑</button><button type="button" class="ghost" data-order-down="${index}" ${index===orderDraft.length-1?"disabled":""}>↓</button></div></div>`).join("");
-  $$('[data-order-up]', list).forEach(btn => btn.addEventListener("click", () => moveOrder(Number(btn.dataset.orderUp), -1)));
-  $$('[data-order-down]', list).forEach(btn => btn.addEventListener("click", () => moveOrder(Number(btn.dataset.orderDown), 1)));
-}
-
-function moveOrder(index, delta) {
-  const next = index + delta;
-  if (next < 0 || next >= orderDraft.length) return;
-  [orderDraft[index], orderDraft[next]] = [orderDraft[next], orderDraft[index]];
-  renderOrderRows();
-}
-
-async function saveOrder() {
-  const patch = {};
-  orderDraft.forEach((item,index) => {
-    patch[`galleries/${item.slug}/public/homeOrder`] = (index + 1) * 10;
-    patch[`galleries/${item.slug}/public/updatedAt`] = Date.now();
-  });
-  try {
-    await update(ref(db), patch);
-    $("#premiumOrderDialog")?.close();
-    toast("Kolejność galerii na home zapisana");
-  } catch (error) {
-    console.error("SAVE HOME ORDER ERROR", error);
-    toast(`Nie udało się zapisać kolejności: ${error.message || error}`);
-  }
-}
-
-async function toggleHomeVisibility(slug) {
-  const pub = allGalleries?.[slug]?.public || {};
-  const next = pub.homeHidden !== true;
-  try {
-    await update(ref(db, `galleries/${slug}/public`), {
-      homeHidden: next,
-      updatedAt: Date.now()
-    });
-    toast(next ? "Galeria ukryta na głównej Strefie klienta" : "Galeria znów widoczna na home");
-  } catch (error) {
-    toast(`Błąd zmiany widoczności: ${error.message || error}`);
-  }
-}
-
 function decorateCards() {
   const list = $("#galleryList");
   if (!list) return;
@@ -355,23 +265,7 @@ function decorateCards() {
     if (!slug) return;
     const pub = allGalleries?.[slug]?.public || {};
     card.hidden = Boolean(pub.trashedAt);
-    card.classList.toggle("premium17-home-hidden", pub.homeHidden === true);
     if (pub.trashedAt) return;
-
-    let actions = $(".premium17-card-actions", card);
-    if (!actions) {
-      actions = document.createElement("div");
-      actions.className = "premium17-card-actions";
-      const body = $(".gallery-body", card) || card;
-      body.appendChild(actions);
-    }
-
-    actions.innerHTML = `
-      <button type="button" class="ghost" data-premium-home="${escapeHtml(slug)}">${pub.homeHidden === true ? "👁 Pokaż na home" : "🙈 Ukryj na home"}</button>
-      <button type="button" class="ghost" data-premium-share="${escapeHtml(slug)}">🔗 Karta linku</button>`;
-
-    $("[data-premium-home]", actions)?.addEventListener("click", () => toggleHomeVisibility(slug));
-    $("[data-premium-share]", actions)?.addEventListener("click", () => openShareCard(slug));
   });
 
   const visible = Object.entries(allGalleries || {}).filter(([slug,g]) => !slug.startsWith("__system__") && g?.public && !g.public.trashedAt);
@@ -548,14 +442,11 @@ async function initialize() {
       replaceDeleteButton();
       setTimeout(decorateCards, 0);
       if ($("#premiumTrashDialog")?.open) renderTrash();
-      if ($("#premiumOrderDialog")?.open) {
-        const live = new Map(visibleHomeEntries().map(item => [item.slug,item]));
-        orderDraft = orderDraft.filter(item => live.has(item.slug)).map(item => ({...item,...live.get(item.slug)}));
-        renderOrderRows();
-      }
       cleanupExpiredTrash().catch(error => console.warn("Expired trash cleanup", error));
     });
   });
 }
+
+window.rafOpenShareCard = slug => openShareCard(slug);
 
 initialize().catch(error => console.error("RAF PREMIUM V17 INIT ERROR", error));

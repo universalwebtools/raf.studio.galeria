@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#09090a">
+  <meta name="theme-color" content="#ffffff">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="RAF Galeria">
   <title>Zainstaluj RAF.studio Galeria</title>
 
@@ -23,23 +23,33 @@
   <link rel="manifest" href="/manifest.webmanifest?v=20.3">
   <link rel="icon" type="image/png" sizes="192x192" href="/app-icon-192.png?v=20.3">
   <link rel="apple-touch-icon" href="/app-icon-192.png?v=20.3">
+  <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <script>try { if (localStorage.getItem("raf-admin-theme") === "dark") document.documentElement.dataset.theme = "dark"; } catch (_) {}</script>
   <style>
-    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#09090a;color:#f5f5f2;font-family:Inter,Arial,sans-serif}
-    body{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 0,#202024 0,#0d0d0f 38%,#09090a 72%)}
-    .card{width:min(92vw,520px);padding:28px;border:1px solid #2d2d32;border-radius:26px;background:#121214;box-shadow:0 24px 80px #0008;text-align:center}
-    .icon{width:116px;height:116px;margin:0 auto 18px;display:block;border-radius:28px}
-    h1{font-size:31px;line-height:1.05;margin:0 0 12px}p{color:#a4a4aa;line-height:1.5;margin:0 0 22px}
-    button,a{width:100%;min-height:52px;border-radius:15px;border:1px solid #36363b;font-weight:800;font-size:16px;cursor:pointer}
-    button:disabled{opacity:.65;cursor:default}
-    #installBtn{background:#f5f5f2;color:#09090a;border-color:#f5f5f2}.secondary{display:flex;align-items:center;justify-content:center;margin-top:10px;background:#19191c;color:#fff;text-decoration:none}
-    #status{margin-top:18px;padding:12px;border-radius:12px;background:#0e0e10;color:#b7b7bd;font-size:13px;line-height:1.45}
-    .ok{color:#aaf0bb!important;border:1px solid #2f5b3b}.warn{color:#ffd9a0!important;border:1px solid #685027}.working{color:#d9e7ff!important;border:1px solid #304963}
-    #diag{margin-top:10px;color:#74747b;font-size:11px;line-height:1.35;word-break:break-word}
+    @font-face{font-family:Inter;font-style:normal;font-display:swap;font-weight:100 900;src:url(/fonts/inter-latin-ext.woff2) format('woff2');unicode-range:U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+1E00-1E9F,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF}
+    @font-face{font-family:Inter;font-style:normal;font-display:swap;font-weight:100 900;src:url(/fonts/inter-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+    :root{--bg:#fff;--bg-2:#f6f4f1;--ink:#141414;--muted:#6d6a66;--line:#e7e3dd;--accent:#b8925a;--ok:#2f7d4f;--ok-soft:#e6f2ea;--warn:#8a5a12;--warn-soft:#fbf3e4;color-scheme:light}
+    :root[data-theme="dark"]{--bg:#0b0b0c;--bg-2:#141416;--ink:#f3f1ee;--muted:#a3a09b;--line:#2a2a2e;--ok:#7fd49c;--ok-soft:#12261a;--warn:#f2cf8a;--warn-soft:#2a2214;color-scheme:dark}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+    body{min-height:100svh;display:grid;place-items:center;padding:24px}
+    .card{width:min(100%,460px);text-align:center}
+    .icon{width:104px;height:104px;margin:0 auto 28px;display:block;border-radius:26px;box-shadow:0 10px 30px rgba(0,0,0,.12)}
+    .kicker{text-transform:uppercase;letter-spacing:.2em;font-size:11px;font-weight:600;color:var(--accent);margin:0 0 12px}
+    h1{font-size:clamp(32px,7vw,44px);line-height:1.05;letter-spacing:-.04em;font-weight:600;margin:0 0 14px}
+    p{color:var(--muted);line-height:1.6;margin:0 0 28px;font-size:16px}
+    button,a{width:100%;min-height:52px;border-radius:999px;border:1px solid var(--line);font-family:inherit;font-weight:600;font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;text-decoration:none}
+    button:disabled{opacity:.6;cursor:default}
+    #installBtn{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+    .secondary{margin-top:10px;background:var(--bg);color:var(--ink)}
+    #status{margin-top:20px;padding:14px 16px;border-radius:14px;background:var(--bg-2);color:var(--muted);font-size:14px;line-height:1.5}
+    .ok{background:var(--ok-soft)!important;color:var(--ok)!important}.warn{background:var(--warn-soft)!important;color:var(--warn)!important}.working{color:var(--ink)!important}
+    #diag{margin-top:12px;color:var(--muted);opacity:.7;font-size:11px;line-height:1.4;word-break:break-word}
   </style>
 </head>
 <body>
   <main class="card">
     <img class="icon" src="/app-icon-512.png?v=20.3" alt="RAF.studio Galeria">
+    <p class="kicker">Studio Manager</p>
     <h1>RAF.studio Galeria</h1>
     <p>Zainstaluj panel fotografa jako osobną aplikację. Po instalacji uruchomi się bez paska adresu i będzie widoczny jak normalna aplikacja.</p>
     <button id="installBtn" type="button">Przygotowuję instalację…</button>

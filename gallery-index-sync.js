@@ -1,100 +1,33 @@
 import { getApps } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
+import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
 import { ADMIN_UID } from "./firebase-config.js?v=17.0";
 
+// Strefa klienta nie pokazuje już publicznej listy galerii. Ten moduł usuwa
+// ewentualny stary publiczny indeks i wczytuje dodatkowe moduły panelu.
 const INDEX_PATH = "galleries/__system__/public/galleryIndex";
 
-function stable(value){
-  if (!value || typeof value !== "object") return JSON.stringify(value);
-  const sorted = Object.keys(value).sort().reduce((acc,key) => {
-    acc[key] = value[key];
-    return acc;
-  }, {});
-  return JSON.stringify(sorted);
-}
-
-async function buildIndex(all, storage){
-  const result = {};
-
-  for (const [slug, gallery] of Object.entries(all || {})) {
-    if (slug.startsWith("__system__")) continue;
-    const pub = gallery?.public;
-    if (!pub || pub.trashedAt) continue;
-
-    const photos = Object.values(pub.photos || {}).filter(photo =>
-      photo?.filename && photo.hiddenFromClient !== true
-    );
-    const preferredFile = pub.coverFile || pub.heroBackgroundFile || photos[0]?.filename || "";
-    const cover =
-      photos.find(photo => photo?.filename === preferredFile) ||
-      photos.find(photo => photo?.previewUrl) ||
-      photos[0] ||
-      null;
-
-    let coverUrl = String(cover?.previewUrl || "");
-    const coverFile = String(cover?.filename || preferredFile || "");
-
-    if (!coverUrl && coverFile) {
-      try {
-        coverUrl = await getDownloadURL(
-          sRef(storage, `galleries/${slug}/previews/${coverFile}.webp`)
-        );
-      } catch (error) {
-        console.warn("RAF.studio index cover fallback failed:", slug, error);
-      }
-    }
-
-    result[slug] = {
-      slug,
-      title: String(pub.title || slug),
-      coverUrl,
-      coverFile,
-      enabled: pub.enabled !== false && pub.active !== false,
-      homeHidden: pub.homeHidden === true,
-      homeOrder: Number.isFinite(Number(pub.homeOrder)) ? Number(pub.homeOrder) : 999999,
-      expiresAt: pub.expiresAt || "",
-      updatedAt: Number(pub.updatedAt || Date.now())
-    };
-  }
-
-  return result;
-}
-
-async function waitForFirebaseApp(){
-  for (let i = 0; i < 100; i++) {
-    const apps = getApps();
-    if (apps.length) return apps[0];
-    await new Promise(resolve => setTimeout(resolve, 50));
-  }
-  return null;
-}
-
-async function start(){
-  const app = await waitForFirebaseApp();
+async function start() {
+  for (let i = 0; i < 160 && !getApps().length; i++) await new Promise(resolve => setTimeout(resolve, 25));
+  const app = getApps()[0];
   if (!app) return;
-
   const auth = getAuth(app);
   const db = getDatabase(app);
-  const storage = getStorage(app);
-  let busy = false;
-
-  // Publiczny indeks galerii nie jest już używany (Strefa klienta nie pokazuje
-  // listy galerii — nazwy klientów nie są publiczne). Usuwamy stary indeks.
-  onAuthStateChanged(auth, user => {
+  onAuthStateChanged(auth, async user => {
     if (!user || user.uid !== ADMIN_UID) return;
-    set(ref(db, INDEX_PATH), null)
-      .then(() => console.info("RAF.studio: publiczny indeks galerii usunięty"))
-      .catch(error => console.warn("RAF.studio: nie usunięto indeksu galerii", error));
+    try {
+      if ((await get(ref(db, INDEX_PATH))).exists()) await set(ref(db, INDEX_PATH), null);
+    } catch (error) {
+      console.warn("RAF.studio: nie usunięto starego indeksu galerii", error?.code || error);
+    }
   });
 }
 
 start();
 
-// Premium Studio v17: kosz i karta udostępniania.
-import("./admin-premium-v17.js?v=21.1").catch(error => console.warn("RAF premium v17 load failed", error));
-// Premium Studio v18.1 SAFE: szablony, status klienta i statystyki bez rekurencyjnego MutationObservera.
+// Kosz i karta linku.
+import("./admin-premium-v17.js?v=25.0").catch(error => console.warn("RAF premium v17 load failed", error));
+// Szablony, status klienta i statystyki.
 import("./admin-premium-v18.1.js?v=18.1").catch(error => console.warn("RAF premium v18.1 load failed", error));
-// PWA v20: instalacja panelu na telefonie + rejestracja powiadomień PUSH.
+// Instalacja panelu na telefonie + powiadomienia PUSH.
 import("./admin-pwa-v20.js?v=20.0.1").catch(error => console.warn("RAF PWA v20 load failed", error));

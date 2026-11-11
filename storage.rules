@@ -12,6 +12,13 @@ service firebase.storage {
                    && request.auth.uid == "NLYAfU5UNcfldH4k2x2r9m1g4Vx1";
     }
 
+    // Kopie zapasowe bazy (zapisuje je Cloud Function) — tylko do pobrania przez administratora.
+    match /backups/{allPaths=**} {
+      allow read: if request.auth != null
+                  && request.auth.uid == "NLYAfU5UNcfldH4k2x2r9m1g4Vx1";
+      allow write: if false;
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

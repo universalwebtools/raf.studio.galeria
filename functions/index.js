@@ -1,10 +1,17 @@
 const crypto = require("node:crypto");
+const zlib = require("node:zlib");
+const { promisify } = require("node:util");
 const { onValueCreated } = require("firebase-functions/v2/database");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { initializeApp } = require("firebase-admin/app");
 const { getAuth } = require("firebase-admin/auth");
 const { getDatabase } = require("firebase-admin/database");
 const { getMessaging } = require("firebase-admin/messaging");
+const { getStorage } = require("firebase-admin/storage");
+
+const scrypt = promisify(crypto.scrypt);
+const ADMIN_UID = "NLYAfU5UNcfldH4k2x2r9m1g4Vx1";
 
 initializeApp();
 
@@ -61,6 +68,38 @@ async function readGalleryFields(db, slug, fields) {
   const out = {};
   fields.forEach((field, index) => { out[field] = values[index].val(); });
   return out;
+}
+
+// Hasła galerii: scrypt z losową solą, przechowywany w galleries/{slug}/secret
+// (czytelny tylko dla administratora). Format: scrypt$N$r$p$sól$skrót (base64).
+const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32 };
+
+async function scryptHash(password) {
+  const salt = crypto.randomBytes(16);
+  const key = await scrypt(password, salt, SCRYPT.keylen, { N: SCRYPT.N, r: SCRYPT.r, p: SCRYPT.p });
+  return `scrypt$${SCRYPT.N}$${SCRYPT.r}$${SCRYPT.p}$${salt.toString("base64")}$${key.toString("base64")}`;
+}
+
+async function scryptMatches(password, stored) {
+  const parts = String(stored || "").split("$");
+  if (parts.length !== 6 || parts[0] !== "scrypt") return false;
+  const [, N, r, p, saltB64, hashB64] = parts;
+  const expected = Buffer.from(hashB64, "base64");
+  const key = await scrypt(password, Buffer.from(saltB64, "base64"), expected.length, { N: Number(N), r: Number(r), p: Number(p) });
+  return key.length === expected.length && crypto.timingSafeEqual(key, expected);
+}
+
+// Zapisuje nowe hasło i usuwa stare skróty SHA-256 z części publicznej.
+async function storePassword(db, slug, password) {
+  const hash = await scryptHash(password);
+  await db.ref(`galleries/${slug}/secret/passwordScrypt`).set(hash);
+  await db.ref(`galleries/${slug}/public`).update({
+    passwordHash: null,
+    passwordHashTrimmed: null,
+    password: null,
+    passwordSet: true,
+    passwordVersion: 3
+  });
 }
 
 function passwordMatches(entered, stored) {
@@ -149,8 +188,15 @@ exports.galleryAccess = onCall(
     const galleryOk = deviceOk && await consumeAttempt(db.ref(`${ATTEMPTS_PATH}/${slug}/total`), MAX_ATTEMPTS_PER_GALLERY);
     if (!deviceOk || !galleryOk) return { status: "rate-limited" };
 
-    const stored = await readGalleryFields(db, slug, ["passwordHash", "passwordHashTrimmed", "password"]);
-    if (!passwordMatches(password, stored)) return { status: "wrong-password" };
+    const secret = (await db.ref(`galleries/${slug}/secret/passwordScrypt`).get()).val();
+    if (secret) {
+      if (!(await scryptMatches(password.trim(), secret))) return { status: "wrong-password" };
+    } else {
+      // Starsze galerie: skrót SHA-256. Po poprawnym haśle przenosimy je na scrypt.
+      const stored = await readGalleryFields(db, slug, ["passwordHash", "passwordHashTrimmed", "password"]);
+      if (!passwordMatches(password, stored)) return { status: "wrong-password" };
+      await storePassword(db, slug, password.trim()).catch(error => console.warn("PASSWORD MIGRATION", slug, error));
+    }
 
     await Promise.all([
       db.ref(`${ACCESS_PATH}/${uid}/${slug}`).set(Date.now()),
@@ -159,6 +205,58 @@ exports.galleryAccess = onCall(
     ]);
 
     return { status: "ok", title: String(meta.title || "") };
+  }
+);
+
+// Panel administratora ustawia hasło galerii przez serwer — przeglądarka nie
+// liczy ani nie zapisuje żadnego skrótu hasła.
+exports.setGalleryPassword = onCall(
+  { region: "europe-west1", timeoutSeconds: 30, memory: "256MiB", maxInstances: 5 },
+  async (request) => {
+    if (request.auth?.uid !== ADMIN_UID) throw new HttpsError("permission-denied", "Tylko administrator.");
+    const slug = cleanSlug(request.data?.slug);
+    const password = String(request.data?.password ?? "").trim();
+    if (!slug) throw new HttpsError("invalid-argument", "Nieprawidłowy identyfikator galerii.");
+    if (password.length < 4 || password.length > 200) throw new HttpsError("invalid-argument", "Hasło musi mieć od 4 do 200 znaków.");
+    const db = getDatabase();
+    const exists = (await db.ref(`galleries/${slug}/public/title`).get()).exists();
+    if (!exists) throw new HttpsError("not-found", "Nie ma takiej galerii.");
+    await storePassword(db, slug, password);
+    return { status: "ok" };
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Codzienna kopia zapasowa całej bazy do Storage: backups/db-RRRR-MM-DD.json.gz
+// Trzymamy 30 ostatnich kopii. Status ostatniej kopii widać w „Zdrowiu systemu”.
+// ---------------------------------------------------------------------------
+const BACKUP_PREFIX = "backups/db-";
+const BACKUP_KEEP = 30;
+
+exports.dailyBackup = onSchedule(
+  { schedule: "every day 03:30", timeZone: "Europe/Warsaw", region: "europe-west1", memory: "512MiB", timeoutSeconds: 300 },
+  async () => {
+    const db = getDatabase();
+    const data = (await db.ref("/").get()).val() || {};
+    delete data.unlockAttempts; // dane tymczasowe
+    const gz = await promisify(zlib.gzip)(Buffer.from(JSON.stringify(data)));
+    const date = new Date().toISOString().slice(0, 10);
+    const name = `${BACKUP_PREFIX}${date}.json.gz`;
+    const bucket = getStorage().bucket();
+    await bucket.file(name).save(gz, { contentType: "application/gzip", resumable: false, metadata: { cacheControl: "private, max-age=0" } });
+
+    const [files] = await bucket.getFiles({ prefix: BACKUP_PREFIX });
+    const sorted = files.map(file => file.name).sort();
+    const toDelete = sorted.slice(0, Math.max(0, sorted.length - BACKUP_KEEP));
+    await Promise.allSettled(toDelete.map(fileName => bucket.file(fileName).delete()));
+
+    await db.ref("galleries/__system__/backupStatus").set({
+      lastAt: Date.now(),
+      file: name,
+      bytes: gz.length,
+      kept: sorted.length - toDelete.length
+    });
+    console.log(`BACKUP ${name}: ${gz.length} B, kopii: ${sorted.length - toDelete.length}`);
   }
 );
 

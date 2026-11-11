@@ -415,3 +415,5 @@ details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 
 /* Eksport wyboru */
 .selection-export { display: flex; flex-wrap: wrap; gap: 8px; }
+.backup-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.backup-row .muted { margin: 0; font-size: 13px; }

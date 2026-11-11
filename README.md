@@ -56,3 +56,24 @@ Pole `previewUrl` to link Storage z tokenem pobierania — działa niezależnie 
 reguł. Linki, które były publicznie czytelne przed tą zmianą, pozostają ważne,
 dopóki nie unieważnisz tokenów (Firebase Console → Storage → plik → „Revoke”)
 albo nie wgrasz zdjęć ponownie.
+
+## Hasła galerii
+
+Panel wysyła hasło do Cloud Function `setGalleryPassword` (tylko administrator), która
+zapisuje je jako **scrypt z losową solą** w `galleries/{slug}/secret/passwordScrypt`
+(czytelne tylko dla administratora). Starsze galerie mają jeszcze skrót SHA-256 w części
+publicznej — przy pierwszym poprawnym wejściu klienta `galleryAccess` sam przenosi je na scrypt
+i usuwa stary skrót.
+
+## Kopia zapasowa bazy
+
+Funkcja `dailyBackup` codziennie o 3:30 (czasu polskiego) zapisuje całą bazę do
+`backups/db-RRRR-MM-DD.json.gz` w Storage i trzyma 30 ostatnich kopii. Status i przycisk
+pobrania są w panelu: **Zdrowie systemu → Narzędzia serwisowe**.
+
+Przywracanie (ostrożnie — nadpisuje bazę):
+
+```bash
+gunzip db-RRRR-MM-DD.json.gz
+firebase database:set / db-RRRR-MM-DD.json --project rafstudiogaleria
+```

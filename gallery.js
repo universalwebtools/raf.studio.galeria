@@ -191,25 +191,6 @@ function acceptGalleryData(data) {
   return true;
 }
 
-async function sha256(text) {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
-// Lokalne sprawdzenie — tylko gdy to urządzenie ma już dostęp (hash jest wtedy czytelny).
-async function passwordMatchesLocally(entered) {
-  const raw = String(entered ?? "");
-  const trimmed = raw.trim();
-  const trimmedHash = await sha256(trimmed);
-  if (gallery.passwordHashTrimmed && trimmedHash === gallery.passwordHashTrimmed) return true;
-  if (gallery.passwordHash) {
-    if (trimmedHash === gallery.passwordHash) return true;
-    if (raw !== trimmed && await sha256(raw) === gallery.passwordHash) return true;
-  }
-  if (typeof gallery.password === "string") return raw === gallery.password || trimmed === gallery.password.trim();
-  return false;
-}
-
 async function unlockOnServer(entered) {
   if (!auth.currentUser) await signInAnonymously(auth);
   const result = await callGalleryAccess({ action: "unlock", slug, password: entered });
@@ -305,7 +286,8 @@ $("#gateForm").addEventListener("submit", async event => {
   button.disabled = true;
   button.textContent = "Sprawdzam…";
   try {
-    const ok = gallery ? await passwordMatchesLocally(entered) : await unlockOnServer(entered);
+    // Hasło zawsze sprawdza serwer (scrypt, limit prób).
+    const ok = await unlockOnServer(entered);
     if (!ok) {
       errorEl.textContent = "Nieprawidłowe hasło.";
       errorEl.hidden = false;
