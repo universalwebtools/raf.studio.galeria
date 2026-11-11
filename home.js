@@ -1,245 +1,50 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-app.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-auth.js";
-import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-database.js";
-import { getStorage, ref as sRef, getDownloadURL } from "https://www.gstatic.com/firebasejs/12.2.1/firebase-storage.js";
-import { firebaseConfig } from "./firebase-config.js?v=17.1";
+// Strefa klienta: przejście do galerii po kodzie lub wklejonym linku.
+// Celowo bez listy galerii — nazwy galerii klientów nie są publiczne.
+(function () {
+  var THEME_KEY = "raf-gallery-theme";
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getDatabase(app);
-const storage = getStorage(app);
-const $ = selector => document.querySelector(selector);
-
-const CACHE_KEY = "raf-client-zone-gallery-index-v17";
-const AUTH_TIMEOUT = 8000;
-const DATA_TIMEOUT = 10000;
-
-let entries = [];
-let legitModuleLoaded = false;
-
-function escapeHtml(value){
-  return String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
-}
-
-function galleryHref(slug){
-  const url = new URL("/", location.origin);
-  url.searchParams.set("g", String(slug || ""));
-  return url.toString();
-}
-
-function withTimeout(promise, ms, label){
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} — przekroczono ${Math.round(ms / 1000)} s`)), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
-function loadLegitModule(){
-  if (legitModuleLoaded) return;
-  legitModuleLoaded = true;
-  import("./home-legit-v16.6.js?v=19.5.0").catch(error => {
-    console.warn("HOME LEGIT MODULE ERROR", error);
-  });
-}
-
-function applyClientZoneConfig(raw){
-  const blurPercent = Math.max(0, Math.min(100, Number(raw?.coverBlur ?? 50) || 0));
-  const blurPx = (blurPercent * 0.4).toFixed(1);
-  document.documentElement.style.setProperty("--zone-cover-blur", `${blurPx}px`);
-}
-
-function normalizeEntries(data){
-  return Object.entries(data || {})
-    .map(([key, value]) => ({ slug: value?.slug || key, ...value }))
-    .filter(item => item.slug && item.title && item.enabled !== false && item.homeHidden !== true)
-    .sort((a,b) => {
-      const orderA = Number.isFinite(Number(a.homeOrder)) ? Number(a.homeOrder) : 999999;
-      const orderB = Number.isFinite(Number(b.homeOrder)) ? Number(b.homeOrder) : 999999;
-      return orderA - orderB || String(a.title).localeCompare(String(b.title), "pl", {numeric:true,sensitivity:"base"});
+  function setTheme(dark) {
+    if (dark) document.documentElement.dataset.theme = "dark";
+    else delete document.documentElement.dataset.theme;
+    document.querySelectorAll(".theme-toggle use").forEach(function (use) {
+      use.setAttribute("href", dark ? "#i-sun" : "#i-moon");
     });
-}
-
-
-async function resolveCoverUrl(item){
-  try{
-    const publicSnap = await get(ref(db, `galleries/${item.slug}/public`));
-    if (!publicSnap.exists()) return String(item.coverUrl || "");
-
-    const pub = publicSnap.val() || {};
-    const photos = Object.values(pub.photos || {}).filter(photo =>
-      photo?.filename && photo.hiddenFromClient !== true
-    );
-    if (!photos.length) return String(item.coverUrl || "");
-
-    const preferredFile = pub.coverFile || pub.heroBackgroundFile || item.coverFile || photos[0]?.filename || "";
-    const coverPhoto =
-      photos.find(photo => photo?.filename === preferredFile) ||
-      photos[0];
-
-    const filename = coverPhoto?.filename || preferredFile;
-    if (filename) {
-      try {
-        return await getDownloadURL(
-          sRef(storage, `galleries/${item.slug}/previews/${filename}.webp`)
-        );
-      } catch (storageError) {
-        console.warn("CLIENT ZONE FRESH COVER URL FAILED", item?.slug, storageError);
-      }
-    }
-
-    return String(coverPhoto?.previewUrl || item.coverUrl || "");
-  }catch(error){
-    console.warn("CLIENT ZONE COVER FALLBACK FAILED", item?.slug, error);
-    return String(item.coverUrl || "");
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", dark ? "#0b0b0c" : "#ffffff");
   }
-}
 
-async function repairMissingCovers(){
-  if (!entries.length) return;
-
-  let changed = false;
-  await Promise.all(entries.map(async item => {
-    const url = await resolveCoverUrl(item);
-    if (url) {
-      item.coverUrl = url;
-      changed = true;
-    }
-  }));
-
-  if (!changed) return;
-
-  render();
-  try{
-    const data = Object.fromEntries(entries.map(item => [item.slug, item]));
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
-  }catch(_){ }
-}
-
-function render(){
-  const search = $("#gallerySearch");
-  const q = search ? search.value.trim().toLowerCase() : "";
-  const visible = entries.filter(item => String(item.title || item.slug).toLowerCase().includes(q));
-
-  const count = $("#galleryCount");
-  if (count) count.textContent = `${visible.length} ${visible.length === 1 ? "galeria" : "galerii"}`;
-
-  const container = $("#galleryDirectory");
-  if (!container) return;
-
-  container.innerHTML = visible.map(item => {
-    const title = escapeHtml(item.title || item.slug || "Galeria");
-    const cover = String(item.coverUrl || "").replace(/"/g, "%22");
-    return `
-      <a class="gallery-entry" data-gallery-slug="${escapeHtml(item.slug)}" href="${galleryHref(item.slug)}" aria-label="Otwórz galerię ${title}">
-        <div class="gallery-entry-cover"${cover ? ` style="background-image:url(&quot;${cover}&quot;)"` : ""}></div>
-        <span class="gallery-entry-arrow">→</span>
-        <div class="gallery-entry-content">
-          <small>PRYWATNA GALERIA</small>
-          <h2>${title}</h2>
-        </div>
-      </a>`;
-  }).join("");
-
-  container.hidden = visible.length === 0;
-  const empty = $("#homeEmpty");
-  if (empty) empty.hidden = visible.length !== 0;
-
-  bindGalleryNavigation(container);
-}
-
-function bindGalleryNavigation(container){
-  container.querySelectorAll(".gallery-entry").forEach(card => {
-    if (card.dataset.rafNavBound === "1") return;
-    card.dataset.rafNavBound = "1";
-
-    card.addEventListener("click", event => {
-      // Let Ctrl/Cmd/Shift click keep normal browser behaviour.
-      if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-      const slug = card.dataset.gallerySlug || "";
-      if (!slug) return;
-      event.preventDefault();
-      event.stopPropagation();
-      window.location.assign(galleryHref(slug));
+  setTheme(document.documentElement.dataset.theme === "dark");
+  document.querySelectorAll(".theme-toggle").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var dark = document.documentElement.dataset.theme !== "dark";
+      try { localStorage.setItem(THEME_KEY, dark ? "dark" : "light"); } catch (_) {}
+      setTheme(dark);
     });
   });
-}
 
-function showCachedEntries(){
-  try{
-    const cached = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-    if (!cached?.data) return false;
-    entries = normalizeEntries(cached.data);
-    if (!entries.length) return false;
-    const loading = $("#homeLoading");
-    if (loading) loading.hidden = true;
-    render();
-    return true;
-  }catch(_){
-    return false;
+  function codeFrom(value) {
+    var text = String(value || "").trim();
+    if (!text) return "";
+    // Wklejony link do galerii.
+    try {
+      var url = new URL(text, location.href);
+      var fromLink = url.searchParams.get("g");
+      if (fromLink) return fromLink.trim();
+    } catch (_) {}
+    return text.toLowerCase()
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/ł/g, "l")
+      .replace(/[^a-z0-9_-]+/g, "-")
+      .replace(/^-+|-+$/g, "");
   }
-}
 
-function showHomeError(error, hadCache){
-  console.error("CLIENT ZONE HOME ERROR", error);
-  const loading = $("#homeLoading");
-  if (loading) loading.hidden = true;
-
-  if (hadCache) return;
-
-  const errorBox = $("#homeError");
-  if (errorBox) {
-    errorBox.hidden = false;
-    const detail = errorBox.querySelector("span");
-    if (detail) detail.textContent = `Nie udało się połączyć z Firebase. ${error?.code || error?.message || "Spróbuj ponownie."}`;
-  }
-  const count = $("#galleryCount");
-  if (count) count.textContent = "—";
-}
-
-async function ensureAuth(){
-  if (auth.currentUser) return auth.currentUser;
-  const credential = await withTimeout(signInAnonymously(auth), AUTH_TIMEOUT, "Logowanie Firebase");
-  return credential.user;
-}
-
-async function init(){
-  const hadCache = showCachedEntries();
-
-  try{
-    await ensureAuth();
-
-    // Moduł stopki / polityki ładuje się dopiero PO zalogowaniu,
-    // więc nie uruchamia drugiego signInAnonymously równolegle.
-    loadLegitModule();
-
-    const [indexSnap, configSnap] = await withTimeout(Promise.all([
-      get(ref(db, "galleries/__system__/public/galleryIndex")),
-      get(ref(db, "galleries/__system__/public/clientZoneConfig")).catch(() => null)
-    ]), DATA_TIMEOUT, "Pobieranie listy galerii");
-
-    applyClientZoneConfig(configSnap?.exists?.() ? configSnap.val() : null);
-
-    const data = indexSnap.exists() ? indexSnap.val() : {};
-    entries = normalizeEntries(data);
-
-    try{
-      localStorage.setItem(CACHE_KEY, JSON.stringify({ savedAt: Date.now(), data }));
-    }catch(_){ }
-
-    const loading = $("#homeLoading");
-    if (loading) loading.hidden = true;
-    const errorBox = $("#homeError");
-    if (errorBox) errorBox.hidden = true;
-    render();
-    repairMissingCovers().catch(error => console.warn("CLIENT ZONE COVER REPAIR ERROR", error));
-  }catch(error){
-    // Nawet po błędzie ładujemy wygląd strony z domyślną konfiguracją,
-    // aby użytkownik nie widział martwego ekranu.
-    loadLegitModule();
-    showHomeError(error, hadCache);
-  }
-}
-
-$("#gallerySearch")?.addEventListener("input", render);
-init();
+  var form = document.getElementById("codeForm");
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    var code = codeFrom(document.getElementById("codeInput").value);
+    var error = document.getElementById("codeError");
+    if (!code) { error.hidden = false; return; }
+    error.hidden = true;
+    location.href = "index.html?g=" + encodeURIComponent(code);
+  });
+})();

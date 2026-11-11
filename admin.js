@@ -3402,7 +3402,7 @@ async function openSelections(slug) {
             <div><b>${index === 0 ? "NAJNOWSZE • " : ""}${Number(row.selectedCount || 0)} zdjęć</b><span>${escapeHtml(formatDateTimePl(row.submittedAt))}</span></div>
             <details>
               <summary>Pokaż zapisane nazwy (${Object.keys(row.filenames || {}).length})</summary>
-              <div class="approval-filenames">${Object.values(row.filenames || {}).map(item => `<span>${escapeHtml(displayName(item?.filename))}</span>`).join("")}</div>
+              <div class="approval-filenames">${Object.values(row.filenames || {}).map(item => `<span>${escapeHtml(displayName(item?.filename))}${item?.note ? ` — ✎ „${escapeHtml(item.note)}”` : ""}</span>`).join("")}</div>
             </details>
           </article>`).join("")}
       </div>`;
@@ -3578,7 +3578,7 @@ function renderRejectedAdminTools(slug) {
             </div>
             <details>
               <summary>Pokaż zatwierdzoną listę (${Object.keys(row.filenames || {}).length})</summary>
-              <div class="approval-filenames">${Object.values(row.filenames || {}).map(item => `<span>${escapeHtml(displayName(item?.filename))}</span>`).join("")}</div>
+              <div class="approval-filenames">${Object.values(row.filenames || {}).map(item => `<span>${escapeHtml(displayName(item?.filename))}${item?.note ? ` — ✎ „${escapeHtml(item.note)}”` : ""}</span>`).join("")}</div>
             </details>
           </article>`).join("")}
       </div>` : '<div class="notice">Klient nie zatwierdził jeszcze listy zdjęć do odrzucenia.</div>'}

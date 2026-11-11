@@ -3,54 +3,99 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#09090a">
-  <meta name="description" content="RAF.studio — prywatna strefa klienta i galerie fotograficzne.">
-  <title>RAF.studio — Strefa klienta</title>
-  <link rel="stylesheet" href="home.css?v=19.4.0">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="description" content="Strefa klienta RAF.studio — prywatne galerie zdjęć i filmów.">
+  <title>Strefa klienta — RAF.studio</title>
+  <link rel="icon" href="app-icon-192.png">
+  <link rel="preload" href="fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="gallery.css?v=22.0.0">
+  <script>
+    try { if (localStorage.getItem("raf-gallery-theme") === "dark") document.documentElement.dataset.theme = "dark"; } catch (_) {}
+  </script>
 </head>
 <body>
-  <header class="zone-head">
-    <img class="zone-logo" src="logo-white.png" alt="RAF.studio">
+<a class="skip" href="#main">Przejdź do treści</a>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-moon" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></g></symbol>
+</svg>
+
+<header class="hdr">
+  <div class="wrap hdr__in">
+    <a class="hdr__logo" href="https://raf-studio.pl/" aria-label="RAF.studio — strona główna">
+      <img class="logo-on-light" src="logo-black.png" alt="RAF.studio" width="110" height="36">
+      <img class="logo-on-dark" src="logo-white.png" alt="" width="110" height="36" aria-hidden="true">
+    </a>
+    <nav class="hdr__nav" aria-label="Menu">
+      <a href="https://raf-studio.pl/uslugi/">Oferta</a>
+      <a href="https://raf-studio.pl/portfolio/">Portfolio</a>
+      <a href="https://raf-studio.pl/o-mnie/">O mnie</a>
+      <a href="https://raf-studio.pl/kontakt/">Kontakt</a>
+      <a class="hdr__client" href="home.html" aria-current="page">Strefa klienta</a>
+    </nav>
+    <button class="icon-btn theme-toggle" type="button" title="Zmień motyw" aria-label="Przełącz jasny lub ciemny motyw"><svg><use href="#i-moon"/></svg></button>
+  </div>
+</header>
+
+<main id="main">
+  <section class="gate">
+    <div class="gate__in">
+      <p class="kicker">Strefa klienta</p>
+      <h1>Twoje zdjęcia w&nbsp;jednym miejscu</h1>
+      <p class="lead">Wpisz kod galerii z wiadomości ode mnie. Najprościej otworzyć galerię bezpośrednio z linku.</p>
+      <form id="codeForm" novalidate>
+        <div class="field">
+          <label class="sr-only" for="codeInput">Kod galerii lub link</label>
+          <input id="codeInput" class="input" type="text" placeholder="Kod galerii, np. anna-i-tomek" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+          <button class="btn btn--dark" type="submit">Przejdź do galerii</button>
+        </div>
+        <p id="codeError" class="error" role="alert" hidden>Wpisz kod galerii albo wklej link.</p>
+      </form>
+      <p class="gate__help">Nie masz kodu? <a href="https://raf-studio.pl/kontakt/">Napisz do mnie</a> — prześlę link jeszcze raz.</p>
+    </div>
+  </section>
+
+  <section class="section section--alt">
+    <div class="wrap">
+      <p class="kicker">Jak to działa</p>
+      <h2>Trzy kroki do Twoich zdjęć</h2>
+      <ol class="steps" style="margin-top:32px">
+        <li><h3>Otwórz galerię</h3><p>Z linku w wiadomości albo wpisując kod galerii powyżej.</p></li>
+        <li><h3>Wpisz hasło</h3><p>Każda galeria jest prywatna i chroniona hasłem, które ode mnie dostajesz.</p></li>
+        <li><h3>Wybierz i pobierz</h3><p>Zaznacz serduszkiem ulubione zdjęcia, dodaj uwagi, zatwierdź wybór i pobierz zdjęcia.</p></li>
+      </ol>
+    </div>
+  </section>
+</main>
+
+<footer class="ftr">
+  <div class="wrap ftr__grid">
     <div>
-      <h1>Strefa klienta</h1>
-      <p class="zone-lead">Wybierz swoją galerię, a następnie wpisz hasło otrzymane od fotografa.</p>
+      <img src="logo-white.png" alt="RAF.studio" width="122" height="40" loading="lazy">
+      <p class="ftr__tag">Fotografia &amp; film</p>
+      <p class="ftr__muted">Bielsko-Biała · Cieszyn · Śląsk · realizacje wyjazdowe</p>
     </div>
-  </header>
-
-  <main class="zone-main">
-    <div class="zone-tools">
-      <div>
-        <strong>Twoje galerie</strong>
-        <span id="galleryCount">Ładowanie…</span>
-      </div>
-      <label class="zone-search">
-        <span>⌕</span>
-        <input id="gallerySearch" type="search" placeholder="Znajdź galerię…" autocomplete="off">
-      </label>
+    <div>
+      <h3>RAF.studio</h3>
+      <ul>
+        <li><a href="https://raf-studio.pl/">Strona główna</a></li>
+        <li><a href="https://raf-studio.pl/uslugi/">Oferta</a></li>
+        <li><a href="https://raf-studio.pl/portfolio/">Portfolio</a></li>
+      </ul>
     </div>
-
-    <div id="homeLoading" class="zone-loading">
-      <span class="spinner"></span>
-      Ładowanie galerii…
+    <div>
+      <h3>Kontakt</h3>
+      <ul>
+        <li><a href="https://raf-studio.pl/kontakt/">Formularz kontaktowy</a></li>
+      </ul>
     </div>
+  </div>
+  <div class="wrap ftr__bottom">
+    <span>© RAF.studio. Fotografia, film i historie blisko ludzi.</span>
+    <a href="https://raf-studio.pl/polityka-prywatnosci/">Polityka prywatności</a>
+  </div>
+</footer>
 
-    <section id="galleryDirectory" class="gallery-directory" hidden></section>
-
-    <div id="homeEmpty" class="zone-empty" hidden>
-      <strong>Brak galerii do wyświetlenia</strong>
-      <span>Jeśli właśnie otrzymałeś link od fotografa, odśwież stronę za chwilę.</span>
-    </div>
-
-    <div id="homeError" class="zone-empty error" hidden>
-      <strong>Nie udało się pobrać listy galerii</strong>
-      <span>Spróbuj odświeżyć stronę.</span>
-    </div>
-  </main>
-
-  <footer class="zone-footer">
-    <img src="logo-white.png" alt="RAF.studio">
-  </footer>
-
-  <script type="module" src="home.js?v=19.5.0"></script>
+<script src="home.js?v=22.0.0"></script>
 </body>
 </html>

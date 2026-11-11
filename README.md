@@ -3,6 +3,23 @@
 Frontend (GitHub Pages, `galeria.raf-studio.pl`) + Firebase (`rafstudiogaleria`):
 Realtime Database, Storage, Auth (admin e-mail + anonimowi klienci), Cloud Functions.
 
+## Pliki strony klienta
+
+| Plik | Co robi |
+|---|---|
+| `index.html`, `gallery.js`, `gallery.css` | Galeria klienta: hasło, okładka, wybór ♥, uwagi do zdjęć, zatwierdzenie, filmy, pokaz slajdów, ZIP |
+| `zip.js` | Tworzenie paczki ZIP w przeglądarce |
+| `home.html`, `home.js` | Strefa klienta — wejście po kodzie galerii (bez publicznej listy galerii) |
+| `fonts/` | Font Inter (jak na raf-studio.pl) |
+| `admin-client-extras.js` | Panel: ustawienia Strefy klienta (opinia Google, kontakt) i filmy w galerii |
+
+Wygląd jest spójny z raf-studio.pl: jasny motyw, Inter, złoty akcent. Klient może przełączyć
+motyw na ciemny (zapamiętywane w jego przeglądarce).
+
+Dane: uwagi do zdjęć są w `selections/{slug}/{key}/note` i w zatwierdzeniu
+(`approvals/.../filenames/{key}/note`), filmy w `galleries/{slug}/public/videos`,
+link do opinii w `galleries/__system__/public/clientZoneConfig/googleReviewUrl`.
+
 ## Ochrona galerii hasłem
 
 Hasło klienta jest sprawdzane **tylko na serwerze**, w Cloud Function

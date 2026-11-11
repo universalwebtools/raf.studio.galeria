@@ -80,33 +80,19 @@ async function start(){
   const storage = getStorage(app);
   let busy = false;
 
+  // Publiczny indeks galerii nie jest już używany (Strefa klienta nie pokazuje
+  // listy galerii — nazwy klientów nie są publiczne). Usuwamy stary indeks.
   onAuthStateChanged(auth, user => {
     if (!user || user.uid !== ADMIN_UID) return;
-
-    onValue(ref(db, "galleries"), async snap => {
-      if (busy) return;
-      const all = snap.val() || {};
-      const nextIndex = await buildIndex(all, storage);
-      const currentIndex = all?.__system__?.public?.galleryIndex || {};
-
-      if (stable(nextIndex) === stable(currentIndex)) return;
-
-      busy = true;
-      try {
-        await set(ref(db, INDEX_PATH), nextIndex);
-        console.info("RAF.studio gallery index synced:", Object.keys(nextIndex).length);
-      } catch (error) {
-        console.warn("RAF.studio gallery index sync failed", error);
-      } finally {
-        busy = false;
-      }
-    });
+    set(ref(db, INDEX_PATH), null)
+      .then(() => console.info("RAF.studio: publiczny indeks galerii usunięty"))
+      .catch(error => console.warn("RAF.studio: nie usunięto indeksu galerii", error));
   });
 }
 
 start();
 
-// Premium Studio v17: ukrywanie galerii z home, kosz, kolejność home i karta udostępniania.
+// Premium Studio v17: kosz i karta udostępniania.
 import("./admin-premium-v17.js?v=21.1").catch(error => console.warn("RAF premium v17 load failed", error));
 // Premium Studio v18.1 SAFE: szablony, status klienta i statystyki bez rekurencyjnego MutationObservera.
 import("./admin-premium-v18.1.js?v=18.1").catch(error => console.warn("RAF premium v18.1 load failed", error));
