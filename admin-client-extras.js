@@ -7,6 +7,8 @@ import { getStorage, ref as sRef, uploadBytesResumable, deleteObject } from "htt
 import { ADMIN_UID } from "./firebase-config.js?v=17.0";
 
 const ZONE_CONFIG_PATH = "galleries/__system__/public/clientZoneConfig";
+const LOGIN_CONFIG_PATH = "galleries/__system__/public/clientLoginConfig";
+const THEME_KEY = "raf-admin-theme";
 const $ = (selector, root = document) => root.querySelector(selector);
 
 let db, storage, auth;
@@ -27,19 +29,19 @@ function injectStyles() {
   if ($("#rafExtrasStyles")) return;
   const style = el("style", { id: "rafExtrasStyles" });
   style.textContent = `
-    .rx-dialog{width:min(720px,calc(100% - 20px));max-height:92vh;padding:0;border:1px solid #33333a;border-radius:22px;background:#111113;color:#f5f5f2}
+    .rx-dialog{width:min(720px,calc(100% - 20px));max-height:92vh;padding:0;border:1px solid var(--line);border-radius:22px;background:var(--bg);color:var(--ink)}
     .rx-dialog::backdrop{background:#000c;backdrop-filter:blur(6px)}
     .rx-in{padding:24px;display:grid;gap:14px}
-    .rx-head{display:flex;justify-content:space-between;align-items:start;gap:12px}.rx-head h2{margin:4px 0;font-size:26px}.rx-head p{margin:0;color:#8e8e95;font-size:13px}
-    .rx-in label{display:grid;gap:6px;font-size:13px;font-weight:700;color:#dedee3}
-    .rx-in input{width:100%;box-sizing:border-box;border:1px solid #34343a;border-radius:12px;background:#0e0e10;color:#f4f4f2;padding:11px 12px;font:500 14px system-ui}
-    .rx-hint{font-size:12px;color:#85858d;font-weight:500;margin:0}
+    .rx-head{display:flex;justify-content:space-between;align-items:start;gap:12px}.rx-head h2{margin:4px 0;font-size:26px}.rx-head p{margin:0;color:var(--muted);font-size:13px}
+    .rx-in label{display:grid;gap:6px;font-size:13px;font-weight:700;color:var(--ink-2)}
+    .rx-in input{width:100%;box-sizing:border-box;border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:11px 12px;font:500 14px system-ui}
+    .rx-hint{font-size:12px;color:var(--muted);font-weight:500;margin:0}
     .rx-actions{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
-    .rx-status{font-size:13px;padding:10px 12px;border-radius:10px;background:#18181b}.rx-status.ok{color:#9be3b5}.rx-status.err{color:#ff9b9b}
-    .rx-list{display:grid;gap:8px}.rx-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #2c2c31;border-radius:12px;background:#0f0f11}
-    .rx-item div{flex:1;min-width:0}.rx-item strong{display:block}.rx-item small{color:#85858d;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .rx-status{font-size:13px;padding:10px 12px;border-radius:10px;background:var(--bg-2)}.rx-status.ok{color:var(--ok)}.rx-status.err{color:var(--danger)}
+    .rx-list{display:grid;gap:8px}.rx-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+    .rx-item div{flex:1;min-width:0}.rx-item strong{display:block}.rx-item small{color:var(--muted);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .rx-row{display:grid;grid-template-columns:1fr 1.4fr auto;gap:8px;align-items:end}
-    .rx-bar{height:6px;border-radius:9px;background:#29292d;overflow:hidden}.rx-bar i{display:block;height:100%;width:0;background:#f5f5f2}
+    .rx-bar{height:6px;border-radius:9px;background:var(--bg-3);overflow:hidden}.rx-bar i{display:block;height:100%;width:0;background:var(--ink)}
     @media(max-width:640px){.rx-row{grid-template-columns:1fr}}
   `;
   document.head.appendChild(style);
@@ -72,6 +74,11 @@ function buildSettingsDialog() {
     contactInstagram: el("input", { type: "url", placeholder: "https://instagram.com/..." }),
     copyrightText: el("input", { type: "text", placeholder: "© RAF.studio" })
   };
+  const login = {
+    eyebrow: el("input", { type: "text", placeholder: "Prywatna galeria" }),
+    instruction: el("input", { type: "text", placeholder: "Wpisz hasło otrzymane od fotografa." }),
+    buttonLabel: el("input", { type: "text", placeholder: "Otwórz galerię" })
+  };
   const msg = el("div", { class: "rx-status", hidden: true });
   const dialog = el("dialog", { id: "rxSettingsDialog", class: "rx-dialog" },
     el("div", { class: "rx-in" },
@@ -83,6 +90,12 @@ function buildSettingsDialog() {
       el("label", {}, "E-mail kontaktowy (stopka galerii)", fields.contactEmail),
       el("label", {}, "Instagram (stopka galerii)", fields.contactInstagram),
       el("label", {}, "Tekst praw autorskich", fields.copyrightText),
+      el("p", { class: "eyebrow", text: "EKRAN HASŁA GALERII" }),
+      el("div", { class: "form3" },
+        el("label", {}, "Nadtytuł", login.eyebrow),
+        el("label", {}, "Instrukcja", login.instruction),
+        el("label", {}, "Przycisk", login.buttonLabel)),
+      el("p", { class: "rx-hint", text: "Puste pole = tekst domyślny." }),
       msg,
       el("div", { class: "rx-actions" },
         el("button", { type: "button", class: "ghost", text: "Otwórz Strefę klienta", onclick: () => window.open(new URL("home.html", location.href), "_blank", "noopener") }),
@@ -98,6 +111,7 @@ function buildSettingsDialog() {
               updatedAt: Date.now()
             };
             await update(ref(db, ZONE_CONFIG_PATH), data);
+            await update(ref(db, LOGIN_CONFIG_PATH), Object.fromEntries(Object.entries(login).map(([key, input]) => [key, input.value.trim()])));
             status(msg, "Zapisano. Zmiany widać od razu w galeriach klientów.", "ok");
           } catch (error) {
             status(msg, `Nie zapisano: ${error.message || error}`, "err");
@@ -107,7 +121,10 @@ function buildSettingsDialog() {
         } })))
   );
   document.body.appendChild(dialog);
-  dialog.fill = data => Object.entries(fields).forEach(([key, input]) => { input.value = data?.[key] || ""; });
+  dialog.fill = (data, loginData) => {
+    Object.entries(fields).forEach(([key, input]) => { input.value = data?.[key] || ""; });
+    Object.entries(login).forEach(([key, input]) => { input.value = loginData?.[key] || ""; });
+  };
   dialog.msg = msg;
   return dialog;
 }
@@ -116,8 +133,8 @@ async function openSettings() {
   const dialog = $("#rxSettingsDialog") || buildSettingsDialog();
   status(dialog.msg, "");
   try {
-    const snap = await get(ref(db, ZONE_CONFIG_PATH));
-    dialog.fill(snap.val() || {});
+    const [snap, loginSnap] = await Promise.all([get(ref(db, ZONE_CONFIG_PATH)), get(ref(db, LOGIN_CONFIG_PATH))]);
+    dialog.fill(snap.val() || {}, loginSnap.val() || {});
   } catch (error) {
     status(dialog.msg, `Nie udało się wczytać ustawień: ${error.message || error}`, "err");
   }
@@ -258,7 +275,25 @@ function injectButtons() {
   }
 }
 
+function applyTheme(dark) {
+  if (dark) document.documentElement.dataset.theme = "dark";
+  else delete document.documentElement.dataset.theme;
+  const button = $("#adminThemeToggle");
+  if (button) button.textContent = dark ? "☀" : "☾";
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#0b0b0c" : "#ffffff");
+}
+
+function initTheme() {
+  applyTheme(document.documentElement.dataset.theme === "dark");
+  $("#adminThemeToggle")?.addEventListener("click", () => {
+    const dark = document.documentElement.dataset.theme !== "dark";
+    try { localStorage.setItem(THEME_KEY, dark ? "dark" : "light"); } catch (_) {}
+    applyTheme(dark);
+  });
+}
+
 async function start() {
+  initTheme();
   for (let i = 0; i < 160 && !getApps().length; i++) await new Promise(resolve => setTimeout(resolve, 25));
   if (!getApps().length) return;
   const app = getApp();

@@ -3,15 +3,21 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="theme-color" content="#09090a">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="robots" content="noindex, nofollow">
   <title>RAF.studio — Studio Manager</title>
-  <link rel="stylesheet" href="style.css?v=16.3.2">
+  <link rel="preload" href="fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="admin.css?v=23.0.0">
+  <script>
+    try { if (localStorage.getItem("raf-admin-theme") === "dark") document.documentElement.dataset.theme = "dark"; } catch (_) {}
+  </script>
 </head>
 <body class="admin-body">
 
 <section id="adminLogin" class="lock-screen">
   <div class="lock-card">
-    <img class="raf-logo login-logo" src="logo-white.png?v=16.2.5" alt="RAF.studio">
+    <img class="raf-logo login-logo logo-on-light" src="logo-black.png" alt="RAF.studio">
+    <img class="raf-logo login-logo logo-on-dark" src="logo-white.png" alt="" aria-hidden="true">
     <p id="adminLoginEyebrow" class="eyebrow">STUDIO MANAGER</p>
     <h1 id="adminLoginTitle">Panel fotografa</h1>
     <p id="adminLoginSubtitle" class="muted">Zarządzaj galeriami, zdjęciami i wyborami klientów.</p>
@@ -39,13 +45,26 @@
 
 <main id="adminPanel" hidden>
   <aside class="sidebar">
-    <div>
-      <img class="raf-logo sidebar-logo" src="logo-white.png?v=16.2.5" alt="RAF.studio">
-      <small>Studio Manager</small>
+    <div class="sidebar-brand">
+      <div>
+        <img class="raf-logo sidebar-logo logo-on-light" src="logo-black.png" alt="RAF.studio">
+        <img class="raf-logo sidebar-logo logo-on-dark" src="logo-white.png" alt="" aria-hidden="true">
+        <small>Studio Manager</small>
+      </div>
     </div>
+    <nav class="admin-head-actions" aria-label="Menu panelu">
+      <button id="newGalleryBtn" type="button" class="primary">+ Nowa galeria</button>
+      <button id="healthPanelBtn" type="button" class="ghost">🩺 Zdrowie systemu</button>
+      <button id="loginEditorBtn" type="button" class="ghost" hidden>🔐 Logowanie admina</button>
+      <button id="clientLoginEditorBtn" type="button" class="ghost" hidden>🔑 Logowanie klienta</button>
+      <button id="adminPanelEditorBtn" type="button" class="ghost" hidden>🖥 Wygląd panelu</button>
+    </nav>
     <div class="side-bottom">
       <div id="adminEmailLabel"></div>
-      <button id="adminLogoutBtn" type="button" class="ghost">Wyloguj</button>
+      <div class="side-bottom-row">
+        <button id="adminThemeToggle" type="button" class="ghost theme-toggle" title="Zmień motyw" aria-label="Przełącz jasny lub ciemny motyw">☾</button>
+        <button id="adminLogoutBtn" type="button" class="ghost">Wyloguj</button>
+      </div>
     </div>
   </aside>
 
@@ -53,17 +72,11 @@
     <div class="admin-content">
     <header class="admin-head">
       <div>
-        <p class="eyebrow">STUDIO MANAGER</p>
+        <p class="eyebrow">Studio Manager</p>
         <h1>Galerie klientów</h1>
-        <p class="muted">Twórz galerie, wysyłaj zdjęcia i sprawdzaj zaznaczenia.</p>
+        <p class="muted">Twórz galerie, wysyłaj zdjęcia i sprawdzaj wybory klientów.</p>
       </div>
-      <div class="admin-head-actions">
-        <button id="loginEditorBtn" type="button" class="ghost">🔐 Logowanie admina</button>
-        <button id="clientLoginEditorBtn" type="button" class="ghost">🔑 Logowanie klienta</button>
-        <button id="adminPanelEditorBtn" type="button" class="ghost">🖥 Wygląd panelu</button>
-        <button id="healthPanelBtn" type="button" class="ghost">🩺 Zdrowie systemu</button>
-        <button id="newGalleryBtn" type="button" class="primary">+ Nowa galeria</button>
-      </div>
+      <a class="ghost" href="home.html" target="_blank" rel="noopener">Strefa klienta ↗</a>
     </header>
 
     <section class="stats">
@@ -181,9 +194,9 @@
       <input id="gallerySubtitleInput" placeholder="np. Wybierzcie proszę 20 ulubionych zdjęć">
     </label>
 
-    <label>Wiadomość powitalna na ekranie wejścia
+    <label>Tekst pod tytułem galerii
       <input id="introMessageInput" placeholder="np. Miłego oglądania! Wasze zdjęcia są już gotowe ❤️">
-      <small>Ta wiadomość pojawi się na ekranie „Wejdź do galerii”.</small>
+      <small>Pojawi się na okładce galerii, pod tytułem.</small>
     </label>
 
     <div class="form2">
@@ -378,9 +391,9 @@
 <dialog id="siteSettingsDialog" class="dialog xl site-settings-dialog">
   <div class="dialog-head">
     <div>
-      <p class="eyebrow">WYGLĄD GALERII</p>
-      <h2 id="siteSettingsTitle">Ustawienia strony</h2>
-      <p class="muted">Zmieniaj układ, rozmiary, kolory i nazwy przycisków bez grzebania w kodzie.</p>
+      <p class="eyebrow">OPCJE GALERII</p>
+      <h2 id="siteSettingsTitle">Opcje galerii</h2>
+      <p class="muted">Co klient może robić w tej galerii. Wygląd jest wspólny dla wszystkich galerii.</p>
     </div>
     <button id="closeSiteSettingsDialog" type="button" class="ghost close-btn">×</button>
   </div>
@@ -389,7 +402,7 @@
 
   <div class="site-editor-layout">
     <section class="site-editor-controls">
-      <div class="site-settings-section hero-settings-section hero-designer-section">
+      <div class="site-settings-section obsolete hero-settings-section hero-designer-section">
         <div class="hero-designer-title">
           <div>
             <h3>Kreator tła HERO</h3>
@@ -503,13 +516,13 @@
       </div>
 
       <div class="site-settings-section">
-        <h3>Układ zdjęć — komputer / tablet</h3>
+        <h3>Siatka zdjęć</h3>
         <div class="form3">
-          <label>Kolumny — komputer
+          <label class="obsolete">Kolumny — komputer
             <input id="uiDesktopColumns" type="number" min="2" max="6" value="4">
             <input class="hero-range" type="range" min="2" max="6" step="1" value="4" data-sync-number="uiDesktopColumns" aria-label="Kolumny komputer">
           </label>
-          <label>Kolumny — tablet
+          <label class="obsolete">Kolumny — tablet
             <input id="uiTabletColumns" type="number" min="2" max="5" value="3">
             <input class="hero-range" type="range" min="2" max="5" step="1" value="3" data-sync-number="uiTabletColumns" aria-label="Kolumny tablet">
           </label>
@@ -519,11 +532,11 @@
           </label>
         </div>
         <div class="form3">
-          <label>Zaokrąglenie zdjęć (px)
+          <label class="obsolete">Zaokrąglenie zdjęć (px)
             <input id="uiCardRadius" type="number" min="0" max="30" value="9">
             <input class="hero-range" type="range" min="0" max="30" step="1" value="9" data-sync-number="uiCardRadius" aria-label="Zaokrąglenie zdjęć">
           </label>
-          <label>Rozmiar przycisków (px)
+          <label class="obsolete">Rozmiar przycisków (px)
             <input id="uiButtonSize" type="number" min="26" max="64" value="40">
             <input class="hero-range" type="range" min="26" max="64" step="1" value="40" data-sync-number="uiButtonSize" aria-label="Rozmiar przycisków">
           </label>
@@ -534,7 +547,7 @@
         </div>
       </div>
 
-      <div class="site-settings-section">
+      <div class="site-settings-section obsolete">
         <h3>Układ mobilny — telefon</h3>
         <p class="muted">Osobna konfiguracja telefonu. Tu zmniejszysz kafelki, odstępy i wielkość pasków, żeby nie zasłaniały połowy ekranu.</p>
         <div class="form3">
@@ -567,7 +580,7 @@
         </div>
       </div>
 
-      <div class="site-settings-section">
+      <div class="site-settings-section obsolete">
         <h3>Przyciski na zdjęciach</h3>
         <div class="form3">
           <label>Odstęp przycisków (px)
@@ -603,7 +616,7 @@
             <input id="uiAllowSingleDownload" type="checkbox" checked>
             <span><b>Pobieranie pojedynczego zdjęcia</b><small>Dotyczy strzałki ↓ przy zdjęciu i w lightboxie.</small></span>
           </label>
-          <label class="check">
+          <label class="obsolete check">
             <input id="uiAllowSelectedDownloads" type="checkbox" checked>
             <span><b>Pobieranie zaznaczonych ○/✓</b><small>Włącza pobieranie osobnego zestawu zaznaczonego kółkiem.</small></span>
           </label>
@@ -616,10 +629,10 @@
         <h4>Widoczność przycisków na zdjęciu</h4>
         <div class="permission-grid compact">
           <label class="check"><input id="uiShowHeartButton" type="checkbox" checked><span>♥ Serduszko</span></label>
-          <label class="check"><input id="uiShowRejectButton" type="checkbox" checked><span>× Odrzuć zdjęcie</span></label>
-          <label class="check"><input id="uiShowCompareButton" type="checkbox" checked><span>A/B Porównanie</span></label>
+          <label class="obsolete check"><input id="uiShowRejectButton" type="checkbox" checked><span>× Odrzuć zdjęcie</span></label>
+          <label class="obsolete check"><input id="uiShowCompareButton" type="checkbox" checked><span>A/B Porównanie</span></label>
           <label class="check"><input id="uiShowSingleDownloadButton" type="checkbox" checked><span>↓ Pobierz jedno</span></label>
-          <label class="check"><input id="uiShowDownloadSelectButton" type="checkbox" checked><span>○/✓ Zaznacz do pobrania</span></label>
+          <label class="obsolete check"><input id="uiShowDownloadSelectButton" type="checkbox" checked><span>○/✓ Zaznacz do pobrania</span></label>
         </div>
 
         <label class="check protection-toggle">
@@ -628,7 +641,7 @@
         </label>
       </div>
 
-      <div class="site-settings-section">
+      <div class="site-settings-section obsolete">
         <h3>Filtry i główne przyciski</h3>
         <div class="form2">
           <label>Wszystkie
@@ -705,7 +718,7 @@
     <button id="resetSiteSettingsBtn" type="button" class="ghost">Przywróć domyślne</button>
     <span class="spacer"></span>
     <button id="cancelSiteSettingsBtn" type="button" class="ghost">Anuluj</button>
-    <button id="saveSiteSettingsBtn" type="button" class="primary">Zapisz wygląd</button>
+    <button id="saveSiteSettingsBtn" type="button" class="primary">Zapisz opcje</button>
   </div>
 </dialog>
 
@@ -1134,9 +1147,9 @@
 <div id="toast" class="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
-<script type="module" src="admin.js?v=22.0.0"></script>
+<script type="module" src="admin.js?v=23.0.0"></script>
   <script type="module" src="gallery-index-sync.js?v=22.0.0"></script>
-  <script type="module" src="admin-client-extras.js?v=22.0.0"></script>
+  <script type="module" src="admin-client-extras.js?v=23.0.0"></script>
   <script type="module" src="admin-push-v20.3.js?v=20.3"></script>
 </body>
 </html>

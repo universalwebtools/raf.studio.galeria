@@ -14,14 +14,14 @@ firebase.initializeApp({
 });
 
 const messaging = firebase.messaging();
-const CACHE_NAME = "raf-studio-galeria-pwa-v20.3";
+const CACHE_NAME = "raf-studio-galeria-pwa-v23";
 const APP_SHELL = [
   "/admin.html",
   "/install.html",
   "/manifest.webmanifest",
   "/app-icon-192.png",
   "/app-icon-512.png",
-  "/style.css"
+  "/admin.css"
 ];
 
 self.addEventListener("install", event => {

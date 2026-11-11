@@ -174,7 +174,7 @@ function ensureStyles() {
   style.id = "rafPwaStyles";
   style.textContent = `
     #installRafAppBtn,#enableRafPushBtn{white-space:nowrap}
-    #enableRafPushBtn[data-enabled="1"]{border-color:#315b3d!important;color:#b9efc4!important;background:#102015!important}
+    #enableRafPushBtn[data-enabled="1"]{border-color:var(--ok)!important;color:var(--ok)!important;background:var(--ok-soft)!important}
     @media(max-width:760px){#installRafAppBtn,#enableRafPushBtn{width:100%}}
   `;
   document.head.appendChild(style);

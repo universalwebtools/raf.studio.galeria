@@ -1629,12 +1629,18 @@ function renderCards() {
 
         <div class="gallery-actions">
           <button type="button" class="primary" data-upload="${slug}">+ Zdjęcia</button>
-          <button type="button" class="ghost" data-manage="${slug}">Zarządzaj</button><button type="button" class="ghost" data-repair="${slug}">⚙ Napraw pobieranie</button>
-          <button type="button" class="ghost" data-select="${slug}">♥ Wybory</button>
-          <button type="button" class="ghost" data-qr="${slug}">QR</button>
-          <button type="button" class="ghost" data-site="${slug}">🎨 Ustawienia strony</button>
-          <button type="button" class="ghost" data-edit="${slug}">Ustawienia</button>
-          <a class="ghost" href="${galleryUrl(slug)}" target="_blank" rel="noopener">Otwórz</a>
+          <button type="button" class="ghost" data-select="${slug}">♥ Wybory${selectedCount ? ` (${selectedCount})` : ""}</button>
+          <button type="button" class="ghost" data-manage="${slug}">Zdjęcia</button>
+          <button type="button" class="ghost" data-edit="${slug}">Edytuj</button>
+          <details class="more-menu">
+            <summary class="ghost">⋯ Więcej</summary>
+            <div class="more-menu__list">
+              <a class="ghost" href="${galleryUrl(slug)}" target="_blank" rel="noopener">↗ Otwórz galerię</a>
+              <button type="button" class="ghost" data-qr="${slug}">▦ Kod QR</button>
+              <button type="button" class="ghost" data-site="${slug}">⚙ Opcje galerii</button>
+              <button type="button" class="ghost" data-repair="${slug}">🛠 Napraw pobieranie</button>
+            </div>
+          </details>
         </div>
       </div>
     `;
@@ -2783,12 +2789,18 @@ async function getAdminPhotoDownloadUrl(slug, filename) {
 
 async function migrateLegacyFavoritesToShared(slug) {
   const items = mergedSelectionForSlug(slug);
+  // Migracja dotyczy tylko starych danych w favorites/{slug}. Bez nich nic nie
+  // przepisujemy — inaczej nadpisalibyśmy bieżący wybór klienta.
+  if (!Object.keys(favoritesRoot?.[slug] || {}).length) return items;
+
   const cleanSelection = {};
   items.forEach(item => {
-    cleanSelection[manifestKey(item.filename)] = {
+    const entry = {
       filename: item.filename,
       selectedAt: Number(item.selectedAt || Date.now())
     };
+    if (typeof item.note === "string" && item.note.trim()) entry.note = item.note.trim().slice(0, 400);
+    cleanSelection[manifestKey(item.filename)] = entry;
   });
 
 
@@ -3149,7 +3161,7 @@ function openSiteSettings(slug) {
     const pub = galleries[slug]?.public || {};
 
     $("#siteSettingsSlug").value = slug;
-    $("#siteSettingsTitle").textContent = `Ustawienia strony — ${pub.title || slug}`;
+    $("#siteSettingsTitle").textContent = `Opcje galerii — ${pub.title || slug}`;
     $("#siteSettingsStatus").hidden = true;
 
     fillSiteSettings(normalizedUiConfig(pub));
@@ -3249,7 +3261,7 @@ $("#saveSiteSettingsBtn")?.addEventListener("click", async () => {
       updatedAt: Date.now()
     });
     showNotice($("#siteSettingsStatus"), "Wygląd galerii zapisany. Klient zobaczy zmianę po odświeżeniu strony.", "ok");
-    toast("Ustawienia strony zapisane");
+    toast("Opcje galerii zapisane");
   } catch (error) {
     console.error("SAVE SITE SETTINGS ERROR", error);
     showNotice($("#siteSettingsStatus"), `Błąd zapisu: ${error.code || error.message || error}`, "error");
@@ -3438,6 +3450,7 @@ async function openSelections(slug) {
       <div class="selection-photo-thumb" ${manifestItem?.previewUrl ? `style="background-image:url('${manifestItem.previewUrl}')"` : ""}></div>
       <div class="selection-photo-info">
         <strong>${escapeHtml(displayName(item.filename))}</strong>
+        ${item.note ? `<span class="photo-note">✎ ${escapeHtml(item.note)}</span>` : ""}
         <button type="button" class="ghost download-one">↓ Pobierz</button>
       </div>`;
     card.querySelector(".download-one").addEventListener("click", async () => {
@@ -3551,6 +3564,9 @@ function renderRejectedAdminTools(slug) {
   const rejectedItems = rejectedItemsForSlug(slug);
   const remainingItems = remainingItemsForSlug(slug);
   const rejectionApprovals = rejectionApprovalRowsForSlug(slug);
+  // Odrzucanie zdjęć nie jest już dostępne dla klienta — sekcję pokazujemy
+  // tylko dla starych galerii, w których klient coś odrzucił.
+  if (!rejectedItems.length && !rejectionApprovals.length) return;
 
   const section = document.createElement("section");
   section.className = "selection-client selection-single v163-rejection-tools";
