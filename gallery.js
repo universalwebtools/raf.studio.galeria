@@ -409,7 +409,7 @@ function renderHero() {
   $("#heroSlideshowBtn").hidden = !photos.length;
   $("#barSlideshowBtn").hidden = !photos.length;
 
-  const heroFile = gallery.heroBackgroundFile || gallery.coverFile;
+  const heroFile = gallery.coverFile || gallery.heroBackgroundFile;
   const cover = photos.find(p => p.filename === heroFile) || photos[0];
   const img = $("#heroImg");
   if (!cover) return;
@@ -441,7 +441,7 @@ function renderStatus(value) {
   if (key === "waiting" && !heartsEnabled()) { notice.hidden = true; return; }
   notice.dataset.tone = item.tone;
   $("#statusIcon").textContent = item.icon;
-  $("#statusText").textContent = (typeof value === "object" && value?.label) ? value.label : item.label;
+  $("#statusText").textContent = item.label;
   notice.hidden = false;
 }
 

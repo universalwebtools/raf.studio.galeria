@@ -7,7 +7,7 @@
   <meta name="robots" content="noindex, nofollow">
   <title>RAF.studio — Studio Manager</title>
   <link rel="preload" href="fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="admin.css?v=23.0.0">
+  <link rel="stylesheet" href="admin.css?v=24.0.0">
   <script>
     try { if (localStorage.getItem("raf-admin-theme") === "dark") document.documentElement.dataset.theme = "dark"; } catch (_) {}
   </script>
@@ -78,6 +78,8 @@
       </div>
       <a class="ghost" href="home.html" target="_blank" rel="noopener">Strefa klienta ↗</a>
     </header>
+
+    <section id="todoBoard" class="todo" hidden></section>
 
     <section class="stats">
       <article><span>Galerie</span><strong id="statGalleries">0</strong></article>
@@ -160,6 +162,8 @@
         <option value="all">Wszystkie</option>
         <option value="active">Aktywne</option>
         <option value="inactive">Wyłączone</option>
+        <option value="new-selection">Nowy wybór</option>
+        <option value="expiring">Wygasa wkrótce</option>
       </select>
     </div>
 
@@ -190,12 +194,10 @@
       </label>
     </div>
 
-    <label>Opis galerii
-      <input id="gallerySubtitleInput" placeholder="np. Wybierzcie proszę 20 ulubionych zdjęć">
-    </label>
+    <input id="gallerySubtitleInput" type="hidden">
 
     <label>Tekst pod tytułem galerii
-      <input id="introMessageInput" placeholder="np. Miłego oglądania! Wasze zdjęcia są już gotowe ❤️">
+      <input id="introMessageInput" placeholder="np. Wybierzcie proszę 20 ulubionych zdjęć do albumu ❤️">
       <small>Pojawi się na okładce galerii, pod tytułem.</small>
     </label>
 
@@ -208,28 +210,28 @@
       </label>
     </div>
 
-    <div class="form2">
-      <label>Instagram
-        <input id="instagramInput" placeholder="np. https://instagram.com/twojprofil">
-      </label>
-      <label>Strona internetowa
-        <input id="websiteInput" placeholder="np. https://rafstudio.pl">
-      </label>
-    </div>
+    <input id="instagramInput" type="hidden">
+    <input id="websiteInput" type="hidden">
 
-    <div class="form3">
+    <div class="form2">
       <label>Hasło klienta
-        <input id="galleryPasswordInput" type="password" placeholder="Wymagane przy tworzeniu">
+        <span class="input-with-btn">
+          <input id="galleryPasswordInput" type="text" placeholder="Wymagane przy tworzeniu" autocomplete="off" spellcheck="false">
+          <button id="generatePasswordBtn" type="button" class="ghost">Generuj</button>
+        </span>
+        <small>Przy edycji zostaw puste, żeby nie zmieniać hasła.</small>
       </label>
-      <label>Ważna przez (dni)
-        <input id="validDaysInput" type="number" min="0" value="0">
-        <small>0 = bez końca, np. 30 = wygaśnie za 30 dni</small>
-      </label>
-      <label>Data wygaśnięcia
+      <label>Dostęp do
         <input id="expiresAtInput" type="date">
-        <small>Opcjonalnie ręcznie lub zostanie policzona z liczby dni</small>
+        <span class="quick-dates">
+          <button type="button" class="ghost" data-exp-days="14">+14 dni</button>
+          <button type="button" class="ghost" data-exp-days="30">+30 dni</button>
+          <button type="button" class="ghost" data-exp-days="90">+90 dni</button>
+          <button type="button" class="ghost" data-exp-days="0">Bez terminu</button>
+        </span>
       </label>
     </div>
+    <input id="validDaysInput" type="hidden" value="0">
 
     <div class="form3">
       <label>Limit ulubionych
@@ -269,6 +271,7 @@
   </div>
   <div class="actions equal">
     <button id="openCreatedGalleryBtn" type="button" class="ghost">Otwórz</button>
+    <button id="createdShareBtn" type="button" class="ghost">✉ Wyślij klientowi</button>
     <button id="addPhotosNowBtn" type="button" class="primary">+ Dodaj zdjęcia</button>
   </div>
 </dialog>
@@ -318,12 +321,7 @@
       <strong>Zarządzanie zdjęciami</strong>
       <small>Okładka, tło, polecane, widoczność klienta i usuwanie.</small>
     </div>
-    <div class="photo-manager-toolbar-actions">
-      <input id="rebuildPreviewFilesInput" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple hidden>
-      <button id="rebuildPreviewsBtn" type="button" class="ghost">♻ Przebuduj preview bez RAF.studio</button>
-    </div>
   </div>
-  <div id="rebuildPreviewStatus" class="notice" hidden></div>
 
   <div id="photoManagerLoading" class="loading">Ładowanie…</div>
   <section id="coverEditor" class="cover-editor" hidden>
@@ -340,14 +338,14 @@
       <label>Pozycja pionowa
         <input id="coverPositionYInput" type="range" min="0" max="100" value="38">
       </label>
-      <div class="hero-file-info">
+      <div class="hero-file-info" hidden>
         <span>Zdjęcie w tle galerii:</span>
         <strong id="heroBackgroundFilename">takie samo jak okładka</strong>
       </div>
-      <p class="muted">Przy zdjęciu poniżej możesz osobno kliknąć „Tło”, więc okładka karty galerii i szerokie zdjęcie u klienta nie muszą być tym samym kadrem.</p>
+      <p class="muted">Okładka to duże zdjęcie na górze galerii klienta i na karcie w panelu. Ustaw kadr suwakami.</p>
       <div class="actions right">
-        <button id="useCoverAsHeroBtn" type="button" class="ghost">Użyj okładki jako tła</button>
-        <button id="saveCoverPositionBtn" type="button" class="primary">Zapisz pozycję tła</button>
+        <button id="useCoverAsHeroBtn" type="button" class="ghost" hidden>Użyj okładki jako tła</button>
+        <button id="saveCoverPositionBtn" type="button" class="primary">Zapisz kadr okładki</button>
       </div>
     </div>
   </section>
@@ -366,24 +364,42 @@
   <div id="selectionContent"></div>
 </dialog>
 
-<dialog id="qrDialog" class="dialog small">
+<dialog id="qrDialog" class="dialog wide share-dialog">
   <div class="dialog-head">
     <div>
-      <p class="eyebrow">QR KOD</p>
-      <h2>Udostępnij galerię</h2>
+      <p class="eyebrow">UDOSTĘPNIJ</p>
+      <h2 id="shareTitle">Wyślij klientowi</h2>
+      <p class="muted">Gotowa wiadomość z linkiem i hasłem. Hasła nie da się odczytać z bazy — wpisz je, jeśli nie było ustawiane przed chwilą.</p>
     </div>
     <button id="closeQrDialog" type="button" class="ghost close-btn">×</button>
   </div>
-  <div class="qr-wrap">
-    <canvas id="qrCanvas" width="280" height="280"></canvas>
-  </div>
-  <div class="copy">
-    <input id="qrLink" readonly>
-    <button id="copyQrLinkBtn" type="button" class="ghost">Kopiuj link</button>
-  </div>
-  <div class="actions equal">
-    <button id="openQrGalleryBtn" type="button" class="ghost">Otwórz galerię</button>
-    <button id="downloadQrBtn" type="button" class="primary">Pobierz QR PNG</button>
+  <div class="share-layout">
+    <div class="share-main">
+      <div class="copy">
+        <input id="qrLink" readonly>
+        <button id="copyQrLinkBtn" type="button" class="ghost">Kopiuj link</button>
+      </div>
+      <label>Hasło do wiadomości
+        <input id="sharePasswordInput" type="text" placeholder="Wpisz hasło klienta" autocomplete="off" spellcheck="false">
+      </label>
+      <label>Wiadomość
+        <textarea id="shareMessage" rows="8"></textarea>
+      </label>
+      <div class="actions">
+        <button id="copyShareMessageBtn" type="button" class="primary">Kopiuj wiadomość</button>
+        <a id="shareWhatsappBtn" class="ghost" href="#" target="_blank" rel="noopener">WhatsApp</a>
+        <a id="shareSmsBtn" class="ghost" href="#">SMS</a>
+        <a id="shareMailBtn" class="ghost" href="#">E-mail</a>
+      </div>
+    </div>
+    <aside class="share-side">
+      <div class="qr-wrap">
+        <canvas id="qrCanvas" width="280" height="280"></canvas>
+      </div>
+      <button id="downloadQrBtn" type="button" class="ghost">Pobierz kod QR</button>
+      <button id="shareCardBtn" type="button" class="ghost">🔗 Karta linku (social media)</button>
+      <button id="openQrGalleryBtn" type="button" class="ghost">↗ Otwórz galerię</button>
+    </aside>
   </div>
 </dialog>
 
@@ -1139,6 +1155,21 @@
     <button id="repairHealthBtn" type="button" class="ghost" disabled>⚙ Napraw bezpieczne problemy</button>
   </div>
   <div id="healthStatus" class="notice" hidden></div>
+  <section class="service-tools">
+    <div>
+      <h3>Narzędzia serwisowe</h3>
+      <p class="muted">Jednorazowe naprawy dla wybranej galerii. Zwykle nie są potrzebne.</p>
+    </div>
+    <div class="service-tools-row">
+      <label>Galeria
+        <select id="serviceGallerySelect"></select>
+      </label>
+      <button id="serviceRepairBtn" type="button" class="ghost">🛠 Napraw pobieranie</button>
+      <input id="rebuildPreviewFilesInput" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" multiple hidden>
+      <button id="rebuildPreviewsBtn" type="button" class="ghost">♻ Przebuduj podglądy z oryginałów</button>
+    </div>
+    <div id="rebuildPreviewStatus" class="notice" hidden></div>
+  </section>
   <div id="healthResults" class="health-results">
     <div class="notice">Kliknij „Uruchom pełny skan”.</div>
   </div>
@@ -1147,7 +1178,7 @@
 <div id="toast" class="toast" hidden></div>
 
 <script src="https://cdn.jsdelivr.net/npm/qrious@4.0.2/dist/qrious.min.js"></script>
-<script type="module" src="admin.js?v=23.0.0"></script>
+<script type="module" src="admin.js?v=24.0.0"></script>
   <script type="module" src="gallery-index-sync.js?v=22.0.0"></script>
   <script type="module" src="admin-client-extras.js?v=23.0.0"></script>
   <script type="module" src="admin-push-v20.3.js?v=20.3"></script>

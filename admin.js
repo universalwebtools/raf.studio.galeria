@@ -1558,7 +1558,188 @@ function renderAll() {
   }, 0);
   $("#statSelections").textContent = entries.filter(([slug]) => galleryHasSelection(slug)).length;
   renderCards();
+  renderTodo();
 }
+
+// ---------------------------------------------------------------- pulpit „Do zrobienia”
+
+const knownPasswords = new Map();
+let analyticsRoot = null;
+let analyticsLoadedAt = 0;
+
+function workflowKey(pub) {
+  const value = pub?.workflowStatus;
+  return typeof value === "string" ? value : (value?.key || "waiting");
+}
+
+function needsProcessing(slug) {
+  const pub = galleries[slug]?.public || {};
+  if (!latestApprovalForSlug(slug)) return false;
+  return !["editing", "ready", "delivered"].includes(workflowKey(pub));
+}
+
+function daysUntil(iso) {
+  if (!iso) return null;
+  const end = new Date(`${iso}T23:59:59`);
+  return Number.isFinite(end.getTime()) ? Math.floor((end - Date.now()) / 86400000) : null;
+}
+
+function expiringSoon(pub) {
+  const left = daysUntil(pub?.expiresAt);
+  return pub?.active !== false && left !== null && left >= 0 && left <= 7;
+}
+
+function neverOpened(slug) {
+  if (!analyticsRoot) return false;
+  const pub = galleries[slug]?.public || {};
+  const photoCount = Object.keys(pub.photos || {}).length;
+  if (pub.active === false || !photoCount) return false;
+  const left = daysUntil(pub.expiresAt);
+  if (left !== null && left < 0) return false;
+  return !Object.keys(analyticsRoot[slug] || {}).length;
+}
+
+async function loadAnalyticsForTodo() {
+  if (Date.now() - analyticsLoadedAt < 5 * 60 * 1000) return;
+  analyticsLoadedAt = Date.now();
+  try {
+    analyticsRoot = (await get(ref(db, "clientAnalytics"))).val() || {};
+    renderTodo();
+  } catch (error) {
+    console.warn("TODO ANALYTICS", error?.code || error);
+  }
+}
+
+async function extendGallery(slug, days) {
+  const pub = galleries[slug]?.public || {};
+  const left = daysUntil(pub.expiresAt);
+  const base = left !== null && left >= 0 ? new Date(`${pub.expiresAt}T12:00:00`) : new Date();
+  base.setDate(base.getDate() + days);
+  const iso = base.toISOString().slice(0, 10);
+  try {
+    await update(ref(db, `galleries/${slug}/public`), { expiresAt: iso, validDays: 0, updatedAt: Date.now() });
+    toast(`Dostęp do „${pub.title || slug}” przedłużony do ${formatDate(iso)}`);
+  } catch (error) {
+    toast(`Nie udało się przedłużyć: ${error.code || error.message || error}`);
+  }
+}
+
+async function markEditing(slug) {
+  try {
+    await update(ref(db, `galleries/${slug}/public`), {
+      workflowStatus: { key: "editing", label: "W obróbce", updatedAt: Date.now() },
+      updatedAt: Date.now()
+    });
+    toast("Oznaczono: w obróbce. Klient zobaczy to w galerii.");
+  } catch (error) {
+    toast(`Nie udało się zmienić statusu: ${error.code || error.message || error}`);
+  }
+}
+
+function renderTodo() {
+  const box = $("#todoBoard");
+  if (!box) return;
+  loadAnalyticsForTodo();
+  const entries = Object.keys(galleries).filter(slug => !isSystemGallerySlug(slug) && !galleries[slug]?.public?.trashedAt);
+  const groups = [
+    {
+      title: "Nowe wybory do obróbki",
+      hint: "Klient zatwierdził wybór",
+      items: entries.filter(needsProcessing),
+      meta: slug => {
+        const a = latestApprovalForSlug(slug);
+        return `${Number(a?.selectedCount || 0)} zdjęć • ${formatDateTimePl(a?.submittedAt)}`;
+      },
+      actions: slug => [["♥ Zobacz wybór", () => openSelections(slug)], ["✦ W obróbce", () => markEditing(slug)]]
+    },
+    {
+      title: "Wygasa w ciągu 7 dni",
+      hint: "Przedłuż albo przypomnij klientowi",
+      items: entries.filter(slug => expiringSoon(galleries[slug]?.public)),
+      meta: slug => {
+        const left = daysUntil(galleries[slug]?.public?.expiresAt);
+        return left === 0 ? "wygasa dziś" : left === 1 ? "wygasa jutro" : `wygasa za ${left} dni`;
+      },
+      actions: slug => [["+30 dni", () => extendGallery(slug, 30)], ["✉ Przypomnij", () => openQrDialog(slug)]]
+    },
+    {
+      title: "Klient jeszcze nie otworzył",
+      hint: "Może link nie dotarł?",
+      items: entries.filter(neverOpened),
+      meta: slug => `${Object.keys(galleries[slug]?.public?.photos || {}).length} zdjęć czeka`,
+      actions: slug => [["✉ Wyślij ponownie", () => openQrDialog(slug)]]
+    }
+  ].filter(group => group.items.length);
+
+  box.hidden = !groups.length;
+  box.replaceChildren();
+  if (!groups.length) return;
+
+  const head = document.createElement("div");
+  head.className = "todo-head";
+  head.innerHTML = `<h2>Do zrobienia</h2><span class="muted">${groups.reduce((n, g) => n + g.items.length, 0)} spraw</span>`;
+  box.appendChild(head);
+
+  const grid = document.createElement("div");
+  grid.className = "todo-grid";
+  groups.forEach(group => {
+    const col = document.createElement("section");
+    col.className = "todo-col";
+    const h = document.createElement("h3");
+    h.textContent = group.title;
+    const hint = document.createElement("p");
+    hint.className = "muted";
+    hint.textContent = group.hint;
+    col.append(h, hint);
+    group.items.slice(0, 6).forEach(slug => {
+      const row = document.createElement("article");
+      row.className = "todo-item";
+      const text = document.createElement("div");
+      const strong = document.createElement("strong");
+      strong.textContent = galleries[slug]?.public?.title || slug;
+      const small = document.createElement("small");
+      small.textContent = group.meta(slug);
+      text.append(strong, small);
+      const acts = document.createElement("div");
+      acts.className = "todo-actions";
+      group.actions(slug).forEach(([label, handler]) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "ghost";
+        b.textContent = label;
+        b.addEventListener("click", handler);
+        acts.appendChild(b);
+      });
+      row.append(text, acts);
+      col.appendChild(row);
+    });
+    if (group.items.length > 6) {
+      const more = document.createElement("p");
+      more.className = "muted";
+      more.textContent = `i ${group.items.length - 6} więcej…`;
+      col.appendChild(more);
+    }
+    grid.appendChild(col);
+  });
+  box.appendChild(grid);
+}
+
+$("#generatePasswordBtn")?.addEventListener("click", () => {
+  const words = ["lato", "morze", "kawa", "rzeka", "gory", "wiatr", "kwiat", "zloto", "lipa", "mewa", "plaza", "sowa", "jesien", "zima", "wiosna", "fala", "las", "maki", "slonce", "tecza", "malina", "wanilia", "orzech", "klon"];
+  const pick = () => words[crypto.getRandomValues(new Uint32Array(1))[0] % words.length];
+  const number = 10 + (crypto.getRandomValues(new Uint32Array(1))[0] % 90);
+  let first = pick(), second = pick();
+  while (second === first) second = pick();
+  $("#galleryPasswordInput").value = `${first}-${second}-${number}`;
+});
+
+document.querySelectorAll("[data-exp-days]").forEach(button => button.addEventListener("click", () => {
+  const days = Number(button.dataset.expDays);
+  if (!days) { $("#expiresAtInput").value = ""; return; }
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  $("#expiresAtInput").value = date.toISOString().slice(0, 10);
+}));
 
 function filteredEntries() {
   const query = $("#gallerySearch").value.trim().toLowerCase();
@@ -1575,7 +1756,9 @@ function filteredEntries() {
       const matchesStatus =
         status === "all" ||
         (status === "active" && pub.active !== false) ||
-        (status === "inactive" && pub.active === false);
+        (status === "inactive" && pub.active === false) ||
+        (status === "new-selection" && needsProcessing(slug)) ||
+        (status === "expiring" && expiringSoon(pub));
 
       return matchesQuery && matchesStatus;
     })
@@ -1600,6 +1783,7 @@ function renderCards() {
 
     const card = document.createElement("article");
     card.className = "gallery-card";
+    card.dataset.slug = slug;
 
     card.innerHTML = `
       <div class="gallery-cover">
@@ -1632,13 +1816,13 @@ function renderCards() {
           <button type="button" class="ghost" data-select="${slug}">♥ Wybory${selectedCount ? ` (${selectedCount})` : ""}</button>
           <button type="button" class="ghost" data-manage="${slug}">Zdjęcia</button>
           <button type="button" class="ghost" data-edit="${slug}">Edytuj</button>
+          <button type="button" class="ghost" data-qr="${slug}">✉ Wyślij</button>
           <details class="more-menu">
-            <summary class="ghost">⋯ Więcej</summary>
+            <summary class="ghost">⋯</summary>
             <div class="more-menu__list">
               <a class="ghost" href="${galleryUrl(slug)}" target="_blank" rel="noopener">↗ Otwórz galerię</a>
-              <button type="button" class="ghost" data-qr="${slug}">▦ Kod QR</button>
+              <button type="button" class="ghost" data-extend="${slug}">⏱ Przedłuż dostęp o 30 dni</button>
               <button type="button" class="ghost" data-site="${slug}">⚙ Opcje galerii</button>
-              <button type="button" class="ghost" data-repair="${slug}">🛠 Napraw pobieranie</button>
             </div>
           </details>
         </div>
@@ -1683,6 +1867,31 @@ function renderCards() {
   list.querySelectorAll("[data-edit]").forEach(button =>
     button.addEventListener("click", () => openEdit(button.dataset.edit))
   );
+
+  list.querySelectorAll("[data-extend]").forEach(button =>
+    button.addEventListener("click", () => extendGallery(button.dataset.extend, 30))
+  );
+
+  // Przeciągnij zdjęcia prosto na kartę galerii.
+  list.querySelectorAll(".gallery-card[data-slug]").forEach(card => {
+    card.addEventListener("dragover", event => {
+      if (![...(event.dataTransfer?.types || [])].includes("Files")) return;
+      event.preventDefault();
+      card.classList.add("is-drop");
+    });
+    card.addEventListener("dragleave", () => card.classList.remove("is-drop"));
+    card.addEventListener("drop", event => {
+      event.preventDefault();
+      card.classList.remove("is-drop");
+      const files = [...(event.dataTransfer?.files || [])].filter(file => /\.(jpe?g|png|webp)$/i.test(file.name));
+      if (!files.length) return toast("Upuść zdjęcia JPG, PNG lub WEBP.");
+      openUpload(card.dataset.slug);
+      const transfer = new DataTransfer();
+      files.forEach(file => transfer.items.add(file));
+      $("#photoFilesInput").files = transfer.files;
+      $("#photoFilesInput").dispatchEvent(new Event("change"));
+    });
+  });
 
   updateGalleryStorageBadges();
 }
@@ -1791,12 +2000,13 @@ function openEdit(slug) {
   $("#gallerySlugInput").value = slug;
   $("#gallerySlugInput").disabled = true;
   $("#gallerySubtitleInput").value = pub.subtitle || "";
-  $("#introMessageInput").value = pub.introMessage || "";
+  // Jedno pole tekstu pod tytułem (dawniej „Opis” i „Wiadomość powitalna”).
+  $("#introMessageInput").value = pub.introMessage || pub.subtitle || "";
   $("#eventDateInput").value = pub.eventDate || "";
   $("#outroMessageInput").value = pub.outroMessage || "";
   $("#instagramInput").value = pub.instagram || "";
   $("#websiteInput").value = pub.website || "";
-  $("#validDaysInput").value = Number(pub.validDays || 0);
+  $("#validDaysInput").value = "0";
   $("#expiresAtInput").value = pub.expiresAt || "";
   $("#maxFavoritesInput").value = Number(pub.maxFavorites || 0);
   $("#downloadsEnabledInput").checked = pub.downloadsEnabled !== false;
@@ -1826,7 +2036,7 @@ $("#galleryForm").addEventListener("submit", async (event) => {
 
     const old = galleries[slug]?.public || {};
     const enteredPassword = $("#galleryPasswordInput").value;
-    const validDays = Math.max(0, Number($("#validDaysInput").value || 0));
+    const validDays = 0; // termin ustawiany wyłącznie datą
 
     let passwordHash = old.passwordHash || "";
     let passwordHashTrimmed = old.passwordHashTrimmed || old.passwordHash || "";
@@ -1842,13 +2052,12 @@ $("#galleryForm").addEventListener("submit", async (event) => {
 
     if (!passwordHash && !passwordHashTrimmed) throw new Error("Ustaw hasło klienta.");
 
-    let expiresAt = $("#expiresAtInput").value || "";
-    if (validDays > 0) expiresAt = addDaysToIso(validDays);
+    const expiresAt = $("#expiresAtInput").value || "";
 
     const data = {
       ...old,
       title: $("#galleryTitleInput").value.trim() || slug,
-      subtitle: $("#gallerySubtitleInput").value.trim(),
+      subtitle: $("#introMessageInput").value.trim(),
       introMessage: $("#introMessageInput").value.trim(),
       eventDate: $("#eventDateInput").value || "",
       outroMessage: $("#outroMessageInput").value.trim(),
@@ -1872,6 +2081,8 @@ $("#galleryForm").addEventListener("submit", async (event) => {
     };
 
     await set(ref(db, `galleries/${slug}/public`), data);
+    // Hasło pamiętamy tylko w tej karcie przeglądarki — do wiadomości dla klienta.
+    if (enteredPassword) knownPasswords.set(slug, normalizePassword(enteredPassword));
 
     $("#galleryDialog").close();
 
@@ -2278,10 +2489,61 @@ function previewCoverPosition() {
   coverPreview.style.backgroundPosition = `${$("#coverPositionXInput").value}% ${$("#coverPositionYInput").value}%`;
 }
 
+function shareMessageText(slug) {
+  const pub = galleries[slug]?.public || {};
+  const password = $("#sharePasswordInput").value.trim();
+  const lines = [
+    "Dzień dobry!",
+    "",
+    `Zdjęcia „${pub.title || slug}” są już gotowe 📸`,
+    "",
+    `Galeria: ${galleryUrl(slug)}`,
+    `Hasło: ${password || "[wpisz hasło]"}`
+  ];
+  if (pub.expiresAt) lines.push(`Galeria jest dostępna do ${formatDate(pub.expiresAt)}.`);
+  lines.push("", "Serduszkiem zaznaczysz ulubione zdjęcia, a na koniec kliknij „Zatwierdź wybór”. Zdjęcia możesz też pobrać.", "", "Pozdrawiam,", "RAF.studio");
+  return lines.join("\n");
+}
+
+function updateShareLinks() {
+  const text = $("#shareMessage").value;
+  const encoded = encodeURIComponent(text);
+  $("#shareWhatsappBtn").href = `https://wa.me/?text=${encoded}`;
+  $("#shareSmsBtn").href = `sms:?&body=${encoded}`;
+  const title = galleries[qrGallerySlug]?.public?.title || "";
+  $("#shareMailBtn").href = `mailto:?subject=${encodeURIComponent(`Twoja galeria zdjęć${title ? ` — ${title}` : ""}`)}&body=${encoded}`;
+}
+
+$("#sharePasswordInput")?.addEventListener("input", () => {
+  if (!qrGallerySlug) return;
+  $("#shareMessage").value = shareMessageText(qrGallerySlug);
+  updateShareLinks();
+});
+$("#shareMessage")?.addEventListener("input", updateShareLinks);
+$("#copyShareMessageBtn")?.addEventListener("click", async () => {
+  await navigator.clipboard.writeText($("#shareMessage").value);
+  toast("Wiadomość skopiowana — wklej ją klientowi");
+});
+$("#shareCardBtn")?.addEventListener("click", () => {
+  const trigger = document.querySelector(`[data-premium-share="${CSS.escape(qrGallerySlug || "")}"]`);
+  if (!trigger) return toast("Karta linku nie jest jeszcze gotowa — spróbuj za chwilę.");
+  $("#qrDialog").close();
+  trigger.click();
+});
+$("#createdShareBtn")?.addEventListener("click", () => {
+  if (!createdSlug) return;
+  $("#createdDialog").close();
+  openQrDialog(createdSlug);
+});
+
 async function openQrDialog(slug) {
   qrGallerySlug = slug;
   const url = galleryUrl(slug);
   $("#qrLink").value = url;
+  $("#shareTitle").textContent = `Wyślij klientowi — ${galleries[slug]?.public?.title || slug}`;
+  $("#sharePasswordInput").value = knownPasswords.get(slug) || "";
+  $("#shareMessage").value = shareMessageText(slug);
+  updateShareLinks();
 
   const canvas = $("#qrCanvas");
   if (window.QRious) {
@@ -2682,7 +2944,33 @@ async function rebuildSelectedPreviews(files) {
 }
 
 $("#rebuildPreviewsBtn")?.addEventListener("click", () => {
+  const slug = $("#serviceGallerySelect")?.value;
+  if (!slug) return toast("Wybierz galerię.");
+  currentPhotosSlug = slug;
   $("#rebuildPreviewFilesInput").click();
+});
+
+function fillServiceGallerySelect() {
+  const select = $("#serviceGallerySelect");
+  if (!select) return;
+  const current = select.value;
+  const entries = Object.entries(galleries)
+    .filter(([slug, g]) => !isSystemGallerySlug(slug) && g?.public)
+    .sort((a, b) => String(a[1].public.title || a[0]).localeCompare(String(b[1].public.title || b[0]), "pl"));
+  select.replaceChildren(...entries.map(([slug, g]) => {
+    const option = document.createElement("option");
+    option.value = slug;
+    option.textContent = g.public.title || slug;
+    return option;
+  }));
+  if (current && galleries[current]) select.value = current;
+}
+
+$("#healthPanelBtn")?.addEventListener("click", fillServiceGallerySelect);
+$("#serviceRepairBtn")?.addEventListener("click", event => {
+  const slug = $("#serviceGallerySelect")?.value;
+  if (!slug) return toast("Wybierz galerię.");
+  repairDownloadMetadata(slug, event.currentTarget);
 });
 
 $("#rebuildPreviewFilesInput")?.addEventListener("change", async (event) => {
@@ -3434,7 +3722,11 @@ async function openSelections(slug) {
         <h3>♥ Aktualnie wybrane zdjęcia klienta</h3>
         <div class="gallery-meta"><span>${items.length} zdjęć</span></div>
       </div>
-      <button type="button" class="primary download-all">♥ Pobierz wybrane (${items.length})</button>
+      <div class="selection-export">
+        <button type="button" class="ghost export-lr" title="Wklej w Lightroom: Biblioteka → filtr Tekst → Nazwa pliku → Zawiera">⧉ Kopiuj do Lightrooma</button>
+        <button type="button" class="ghost export-csv">⭳ CSV z uwagami</button>
+        <button type="button" class="primary download-all">♥ Pobierz wybrane (${items.length})</button>
+      </div>
     </div>
     <div class="selection-photo-grid"></div>
   `;
@@ -3461,6 +3753,24 @@ async function openSelections(slug) {
     grid.appendChild(card);
   }
   block.querySelector(".download-all").addEventListener("click", (event) => downloadAdminSelected(slug, items, event.currentTarget));
+  block.querySelector(".export-lr").addEventListener("click", async () => {
+    const names = items.map(item => displayName(item.filename)).join(", ");
+    await navigator.clipboard.writeText(names);
+    toast(`Skopiowano ${items.length} nazw. W Lightroomie: Biblioteka → Tekst → Nazwa pliku → Zawiera → wklej.`);
+  });
+  block.querySelector(".export-csv").addEventListener("click", () => {
+    const cell = value => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const approval = latestApprovalForSlug(slug);
+    const rows = [["Plik", "Uwaga klienta", "Wybrano"].map(cell).join(";")];
+    items.forEach(item => rows.push([item.filename, item.note || "", item.selectedAt ? new Date(Number(item.selectedAt)).toLocaleString("pl-PL") : ""].map(cell).join(";")));
+    if (approval?.comment) rows.push("", [cell("Komentarz do całego wyboru"), cell(approval.comment)].join(";"));
+    const blob = new Blob(["\ufeff" + rows.join("\r\n")], { type: "text/csv;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${slug}-wybor.csv`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+  });
   container.appendChild(block);
 }
 
