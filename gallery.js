@@ -222,7 +222,8 @@ function applyZoneConfig(raw = {}) {
   if (email) items.push([`mailto:${email}`, email]);
   const insta = safeUrl(zoneConfig.contactInstagram);
   if (insta) items.push([insta, "Instagram"]);
-  items.push(["https://raf-studio.pl/kontakt/", "Formularz kontaktowy"]);
+  // Strona główna jeszcze niegotowa – bez linku do formularza na raf-studio.pl.
+  if (!email) items.push(["mailto:kontakt@raf-studio.pl", "kontakt@raf-studio.pl"]);
   list.replaceChildren(...items.map(([href, label]) => {
     const li = document.createElement("li");
     const a = document.createElement("a");
