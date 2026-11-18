@@ -218,7 +218,7 @@ dialog.modal::backdrop { background: rgba(10,10,12,.55); backdrop-filter: blur(4
 .hint { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
 
 /* Podgląd pełnoekranowy (zawsze ciemny) */
-.lb { position: fixed; inset: 0; z-index: 100; background: #070708; color: #f3f1ee; display: grid; grid-template-rows: auto 1fr auto; }
+.lb { position: fixed; inset: 0; height: 100vh; height: 100dvh; z-index: 100; background: #070708; color: #f3f1ee; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; }
 .lb__top, .lb__bottom { display: flex; align-items: center; gap: 10px; padding: 12px 16px; }
 .lb__top { justify-content: space-between; }
 .lb__count { font-size: 14px; color: #a9a6a1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -227,12 +227,13 @@ dialog.modal::backdrop { background: rgba(10,10,12,.55); backdrop-filter: blur(4
 .lb .icon-btn:hover { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.3); }
 .lb .icon-btn.is-on { background: var(--heart); border-color: var(--heart); }
 .lb .icon-btn.is-note { background: var(--accent); border-color: var(--accent); }
-.lb__stage { position: relative; display: grid; place-items: center; min-height: 0; padding: 0 64px; }
-.lb__stage img { max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; transition: opacity .2s; }
-.lb__nav { position: absolute; top: 50%; transform: translateY(-50%); }
+.lb__stage { position: relative; min-height: 0; overflow: hidden; }
+/* Zdjęcie zawsze mieści się w całości: wypełnia obszar między paskami i jest skalowane (contain). */
+.lb__stage img { position: absolute; top: 0; bottom: 0; left: 64px; width: calc(100% - 128px); height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; transition: opacity .2s; }
+.lb__nav { position: absolute; top: 50%; transform: translateY(-50%); z-index: 2; }
 .lb__nav--prev { left: 12px; }
 .lb__nav--next { right: 12px; }
-.lb__bottom { justify-content: center; min-height: 56px; }
+.lb__bottom { justify-content: center; min-height: 20px; }
 .lb__note { max-width: 680px; font-size: 14px; color: #e8d2ad; text-align: center; }
 .lb__progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,.08); }
 .lb__progress i { display: block; height: 100%; width: 0; background: #fff; }
@@ -283,7 +284,7 @@ dialog.modal::backdrop { background: rgba(10,10,12,.55); backdrop-filter: blur(4
   .selbar__text { flex-basis: 100%; padding-left: 6px; }
   .selbar .btn { flex: 1 1 auto; }
   .modal__in { padding: 24px 20px; }
-  .lb__stage { padding: 0; }
+  .lb__stage img { left: 0; width: 100%; }
   .lb__nav { display: none; }
   .ftr__grid { grid-template-columns: 1fr; }
   .gate { padding: 40px 0 64px; }
